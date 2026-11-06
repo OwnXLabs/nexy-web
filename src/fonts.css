@@ -1,0 +1,6 @@
+@font-face{font-family:Geist;src:url(/fonts/geist.woff2) format('woff2');
+  font-weight:300 600;font-style:normal;font-display:swap}
+@font-face{font-family:Antonio;src:url(/fonts/antonio.woff2) format('woff2');
+  font-weight:400 700;font-style:normal;font-display:swap}
+@font-face{font-family:'JetBrains Mono';src:url(/fonts/jetbrains-mono.woff2) format('woff2');
+  font-weight:400 500;font-style:normal;font-display:swap}

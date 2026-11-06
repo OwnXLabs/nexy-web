@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Super Platformer</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{height:100%;background:#0b0d17;overflow:hidden;font-family:system-ui,sans-serif}
+#wrap{height:100%;display:flex;align-items:center;justify-content:center}canvas{max-width:100%;max-height:100%;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.5);touch-action:none}</style></head>
+<body><div id="wrap"><canvas id="c" width="800" height="448"></canvas></div>
+<script>
+(function(){
+  var T={"title":"Super Platformer","hero":"#ff0000","ground":"#8B4513","platform":"#b08d57","accent":"#0000ff","sky1":"#1a1a2e","sky2":"#3f3d56","world":"castle","enemy":"walker","enSpeed":55,"pitRate":0.35,"lives":3,"sprite":"QIKI_HERO_IMAGE_DATA_URI","seed":2782017608,"art":{"top":null,"fill":null,"brick":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAkklEQVR42mNkYGBgyLdz/s9AAZh4aC8jI6WGwAALjNGap0yWAdWT7jIwMDAwMDFQCcBddP3qD+oYxMDAwHDl5hc4W0edh0FTm4OBWIuo7zWYK5ABKd5lwSaI7kViAG28RowrcLmWti5CBuhJAJdrWUi1GZfXCBpEbBIg2UUEvbZk71OKAptp4qG9jJTG2MRDexkBCn0q+OXYX7QAAAAASUVORK5CYII=","coin":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAhElEQVR42mNgGLaAEZtgvp3zf3yaJh7ai6GPiVRDcKlhxKWgtewGVkOquzSwuowFm2KYIVwGaSji3y7MYmgtu4FiGE6vwQC6IbjECBqE7IpvF2YRjDUmakU/CyEF+LxDlIuweQefF1lwRXFr2Q2sGrHFGNaUTUyCxJa6mYhJ/uSoGUYAAI37MNzj7j5sAAAAAElFTkSuQmCC","flag":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAA8UlEQVR42mNkYGBgcPaK/8+ABPZuW8jIQCJgQjcEm8HEABYYY+b0DgYGBgaG9MwKBgYGBoY6Q1W4YU3nb8NdiCyOLM9CjG3YNKPLww3aufMUhJa7AxGQE4PYdvIVhsZ4YXYGeRV+FHm4Qes2rIN4TQ5TEwMDA1wjAwMDw8M7HzEDG8YICghiCAoIwup0eRV+rJqxGoQPPLzzEcVFZBtEVxcRDGxkF+EzjAU5sBkYGBgYznVR5iIYcH+kwsDAwMBg/fwYSppBNmzh258MDG9f4TcIHaBoevsKqxq8WaTp/G1GfFkDOf8RdBG6Yoqjn64GAQBRh1tHt5cZcQAAAABJRU5ErkJggg==","hero":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABQklEQVR42mNgoDFgxCWx797H/6QY5KTEz0iUBcgGOyryEWX4/vufcFrEiM1wmMHIGvEBdPXIlrBgU0ysweg+wKaXidwwxweQzWLB5/qT2dlEGWg+dSrcJ+hmMOHSRKzhhNSyENJQ0VSH1/COuia4HphPsMYBNkDIcGLUsBA04fwD/PKGCnilmYg2PNUVgkl0ABNRsZjqyuDincDg4p2A3RKKLaAAMOFL13AwezfDnq0LGPZsXcDAMHs3A1F6sEUytoyCbAkxZRK6XozCDl2R456TDAwMDAwuG5YyMDAwMOwJiEYth1zMMSxALuxoXprStz6AgXbPmP+4Ig1feVS5fQkj0Tn5ZHY2Q0VgHFGGd6xfRFqd3O4ZAw+mVGtPREI6uh2nGDbX48wHyIqFxUThGJ8YyTkZZgk+78PkcLmegYGBAQBzDJzW4a9IKwAAAABJRU5ErkJggg==","data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABPUlEQVR42mNkwAH23fv4n4EE4KTEz4hNnBGfwY6KfEQZvv/+J5wWMWIzHGYwskZ8AF09siUs2BQTazC6D7DpZSI3zPEBZLNY8Ln+ZHY2UQaaT50K9wm6GUy4NBFrOCG1LIQ0VDTV4TW8o64JrgfmE6xxgA0QMpwYNSwETTj/AL+8oQJeaSaiDU91hWASHcBEVCymujK4eCcwuHgnYLeEYgsoAEz40jUczN7NsGfrAoY9WxcwMMzezUCUHmyRjC2jIFtCTJmErhejsENX5LjnJAMDAwODy4alDAwMDAx7AqJRyyEXcwwLkAs7mpem9K0PYKDdM+Y/rkjDVx5Vbl/CSHROPpmdzZBq7ckgLCaK1+C3r14zzD66nfSioiIwjqABMAdUBMYxdKxfRF5Gw+c6fHIE4wCZjy1sSVFHUwAACV2hiI8jKl4AAAAASUVORK5CYII="],"foe":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAwElEQVR42mNgGAWjYBSMAoKAEZ+ks1f8f2IN2rttIVazmKhhOD71jIQUv6yeznDZipNB99h3BgYGBhT2i9NnGRgYGBj0d83B6RMmfK666JYCZ1+24mS4bMVJUB06YCHG+zAXkwOYaJ2KaG4B3iA6EajCwMDwkSE9s4Jh5vQOBgYGBhQ2g4wKXG36LjIs2LnzFEE2RT5wdzfDEAsKCIKLE2MRUalo3YZ1WC1GFycro5EKiMpoe7ctZERWSCwbW3kEAFgBS27pRpvDAAAAAElFTkSuQmCC","data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAtklEQVR42mNgGAWjYBQMfcCIT9LZK/4/sQbt3bYQq1lM1DAcn3pGQopfVk9nuGzFyaB77DsDAwMDCvvF6bMMDAwMDPq75uD0CRM+V110S4GzL1txMly24iSoDh2wEON9mIvJAUy0TkU0twBvEJ0IVGFgYPjIkJ5ZwTBzegcDAwMDCptBRgWuNn0XGRbs3HmKIJsqQRQUEISVTXEQububwYMFGSAH14BHMiO1igqSyyJkDcSwcQEAk0dCj2NJGg4AAAAASUVORK5CYII="]}};
+  var cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=cv.width,H=cv.height,S=32,ROWS=14;
+  var GRAV=1800,JUMP=-640,RUN=230,ACC=1600,FRIC=1400,EN_SPEED=T.enSpeed;
+  var sprite=null;if(T.sprite&&T.sprite.indexOf('data:')===0){sprite=new Image();sprite.src=T.sprite;}
+  // Kenney tiles, drawn crisp; each falls back to the drawn shapes until it has loaded.
+  function img(u){if(!u)return null;var i=new Image();i.src=u;return i;}function ok(i){return i&&i.complete&&i.naturalWidth>0;}
+  var A=T.art||{},IT=img(A.top),IF=img(A.fill),IB=img(A.brick),IC=img(A.coin),IFL=img(A.flag),IH=(A.hero||[]).map(img),IE=(A.foe||[]).map(img);
+  ctx.imageSmoothingEnabled=false;
+  var rnd;function rng(seed){var s=seed>>>0;return function(){s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};}
+
+  // Level: ground with pits of at most 3 tiles, platforms at most 2 tiles above
+  // the ground they launch from, coins over them, walkers on the flat, a flag.
+  var map,COLS,enemies,coins,flagX,flagY;
+  function build(level){rnd=rng(T.seed+level*7919);COLS=150+level*20;map=[];for(var r=0;r<ROWS;r++){map.push(new Array(COLS).fill(0));}
+    enemies=[];coins=[];var g=ROWS-2,x=0;
+    function col(cx,top){for(var r=top;r<ROWS;r++)map[r][cx]=1;}
+    while(x<COLS){var run=4+Math.floor(rnd()*7);if(x<12)run=14;
+      for(var i=0;i<run&&x<COLS;i++,x++){col(x,g);}
+      if(x>COLS-16){while(x<COLS){col(x,g);x++;}break;}
+      // Mid-stretch, patrolling +-2 tiles: a walker at a pit edge needs a stomp or a
+      // 5-tile jump, beyond reach — the sighted bot's only deaths (2026-09-23).
+      if(x>16&&run>=6&&rnd()<0.5){var hx=(x-Math.ceil(run/2))*S;enemies.push({x:hx,home:hx,y:(g-1)*S+6,vx:-EN_SPEED,alive:true,w:26,h:26});}
+      var roll=rnd();
+      if(roll<T.pitRate){x+=1+Math.floor(rnd()*3);}                             // pit, 1-3 tiles
+      else if(roll<T.pitRate+0.25){var ng=Math.max(ROWS-5,Math.min(ROWS-2,g+(rnd()<0.5?-1:1)*(1+Math.floor(rnd()*2))));g=ng;} // step
+      else if(roll<T.pitRate+0.5){var py=g-3,pl=3+Math.floor(rnd()*3),px=x-Math.floor(pl/2);  // floating platform + coins
+        for(var k=0;k<pl;k++){if(px+k>0&&px+k<COLS){map[py][px+k]=2;coins.push({x:(px+k)*S+S/2,y:(py-1)*S+S/2,got:false});}}}
+    }
+    flagX=(COLS-6)*S;flagY=g*S;}
+  function solid(px,py){var cx=Math.floor(px/S),cy=Math.floor(py/S);if(cx<0||cx>=COLS)return true;if(cy<0)return false;if(cy>=ROWS)return false;return map[cy][cx]>0;}
+
+  var state,level,score,lives,hero,camX,keys={},best=0,deadT=0,safeX=3*S,safeY=(ROWS-4)*S;
+  // Respawn at the last safe footing, not the start: walkers patrol back toward
+  // the start, and a respawn there died to the same one every time.
+  function spawn(){hero={x:safeX,y:safeY-S,vx:0,vy:0,w:24,h:30,ground:false,face:1};camX=Math.max(0,safeX-W*0.4);}
+  function reset(){state='ready';level=1;score=0;lives=T.lives;build(level);safeX=3*S;safeY=(ROWS-4)*S;spawn();}
+  reset();
+
+  function start(){if(state==='ready'||state==='over'||state==='won'){if(state!=='ready'){var l=state==='won'?level+1:1;if(state==='over'){score=0;lives=T.lives;}level=l;build(level);safeX=3*S;safeY=(ROWS-4)*S;spawn();}state='play';}}
+  var JK={Space:1,ArrowUp:1,KeyW:1};
+  window.addEventListener('keydown',function(e){if(JK[e.code]||e.code.indexOf('Arrow')===0)e.preventDefault();keys[e.code]=true;if(JK[e.code]){if(state!=='play')start();else jump();}});
+  window.addEventListener('keyup',function(e){keys[e.code]=false;if(JK[e.code])cut=true;});
+  // Touch: left third moves left, middle third moves right, right third jumps.
+  var TOUCH=matchMedia('(pointer:coarse)').matches;
+  var touch={};function zone(e){var r=cv.getBoundingClientRect(),x=(e.clientX-r.left)/r.width;return x<0.33?'L':x<0.66?'R':'J';}
+  // Any tap starts, as the screen says; the zones are for play.
+  function tdown(id,z){if(state!=='play'){start();return;}touch[id]=z;if(z==='J')jump();}
+  cv.addEventListener('pointerdown',function(e){e.preventDefault();tdown(e.pointerId,zone(e));});
+  cv.addEventListener('pointerup',function(e){if(touch[e.pointerId]==='J')cut=true;delete touch[e.pointerId];});
+  cv.addEventListener('pointercancel',function(e){delete touch[e.pointerId];});
+  function held(z){for(var k in touch)if(touch[k]===z)return true;return false;}
+  // Variable height, with a floor: a tap shorter than 120ms still clears a tile.
+  // Cutting on release at once made an instant tap a 13px hop (2026-09-23).
+  var cut=false,jumpT=0;
+  function jump(){if(hero.ground){hero.vy=JUMP;hero.ground=false;cut=false;jumpT=0;}}
+
+  function hurt(){lives--;deadT=1.5;if(lives<=0){state='over';best=Math.max(best,score);}else{spawn();}}
+  var last=0;
+  function step(dt){
+    var L=keys.ArrowLeft||keys.KeyA||held('L'),R=keys.ArrowRight||keys.KeyD||held('R');
+    if(R){hero.vx=Math.min(RUN,hero.vx+ACC*dt);hero.face=1;}else if(L){hero.vx=Math.max(-RUN,hero.vx-ACC*dt);hero.face=-1;}
+    else{var f=FRIC*dt;hero.vx=Math.abs(hero.vx)<f?0:hero.vx-Math.sign(hero.vx)*f;}
+    jumpT+=dt;if(cut&&jumpT>0.12&&hero.vy<-320){hero.vy=-320;cut=false;}
+    hero.vy=Math.min(900,hero.vy+GRAV*dt);
+    // X then Y, each against the tile grid.
+    var nx=hero.x+hero.vx*dt;
+    if(hero.vx>0&&(solid(nx+hero.w,hero.y+2)||solid(nx+hero.w,hero.y+hero.h-2))){nx=Math.floor((nx+hero.w)/S)*S-hero.w-0.01;hero.vx=0;}
+    if(hero.vx<0&&(solid(nx,hero.y+2)||solid(nx,hero.y+hero.h-2))){nx=Math.floor(nx/S+1)*S+0.01;hero.vx=0;}
+    hero.x=Math.max(0,nx);
+    var ny=hero.y+hero.vy*dt;hero.ground=false;
+    if(hero.vy>0&&(solid(hero.x+2,ny+hero.h)||solid(hero.x+hero.w-2,ny+hero.h))){ny=Math.floor((ny+hero.h)/S)*S-hero.h;hero.vy=0;hero.ground=true;}
+    if(hero.vy<0&&(solid(hero.x+2,ny)||solid(hero.x+hero.w-2,ny))){ny=Math.floor(ny/S+1)*S;hero.vy=0;}
+    hero.y=ny;
+    if(hero.y>H+60){hurt();return;}
+    // A checkpoint is unbroken ground from a tile behind to three ahead, with no
+    // walker within five tiles; checking only the tile past a 1-tile pit put the
+    // respawn on the pit's lip, facing a walker (2026-09-23).
+    if(hero.ground){var near=false,fy=hero.y+hero.h+2;for(var q=0;q<enemies.length;q++){var en=enemies[q];if(en.alive&&Math.abs(en.x-hero.x)<5*S){near=true;break;}}
+      var firm=!near;for(var px=hero.x-S;firm&&px<=hero.x+hero.w+3*S;px+=8)if(!solid(px,fy))firm=false;
+      if(firm){safeX=hero.x;safeY=hero.y+hero.h;}}
+    for(var i=0;i<coins.length;i++){var c=coins[i];if(!c.got&&Math.abs(c.x-(hero.x+hero.w/2))<20&&Math.abs(c.y-(hero.y+hero.h/2))<24){c.got=true;score+=10;}}
+    for(var j=0;j<enemies.length;j++){var e=enemies[j];if(!e.alive)continue;
+      var ex=e.x+e.vx*dt,ahead=e.vx>0?ex+e.w:ex;
+      if(solid(ahead,e.y+e.h/2)||!solid(ahead,e.y+e.h+4)||Math.abs(ex-e.home)>2*S){e.vx=-e.vx;}else e.x=ex;
+      if(hero.x<e.x+e.w&&hero.x+hero.w>e.x&&hero.y<e.y+e.h&&hero.y+hero.h>e.y){
+        if(hero.vy>0&&hero.y+hero.h-e.y<16){e.alive=false;hero.vy=JUMP*0.6;score+=50;}else if(deadT<=0){hurt();return;}}}
+    if(hero.x>flagX){score+=100*lives;state='won';best=Math.max(best,score);}
+    camX=Math.max(0,Math.min(COLS*S-W,hero.x-W*0.4));
+  }
+  function loop(now){var dt=last?Math.min((now-last)/1000,0.033):0;last=now;if(deadT>0)deadT-=dt;if(state==='play')step(dt);draw(now);requestAnimationFrame(loop);}
+
+  function draw(now){
+    var sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,T.sky1);sky.addColorStop(1,T.sky2);ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+    if(T.world==='space'){ctx.fillStyle='rgba(255,255,255,0.8)';for(var st=0;st<60;st++){var sx=((st*97-camX*0.1)%W+W)%W;ctx.fillRect(sx,(st*53)%(H-80),2,2);}}
+    ctx.fillStyle='rgba(255,255,255,0.08)';for(var h=0;h<8;h++){var hx=((h*260-camX*0.3)%(W+260)+W+260)%(W+260)-130;ctx.beginPath();ctx.arc(hx,H-40,120,Math.PI,0);ctx.fill();}
+    var c0=Math.floor(camX/S),c1=Math.min(COLS,c0+Math.ceil(W/S)+1);
+    for(var r=0;r<ROWS;r++)for(var cx=c0;cx<c1;cx++){var t=map[r][cx];if(!t)continue;var x=cx*S-camX,y=r*S;
+      var surf=t===1&&(r===0||!map[r-1][cx]);
+      if(t===2&&ok(IB)){ctx.drawImage(IB,x,y,S,S);continue;}
+      if(t===1&&ok(IT)&&ok(IF)){ctx.drawImage(surf?IT:IF,x,y,S,S);continue;}
+      if(t===1&&ok(IF)&&T.world==='snow'){ctx.drawImage(IF,x,y,S,S);if(surf){ctx.fillStyle='#fff';ctx.fillRect(x,y,S,7);ctx.fillStyle='rgba(180,200,220,0.8)';ctx.fillRect(x,y+7,S,2);}continue;}
+      ctx.fillStyle=t===2?T.platform:T.ground;ctx.fillRect(x,y,S,S);ctx.fillStyle='rgba(0,0,0,0.18)';ctx.fillRect(x,y+S-4,S,4);
+      if(surf&&T.world!=='space'&&T.world!=='castle'&&T.world!=='city'){ctx.fillStyle=T.world==='snow'?'#fff':T.world==='desert'?'#e9c46a':T.world==='underwater'?'#90e0ef':'#4caf50';ctx.fillRect(x,y,S,6);}}
+    ctx.fillStyle='#ffd700';for(var i=0;i<coins.length;i++){var co=coins[i];if(co.got)continue;var sx=co.x-camX;if(sx<-20||sx>W+20)continue;
+      if(ok(IC)){ctx.drawImage(IC,sx-12,co.y-12+Math.sin(now/200+i)*3,24,24);continue;}
+      ctx.beginPath();ctx.ellipse(sx,co.y+Math.sin(now/200+i)*3,7*Math.abs(Math.cos(now/300+i))+2,9,0,0,7);ctx.fill();}
+    for(var j=0;j<enemies.length;j++){var e=enemies[j];if(!e.alive)continue;var ex=e.x-camX;
+      var ef=IE[Math.floor(now/220+j)%2];if(ok(ef)){ctx.save();if(e.vx>0){ctx.translate(ex+e.w/2,0);ctx.scale(-1,1);ctx.translate(-(ex+e.w/2),0);}ctx.drawImage(ef,ex-4,e.y+e.h-(e.w+8),e.w+8,e.w+8);ctx.restore();continue;}
+      if(T.enemy==='slime'){ctx.fillStyle='#57cc99';ctx.beginPath();ctx.ellipse(ex+e.w/2,e.y+e.h-8,e.w/2+2,11+Math.sin(now/150+j)*2,0,Math.PI,0);ctx.fill();ctx.fillRect(ex-2,e.y+e.h-8,e.w+4,8);}
+      else if(T.enemy==='robot'){ctx.fillStyle='#adb5bd';ctx.fillRect(ex+2,e.y+2,e.w-4,e.h-6);ctx.fillStyle='#e63946';ctx.fillRect(ex+8,e.y+8,e.w-16,5);ctx.fillStyle='#495057';ctx.fillRect(ex+4,e.y+e.h-4,6,4);ctx.fillRect(ex+e.w-10,e.y+e.h-4,6,4);}
+      else if(T.enemy==='beetle'){ctx.fillStyle='#3d405b';ctx.beginPath();ctx.ellipse(ex+e.w/2,e.y+e.h/2+4,e.w/2,e.h/2-2,0,0,7);ctx.fill();ctx.strokeStyle='#81b29a';ctx.beginPath();ctx.moveTo(ex+e.w/2,e.y+6);ctx.lineTo(ex+e.w/2,e.y+e.h);ctx.stroke();}
+      else{ctx.fillStyle=(T.world==='castle'||T.world==='space'||T.world==='city')?'#e76f51':'#7b3f00';ctx.beginPath();ctx.arc(ex+e.w/2,e.y+e.h/2+2,e.w/2,Math.PI,0);ctx.fill();ctx.fillRect(ex,e.y+e.h/2,e.w,e.h/2);}
+      ctx.fillStyle='#fff';ctx.fillRect(ex+5,e.y+8,5,6);ctx.fillRect(ex+e.w-10,e.y+8,5,6);}
+    var fx=flagX-camX,ft=flagY-6*S;if(fx<W+40){ctx.fillStyle='#ddd';ctx.fillRect(fx,ft,4,6*S);if(ok(IFL))ctx.drawImage(IFL,fx+2,ft,S,S);else{ctx.fillStyle=T.accent;ctx.beginPath();ctx.moveTo(fx+4,ft);ctx.lineTo(fx+40,ft+14);ctx.lineTo(fx+4,ft+28);ctx.fill();}}
+    if(deadT<=0||Math.floor(now/80)%2){var hx2=hero.x-camX,hy=hero.y;
+      if(sprite&&sprite.complete&&sprite.naturalWidth>0){ctx.save();ctx.beginPath();ctx.arc(hx2+hero.w/2,hy+hero.h/2,17,0,7);ctx.clip();ctx.drawImage(sprite,hx2-6,hy-4,36,36);ctx.restore();}
+      else if(ok(IH[0])){var hf=IH[Math.abs(hero.vx)>20&&hero.ground?Math.floor(now/140)%2:0];ctx.save();if(hero.face<0){ctx.translate(hx2+hero.w/2,0);ctx.scale(-1,1);ctx.translate(-(hx2+hero.w/2),0);}ctx.drawImage(hf,hx2-6,hy-6,36,36);ctx.restore();}
+      else{ctx.fillStyle=T.hero;ctx.fillRect(hx2,hy+10,hero.w,hero.h-10);ctx.fillRect(hx2-2,hy+4,hero.w+4,7);ctx.fillStyle='#f5c6a5';ctx.fillRect(hx2+4,hy+10,hero.w-8,9);
+        ctx.fillStyle='#000';ctx.fillRect(hx2+(hero.face>0?hero.w-9:5),hy+12,3,3);ctx.fillStyle='#1d3557';ctx.fillRect(hx2+2,hy+hero.h-8,hero.w-4,8);}}
+    ctx.fillStyle='#fff';ctx.font='bold 18px system-ui';ctx.textAlign='left';ctx.fillText('Score '+score,14,26);ctx.fillText('Lives '+lives,14,48);ctx.textAlign='right';ctx.fillText('Level '+level,W-14,26);
+    ctx.textAlign='center';
+    if(state!=='play'){ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';ctx.font='bold 40px system-ui';
+      var head=state==='ready'?T.title:state==='won'?'Level complete!':'Game Over';ctx.fillText(head,W/2,H*0.4);ctx.font='18px system-ui';ctx.fillStyle=T.accent;
+      if(state!=='ready')ctx.fillText('Score '+score+'   ·   Best '+best,W/2,H*0.4+36);
+      ctx.fillStyle='rgba(255,255,255,0.78)';
+      ctx.fillText(TOUCH?'Hold left or middle to run · tap the right side to jump':'Arrows to run · Space to jump',W/2,H*0.4+(state==='ready'?40:70));
+      ctx.fillStyle='#fff';ctx.fillText(state==='won'?(TOUCH?'Tap':'Space / tap')+' for the next level':(TOUCH?'Tap':'Space / tap')+' to '+(state==='ready'?'start':'retry'),W/2,H*0.4+(state==='ready'?70:100));}}
+  requestAnimationFrame(loop);
+  // Read-only hooks for tests (a sighted bot checks every level can be finished).
+  window.__game={get state(){return state;},get score(){return score;},get lives(){return lives;},get x(){return hero.x;},get y(){return hero.y;},
+    get ground(){return hero.ground;},get level(){return level;},get flagX(){return flagX;},solid:solid,
+    enemies:function(){return enemies.filter(function(e){return e.alive;}).map(function(e){return{x:e.x,y:e.y,vx:e.vx};});}};
+})();
+</script></body></html>

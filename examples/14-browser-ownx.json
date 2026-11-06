@@ -1,0 +1,22 @@
+{
+ "id": "cxbrowseownx",
+ "pid": "_examples",
+ "title": "Browser: open ownx.co and sum it up",
+ "ts": 1792832112333,
+ "html": "<div class=\"msg m me\"><div class=\"bub t\">load up the website ownx.co</div><div class=\"macts\"><span class=\"faint\">16:52</span><button type=\"button\" data-a=\"copy\" title=\"Copy\"><svg class=\"i\" viewBox=\"0 0 24 24\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"></rect><path d=\"M5 15V5a1 1 0 0 1 1-1h10\"></path></svg></button><button type=\"button\" data-a=\"edit\" title=\"Edit\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M4 20l4-1 11-11-3-3L5 16z\"></path></svg></button><button type=\"button\" data-a=\"retry\" title=\"Retry\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5\"></path></svg></button></div></div><div class=\"msg m ai\"><div class=\"bub t\">The page loaded successfully. It's the OwnX homepage for \"Scalable Private Intelligence (SPI)\".<br><br>Key things on the page:<br><br><b>Five layers of innovation:</b><br>1. <b>Own 1</b> — personal AI computer<br>2. <b>OwnX</b> — private AI platform<br>3. <b>OwnXOS</b> — AI-native operating system<br>4. <b>OwnXCloud</b> — Supercloud infrastructure<br>5. <b>EarthCompute</b> — compute resource management<br><br><b>Two main products highlighted:</b><br>- <b>Own 1</b> — \"A mind of your own\" — a personal AI computer with two local models and eight agents, no subscription, no per-token cost<br>- <b>OwnX</b> — browser-accessible AI platform with unlimited tokens, starting at $8/million tokens<br><br><b>Navigation sections:</b> Products, Solutions (Individuals, Builders, Enterprise, Public Sector), Company, Resources, and Guides.<br><br>There are interactive sliders for tokens per day, API pricing, and a comparison chart between \"renting\" vs \"owning\" AI infrastructure.</div><div class=\"macts ai\"><button type=\"button\" data-a=\"copy\" title=\"Copy\"><svg class=\"i\" viewBox=\"0 0 24 24\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"></rect><path d=\"M5 15V5a1 1 0 0 1 1-1h10\"></path></svg></button><button type=\"button\" data-a=\"retry\" title=\"Try again\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5\"></path></svg></button><button type=\"button\" data-r=\"up\" title=\"Good\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M7 11v9H4v-9zM7 11l4-7c1.2 0 2 .9 1.8 2.1L12 10h6a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7\"></path></svg></button><button type=\"button\" data-r=\"down\" title=\"Not right\"><svg class=\"i\" viewBox=\"0 0 24 24\"><g transform=\"matrix(1 0 0 -1 0 24)\"><path d=\"M7 11v9H4v-9zM7 11l4-7c1.2 0 2 .9 1.8 2.1L12 10h6a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7\"></path></g></svg></button></div></div>",
+ "history": [
+  {
+   "role": "user",
+   "content": "load up the website ownx.co"
+  },
+  {
+   "role": "assistant",
+   "content": "The page loaded successfully. It's the OwnX homepage for \"Scalable Private Intelligence (SPI)\".\n\nKey things on the page:\n\n**Five layers of innovation:**\n1. **Own 1** — personal AI computer\n2. **OwnX** — private AI platform\n3. **OwnXOS** — AI-native operating system\n4. **OwnXCloud** — Supercloud infrastructure\n5. **EarthCompute** — compute resource management\n\n**Two main products highlighted:**\n- **Own 1** — \"A mind of your own\" — a personal AI computer with two local models and eight agents, no subscription, no per-token cost\n- **OwnX** — browser-accessible AI platform with unlimited tokens, starting at $8/million tokens\n\n**Navigation sections:** Products, Solutions (Individuals, Builders, Enterprise, Public Sector), Company, Resources, and Guides.\n\nThere are interactive sliders for tokens per day, API pricing, and a comparison chart between \"renting\" vs \"owning\" AI infrastructure."
+  }
+ ],
+ "open": {
+  "kind": "image",
+  "title": "The agent's screen",
+  "href": "/examples/agent-screen-ownx.png"
+ }
+}

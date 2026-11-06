@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaunchFlow - Product Launch Planner</title>
+    <style>
+        /* 
+         * LAUNCHFLOW DESIGN SYSTEM 
+         * Theme: Clean SaaS, High Contrast, Modern
+         * Palette: #2563EB (Blue), #F3F4F6 (Gray), #10B981 (Green), #1F2937 (Dark)
+         */
+
+        :root {
+            /* Brand Colors */
+            --brand-primary: #2563EB;
+            --brand-primary-hover: #1d4ed8;
+            --brand-success: #10B981;
+            --brand-success-hover: #059669;
+            --brand-dark: #1F2937;
+            --brand-gray-light: #F3F4F6;
+            --brand-white: #FFFFFF;
+            --brand-text: #374151;
+            --brand-text-light: #6B7280;
+            
+            /* Status Colors */
+            --status-todo: #6366f1; /* Indigo */
+            --status-todo-bg: #EEF2FF;
+            --status-progress: #f59e0b; /* Amber */
+            --status-progress-bg: #FFFBEB;
+            --status-done: #10B981; /* Emerald */
+            --status-done-bg: #ECFDF5;
+
+            /* Spacing & Layout */
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-drag: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            
+            /* Transitions */
+            --ease-out: cubic-bezier(0.21, 1.02, 0.73, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            outline: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--brand-gray-light);
+            color: var(--brand-dark);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Header / Navigation --- */
+        header {
+            background-color: var(--brand-white);
+            height: 64px;
+            border-bottom: 1px solid #E5E7EB;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-success));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 18px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .brand-text h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--brand-dark);
+            letter-spacing: -0.025em;
+        }
+
+        .brand-text span {
+            font-size: 12px;
+            color: var(--brand-text-light);
+            font-weight: 500;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--brand-primary);
+            color: white;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--brand-primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-secondary {
+            background-color: var(--brand-gray-light);
+            color: var(--brand-dark);
+        }
+
+        .btn-secondary:hover {
+            background-color: #E5E7EB;
+        }
+
+        /* --- Main Board Layout --- */
+        main {
+            flex: 1;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 24px;
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        .column {
+            flex: 1;
+            min-width: 320px;
+            max-width: 400px;
+            background-color: #E5E7EB;
+            border-radius: var(--radius-md);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .column.drag-over {
+            border-color: var(--brand-primary);
+            background-color: #EFF6FF;
+        }
+
+        .column-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #D1D5DB;
+        }
+
+        .column-title {
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--brand-dark);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .column-count {
+            background-color: #D1D5DB;
+            color: var(--brand-dark);
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .column-body {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 100px;
+        }
+
+        /* Scrollbar Styling */
+        .column-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .column-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .column-body::-webkit-scrollbar-thumb {
+            background-color: #D1D5DB;
+            border-radius: 3px;
+        }
+
+        /* --- Kanban Cards --- */
+        .card {
+            background-color: var(--brand-white);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            box-shadow: var(--shadow-sm);
+            cursor: grab;
+            transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+            border-left: 4px solid transparent;
+            position: relative;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .card:active {
+            cursor: grabbing;
+        }
+
+        .card.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+            box-shadow: var(--shadow-drag);
+        }
+
+        .card.drag-over-placeholder {
+            background-color: #EFF6FF;
+            border: 2px dashed var(--brand-primary);
+            opacity: 0.6;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .card-tag {
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.05em;
+        }
+
+        .tag-design { background-color: #FCE7F3; color: #BE185D; }
+        .tag-dev { background-color: #DBEAFE; color: #1E40AF; }
+        .tag-marketing { background-color: #FEF3C7; color: #B45309; }
+        .tag-ops { background-color: #F3F4F6; color: #374151; }
+
+        .card-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--brand-dark);
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: var(--brand-text-light);
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .priority-badge {
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .priority-high { color: #EF4444; }
+        .priority-medium { color: #F59E0B; }
+        .priority-low { color: #10B981; }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #9CA3AF;
+            transition: color 0.2s;
+        }
+
+        .action-btn:hover {
+            color: var(--brand-dark);
+        }
+
+        .action-btn.delete:hover {
+            color: #EF4444;
+        }
+
+        /* --- Modal --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(31, 41, 55, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background-color: var(--brand-white);
+            width: 100%;
+            max-width: 500px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            padding: 24px;
+            transform: scale(0.95);
+            transition: transform 0.3s var(--ease-out);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+            color: var(--brand-dark);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--brand-dark);
+            margin-bottom: 6px;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #D1D5DB;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: inherit;
+            color: var(--brand-dark);
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 16px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        /* --- Footer --- */
+        footer {
+            background-color: var(--brand-white);
+            border-top: 1px solid #E5E7EB;
+            padding: 12px 24px;
+            font-size: 12px;
+            color: var(--brand-text-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* --- Empty State --- */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #9CA3AF;
+            font-size: 14px;
+            border: 2px dashed #D1D5DB;
+            border-radius: var(--radius-sm);
+            margin: 4px;
+            pointer-events: none;
+        }
+
+        /* SVG Icons */
+        .icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="brand-container">
+            <div class="logo-icon">LF</div>
+            <div class="brand-text">
+                <h1>LaunchFlow</h1>
+                <span>Product Launch Planner</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="resetBoard()">Reset Board</button>
+            <button class="btn btn-primary" onclick="openModal()">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                Add Task
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Board -->
+    <main id="board">
+        <!-- Columns will be injected here by JS -->
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <span>&copy; 2026 LaunchFlow. All rights reserved.</span>
+        <span>Drag & Drop Kanban for seamless product launch planning</span>
+    </footer>
+
+    <!-- Add Task Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create New Task</h2>
+            </div>
+            <form id="taskForm" onsubmit="handleFormSubmit(event)">
+                <div class="form-group">
+                    <label class="form-label">Task Title</label>
+                    <input type="text" id="inputTitle" class="form-input" placeholder="e.g., Finalize landing page copy" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea id="inputDesc" class="form-textarea" placeholder="Add details about this task..."></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <select id="inputCategory" class="form-select">
+                            <option value="design">Design</option>
+                            <option value="dev">Development</option>
+                            <option value="marketing">Marketing</option>
+                            <option value="ops">Operations</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Priority</label>
+                        <select id="inputPriority" class="form-select">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * LaunchFlow Application Logic
+         * Handles state management, rendering, and drag-and-drop functionality.
+         */
+
+        // --- State Management ---
+        
+        const initialData = [
+            {
+                id: '1',
+                title: 'Define Target Audience',
+                description: 'Create detailed personas for early adopters and mainstream market.',
+                column: 'todo',
+                category: 'marketing',
+                priority: 'high'
+            },
+            {
+                id: '2',
+                title: 'Design Beta UI',
+                description: 'High-fidelity mockups for the new dashboard.',
+                column: 'todo',
+                category: 'design',
+                priority: 'medium'
+            },
+            {
+                id: '3',
+                title: 'Setup Analytics',
+                description: 'Integrate Mixpanel and Google Analytics for launch tracking.',
+                column: 'in-progress',
+                category: 'dev',
+                priority: 'high'
+            },
+            {
+                id: '4',
+                title: 'Draft Press Release',
+                description: 'Prepare the core messaging and distribution list.',
+                column: 'in-progress',
+                category: 'marketing',
+                priority: 'medium'
+            },
+            {
+                id: '5',
+                title: 'Configure AWS Infrastructure',
+                description: 'Load balancers and auto-scaling groups.',
+                column: 'done',
+                category: 'dev',
+                priority: 'high'
+            }
+        ];
+
+        let state = {
+            columns: [
+                { id: 'todo', title: 'To Do', color: 'var(--status-todo)', bgColor: 'var(--status-todo-bg)' },
+                { id: 'in-progress', title: 'In Progress', color: 'var(--status-progress)', bgColor: 'var(--status-progress-bg)' },
+                { id: 'done', title: 'Done', color: 'var(--status-done)', bgColor: 'var(--status-done-bg)' }
+            ],
+            tasks: JSON.parse(JSON.stringify(initialData))
+        };
+
+        let draggedTaskId = null;
+
+        // --- Rendering ---
+
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+
+            state.columns.forEach(col => {
+                const columnEl = document.createElement('div');
+                columnEl.className = 'column';
+                columnEl.dataset.columnId = col.id;
+
+                // Drag Over Events for Column
+                columnEl.addEventListener('dragover', handleColumnDragOver);
+                columnEl.addEventListener('dragleave', handleColumnDragLeave);
+
+                // Header
+                const headerEl = document.createElement('div');
+                headerEl.className = 'column-header';
+                headerEl.innerHTML = `
+                    <div class="column-title">
+                        <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${col.color}"></span>
+                        ${col.title}
+                    </div>
+                    <span class="column-count">${state.tasks.filter(t => t.column === col.id).length}</span>
+                `;
+
+                // Body
+                const bodyEl = document.createElement('div');
+                bodyEl.className = 'column-body';
+                bodyEl.dataset.columnId = col.id;
+
+                const columnTasks = state.tasks.filter(t => t.column === col.id);
+
+                if (columnTasks.length === 0) {
+                    bodyEl.innerHTML = `<div class="empty-state">Drop tasks here</div>`;
+                } else {
+                    columnTasks.forEach(task => {
+                        bodyEl.appendChild(createCardElement(task));
+                    });
+                }
+
+                columnEl.appendChild(headerEl);
+                columnEl.appendChild(bodyEl);
+                board.appendChild(columnEl);
+            });
+        }
+
+        function createCardElement(task) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.draggable = true;
+            card.dataset.id = task.id;
+
+            // Drag Events
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragend', handleDragEnd);
+
+            // Category Tag Style
+            let tagClass = 'tag-design';
+            if (task.category === 'dev') tagClass = 'tag-dev';
+            if (task.category === 'marketing') tagClass = 'tag-marketing';
+            if (task.category === 'ops') tagClass = 'tag-ops';
+
+            // Priority Icon
+            let priorityIcon = '';
+            if (task.priority === 'high') priorityIcon = '<svg class="icon" viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm0 4l7.53 13H4.47L12 6z"/></svg>';
+            if (task.priority === 'medium') priorityIcon = '<svg class="icon" viewBox="0 0 24 24"><path d="M12 6l6 12H6l6-12z"/></svg>';
+            if (task.priority === 'low') priorityIcon = '<svg class="icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <span class="card-tag ${tagClass}">${task.category}</span>
+                    <div class="card-actions">
+                        <button class="action-btn delete" onclick="deleteTask('${task.id}')" title="Delete">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-title">${task.title}</div>
+                <div class="card-desc">${task.description}</div>
+                <div class="card-footer">
+                    <div class="priority-badge priority-${task.priority}">
+                        ${priorityIcon} ${task.priority.toUpperCase()}
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        // --- Drag and Drop Logic ---
+
+        function handleDragStart(e) {
+            draggedTaskId = e.target.dataset.id;
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            // Set a transparent drag image or default
+            e.dataTransfer.setData('text/plain', draggedTaskId);
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            draggedTaskId = null;
+            // Clear any drag-over styles on columns
+            document.querySelectorAll('.column').forEach(col => col.classList.remove('drag-over'));
+        }
+
+        function handleColumnDragOver(e) {
+            e.preventDefault(); // Necessary to allow dropping
+            const column = e.currentTarget;
+            column.classList.add('drag-over');
+        }
+
+        function handleColumnDragLeave(e) {
+            // Only remove if we actually left the column element
+            if (!e.currentTarget.contains(e.relatedTarget)) {
+                e.currentTarget.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const column = e.currentTarget;
+            column.classList.remove('drag-over');
+            
+            const taskId = e.dataTransfer.getData('text/plain');
+            const newColumnId = column.dataset.columnId;
+
+            if (!taskId || !newColumnId) return;
+
+            // Update State
+            const taskIndex = state.tasks.findIndex(t => t.id === taskId);
+            if (taskIndex > -1) {
+                state.tasks[taskIndex].column = newColumnId;
+                renderBoard();
+            }
+        }
+
+        // --- Form & Modal Logic ---
+
+        function openModal() {
+            document.getElementById('modalOverlay').classList.add('active');
+            document.getElementById('inputTitle').focus();
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+            document.getElementById('taskForm').reset();
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            const title = document.getElementById('inputTitle').value;
+            const desc = document.getElementById('inputDesc').value;
+            const category = document.getElementById('inputCategory').value;
+            const priority = document.getElementById('inputPriority').value;
+
+            const newTask = {
+                id: Date.now().toString(),
+                title: title,
+                description: desc,
+                column: 'todo',
+                category: category,
+                priority: priority
+            };
+
+            state.tasks.push(newTask);
+            renderBoard();
+            closeModal();
+        }
+
+        function deleteTask(id) {
+            if(confirm('Are you sure you want to delete this task?')) {
+                state.tasks = state.tasks.filter(t => t.id !== id);
+                renderBoard();
+            }
+        }
+
+        function resetBoard() {
+            if(confirm('Reset board to default state?')) {
+                state.tasks = JSON.parse(JSON.stringify(initialData));
+                renderBoard();
+            }
+        }
+
+        // --- Initialization ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderBoard();
+            
+            // Add listeners to all columns for dropping
+            document.querySelectorAll('.column-body').forEach(body => {
+                body.addEventListener('drop', handleDrop);
+            });
+        });
+
+    </script>
+</body>
+</html>

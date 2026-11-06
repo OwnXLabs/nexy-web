@@ -1,0 +1,13 @@
+{
+ "id": "cxshop",
+ "pid": "_examples",
+ "title": "Online store: handmade candles",
+ "ts": 1791459880000,
+ "html": "<div class=\"msg m me\"><div class=\"bub t\">Build me a single-page online store website for a handmade candle shop: a grid of 6 candles with prices, add to cart, a cart panel with a running total and remove buttons, and a checkout button</div><div class=\"macts\"><span class=\"faint\">09:55 AM</span><button type=\"button\" data-a=\"copy\" title=\"Copy\"><svg class=\"i\" viewBox=\"0 0 24 24\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"></rect><path d=\"M5 15V5a1 1 0 0 1 1-1h10\"></path></svg></button><button type=\"button\" data-a=\"edit\" title=\"Edit\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M4 20l4-1 11-11-3-3L5 16z\"></path></svg></button><button type=\"button\" data-a=\"retry\" title=\"Retry\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5\"></path></svg></button></div></div><div class=\"msg m ai\"><div class=\"bub t\">Building that on this machine, not in a datacentre. You can watch it come together on the right.</div><div class=\"macts ai\"><button type=\"button\" data-a=\"copy\" title=\"Copy\"><svg class=\"i\" viewBox=\"0 0 24 24\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"></rect><path d=\"M5 15V5a1 1 0 0 1 1-1h10\"></path></svg></button><button type=\"button\" data-a=\"retry\" title=\"Try again\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5\"></path></svg></button></div></div><div class=\"msg m ai\"><div class=\"bub t\">Done — it is on the right and it runs. Built on this machine in 257s.</div><div class=\"macts ai\"><button type=\"button\" data-a=\"copy\" title=\"Copy\"><svg class=\"i\" viewBox=\"0 0 24 24\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"></rect><path d=\"M5 15V5a1 1 0 0 1 1-1h10\"></path></svg></button><button type=\"button\" data-a=\"retry\" title=\"Try again\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5\"></path></svg></button></div><div class=\"rate\" style=\"display: flex; gap: 4px; align-items: center; margin: 4px 0px 0px 4px; font-size: 12px; opacity: 0.7;\"><button class=\"btn small\" data-r=\"up\" title=\"Good\">👍</button><button class=\"btn small\" data-r=\"down\" title=\"Not right\">👎</button></div></div>",
+ "history": [],
+ "open": {
+  "kind": "html",
+  "title": "Online store: handmade candles",
+  "href": "/examples/shop.html"
+ }
+}

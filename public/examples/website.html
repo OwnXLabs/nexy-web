@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scoops & Smiles | Handcrafted Ice Cream</title>
+    <style>
+        /* 
+         * Scoops & Smiles - Official Website
+         * Brand Colors: #FFB7B2 (Pink), #FFDAC1 (Peach), #E2F0CB (Lime), #B5EAD7 (Mint)
+         * Typography: Google Fonts (Playfair Display, Fredoka One, Caveat)
+         */
+
+        :root {
+            --c-pink: #FFB7B2;
+            --c-peach: #FFDAC1;
+            --c-lime: #E2F0CB;
+            --c-mint: #B5EAD7;
+            --c-cream: #FFFDF9;
+            --c-text: #5D4037;
+            --c-text-light: #8D6E63;
+            --shadow-soft: 0 10px 25px rgba(93, 64, 55, 0.1);
+            --shadow-hover: 0 15px 35px rgba(93, 64, 55, 0.15);
+            --font-heading: 'Fredoka One', cursive, sans-serif;
+            --font-body: 'Quicksand', sans-serif;
+            --font-accent: 'Caveat', cursive;
+        }
+
+        /* --- Reset & Base --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            font-size: 16px;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--c-cream);
+            color: var(--c-text);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(255, 183, 178, 0.2) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(181, 234, 215, 0.2) 0%, transparent 20%),
+                url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+        }
+
+        /* --- Typography --- */
+        h1, h2, h3, h4 {
+            font-family: var(--font-heading);
+            font-weight: 400;
+            color: var(--c-text);
+        }
+
+        .accent-text {
+            font-family: var(--font-accent);
+            color: var(--c-pink);
+            font-size: 1.5rem;
+            transform: rotate(-3deg);
+            display: inline-block;
+        }
+
+        /* --- Utility Classes --- */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-family: var(--font-heading);
+            font-size: 1.1rem;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            cursor: pointer;
+            border: none;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .btn-primary {
+            background-color: var(--c-pink);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .btn-primary:hover {
+            background-color: #ff9e99;
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .btn-secondary {
+            background-color: var(--c-mint);
+            color: var(--c-text);
+        }
+
+        .btn-secondary:hover {
+            background-color: #a0d8c5;
+            transform: translateY(-3px);
+        }
+
+        .section-padding {
+            padding: 80px 0;
+        }
+
+        /* --- Navigation --- */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(255, 253, 249, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px 0;
+            transition: all 0.3s ease;
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: var(--font-heading);
+            font-size: 1.8rem;
+            color: var(--c-text);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo span {
+            color: var(--c-pink);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--c-text);
+            font-weight: 600;
+            font-size: 1rem;
+            position: relative;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 3px;
+            background-color: var(--c-mint);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--c-text);
+            cursor: pointer;
+        }
+
+        /* --- Hero Section --- */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+            padding-top: 80px;
+        }
+
+        .hero-content {
+            z-index: 2;
+            max-width: 800px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(5px);
+            border-radius: 30px;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            animation: fadeIn 1s ease-out;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            color: var(--c-text);
+        }
+
+        .hero p {
+            font-size: 1.5rem;
+            color: var(--c-text-light);
+            margin-bottom: 30px;
+            font-family: var(--font-accent);
+        }
+
+        .hero-image {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* CSS Ice Cream Graphic */
+        .ice-cream-graphic {
+            position: absolute;
+            bottom: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 400px;
+            z-index: 0;
+            opacity: 0.8;
+        }
+
+        .cone {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 60px solid transparent;
+            border-right: 60px solid transparent;
+            border-top: 180px solid var(--c-peach);
+            filter: drop-shadow(0 5px 5px rgba(0,0,0,0.1));
+        }
+        
+        .cone::after {
+            content: '';
+            position: absolute;
+            top: -180px;
+            left: -60px;
+            width: 120px;
+            height: 180px;
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.2) 5px, rgba(255,255,255,0.2) 10px);
+        }
+
+        .scoop {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            box-shadow: inset -10px -10px 20px rgba(0,0,0,0.1);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .scoop-1 {
+            width: 140px;
+            height: 140px;
+            bottom: 120px;
+            background-color: var(--c-pink);
+            z-index: 3;
+        }
+
+        .scoop-2 {
+            width: 120px;
+            height: 120px;
+            bottom: 210px;
+            background-color: var(--c-mint);
+            z-index: 2;
+        }
+
+        .scoop-3 {
+            width: 100px;
+            height: 100px;
+            bottom: 280px;
+            background-color: var(--c-lime);
+            z-index: 1;
+        }
+
+        .sprinkles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        .sprinkle {
+            position: absolute;
+            width: 4px;
+            height: 12px;
+            border-radius: 2px;
+            background: white;
+            opacity: 0.7;
+        }
+
+        /* --- About Section --- */
+        .about {
+            background-color: white;
+            position: relative;
+        }
+
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+            align-items: center;
+        }
+
+        .about-image {
+            position: relative;
+            height: 400px;
+            background-color: var(--c-peach);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: var(--shadow-soft);
+        }
+        
+        .about-image::before {
+            content: 'Est. 2023';
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-family: var(--font-accent);
+            color: white;
+            font-size: 1.5rem;
+            background: var(--c-pink);
+            padding: 5px 15px;
+            border-radius: 20px;
+        }
+
+        .story-content h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .story-content p {
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+        }
+
+        /* --- Menu Section --- */
+        .menu {
+            background-color: var(--c-lime);
+            background-image: radial-gradient(circle, rgba(255,255,255,0.4) 2px, transparent 2.5px);
+            background-size: 30px 30px;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .section-header h2 {
+            font-size: 3rem;
+            color: var(--c-text);
+        }
+
+        .flavor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+        }
+
+        .flavor-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid transparent;
+        }
+
+        .flavor-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--c-peach);
+        }
+
+        .flavor-icon {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            position: relative;
+        }
+
+        /* Dynamic flavor colors via JS classes */
+        .flavor-card.strawberry .flavor-icon { background-color: var(--c-pink); }
+        .flavor-card.vanilla .flavor-icon { background-color: var(--c-peach); }
+        .flavor-card.mint .flavor-icon { background-color: var(--c-mint); }
+        .flavor-card.limeade .flavor-icon { background-color: var(--c-lime); }
+        .flavor-card.chocolate .flavor-icon { background-color: #D7CCC8; }
+        .flavor-card.berry .flavor-icon { background-color: #F8BBD0; }
+
+        .flavor-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+
+        .flavor-desc {
+            color: var(--c-text-light);
+            font-size: 0.95rem;
+            margin-bottom: 15px;
+        }
+
+        .price-tag {
+            display: inline-block;
+            background: var(--c-cream);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            color: var(--c-text);
+        }
+
+        /* --- Reviews Section --- */
+        .reviews {
+            background-color: white;
+        }
+
+        .review-slider {
+            display: flex;
+            overflow-x: auto;
+            gap: 30px;
+            padding-bottom: 20px;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .review-card {
+            min-width: 300px;
+            background: var(--c-cream);
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid var(--c-peach);
+            scroll-snap-align: center;
+            position: relative;
+        }
+
+        .review-card::before {
+            content: '"';
+            font-family: var(--font-heading);
+            font-size: 4rem;
+            color: var(--c-pink);
+            opacity: 0.3;
+            position: absolute;
+            top: 10px;
+            left: 20px;
+        }
+
+        .stars {
+            color: #FFD700;
+            margin-bottom: 15px;
+        }
+
+        .review-text {
+            font-style: italic;
+            margin-bottom: 20px;
+            color: var(--c-text);
+        }
+
+        .reviewer {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: var(--c-mint);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+
+        /* --- Hours & Location --- */
+        .info-section {
+            background-color: var(--c-pink);
+            color: white;
+            position: relative;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+        }
+
+        .hours-box, .location-box {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+        }
+
+        .hours-list {
+            list-style: none;
+            margin-top: 20px;
+        }
+
+        .hours-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px dashed rgba(255,255,255,0.5);
+            font-size: 1.1rem;
+        }
+
+        .map-placeholder {
+            width: 100%;
+            height: 250px;
+            background-color: rgba(255,255,255,0.3);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+            color: white;
+            font-weight: bold;
+            border: 2px solid white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .map-placeholder:hover {
+            background-color: rgba(255,255,255,0.4);
+        }
+
+        /* --- Footer --- */
+        footer {
+            background-color: var(--c-text);
+            color: white;
+            padding: 50px 0;
+            text-align: center;
+        }
+
+        .footer-logo {
+            font-family: var(--font-heading);
+            font-size: 2rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .social-link {
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-decoration: none;
+            transition: background 0.3s;
+        }
+
+        .social-link:hover {
+            background: var(--c-pink);
+        }
+
+        .copyright {
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+
+        /* --- Animations --- */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-10px); }
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .about-grid, .info-grid { grid-template-columns: 1fr; }
+            .nav-links { display: none; }
+            .mobile-menu-btn { display: block; }
+            .ice-cream-graphic { display: none; }
+        }
+
+        /* --- Modal --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--c-text-light);
+        }
+
+    </style>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Fredoka+One&family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="container nav-container">
+            <a href="#" class="logo">
+                <span style="color: var(--c-pink)">🍦</span> Scoops & Smiles
+            </a>
+            <button class="mobile-menu-btn" aria-label="Menu">☰</button>
+            <ul class="nav-links">
+                <li><a href="#home">Home</a></li>
+                <li><a href="#about">Our Story</a></li>
+                <li><a href="#menu">Flavors</a></li>
+                <li><a href="#reviews">Reviews</a></li>
+                <li><a href="#visit">Visit Us</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <span class="accent-text">Est. 2023</span>
+                <h1>Handcrafted ice cream made with love, served with memories.</h1>
+                <p>Experience the sweetness of simple joys at your neighborhood parlour.</p>
+                <div style="margin-top: 30px;">
+                    <a href="#menu" class="btn btn-primary">View Menu</a>
+                    <a href="#visit" class="btn btn-secondary" style="margin-left: 10px;">Find Us</a>
+                </div>
+            </div>
+            
+            <!-- CSS Art Ice Cream -->
+            <div class="ice-cream-graphic">
+                <div class="scoop scoop-3"></div>
+                <div class="scoop scoop-2"></div>
+                <div class="scoop scoop-1"></div>
+                <div class="cone"></div>
+                <!-- Sprinkles generated by JS -->
+                <div class="sprinkles" id="sprinkles-container"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="section-padding about">
+        <div class="container about-grid">
+            <div class="about-image">
+                <!-- Placeholder for a real image -->
+                <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #FFDAC1 0%, #FFB7B2 100%); display: flex; align-items: center; justify-content: center; color: white; font-family: var(--font-heading); font-size: 2rem;">
+                    Family Photo Placeholder
+                </div>
+            </div>
+            <div class="story-content">
+                <span class="accent-text">From our family to yours</span>
+                <h2>More Than Just Ice Cream</h2>
+                <p>It all started in a small kitchen with a big dream and an even bigger mixer. The Miller family has been perfecting the art of the scoop since 2023.</p>
+                <p>We believe in using only the freshest local ingredients, sustainable packaging, and a whole lot of laughter. Whether you're celebrating a birthday, a graduation, or just a Tuesday, we're here to make it sweeter.</p>
+                <a href="#reviews" class="btn btn-secondary" style="margin-top: 20px;">Read Our Story</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Menu Section -->
+    <section id="menu" class="section-padding menu">
+        <div class="container">
+            <div class="section-header">
+                <span class="accent-text">Taste the Rainbow</span>
+                <h2>Today's Flavors</h2>
+                <p style="max-width: 600px; margin: 10px auto; color: var(--c-text-light);">Rotating seasonal favorites and classic crowd-pleasers.</p>
+            </div>
+            
+            <div class="flavor-grid" id="flavor-grid">
+                <!-- Flavors injected via JS -->
+            </div>
+            
+            <div style="text-align: center; margin-top: 50px;">
+                <button class="btn btn-primary" onclick="openModal()">View Full Menu PDF</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Reviews Section -->
+    <section id="reviews" class="section-padding reviews">
+        <div class="container">
+            <div class="section-header">
+                <span class="accent-text">Happy Customers</span>
+                <h2>What They're Saying</h2>
+            </div>
+            
+            <div class="review-slider" id="review-slider">
+                <!-- Reviews injected via JS -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Info Section -->
+    <section id="visit" class="section-padding info-section">
+        <div class="container info-grid">
+            <div class="hours-box">
+                <h2>Opening Hours</h2>
+                <ul class="hours-list">
+                    <li><span>Monday - Thursday</span> <span>12:00 PM - 8:00 PM</span></li>
+                    <li><span>Friday</span> <span>12:00 PM - 10:00 PM</span></li>
+                    <li><span>Saturday</span> <span>11:00 AM - 10:00 PM</span></li>
+                    <li><span>Sunday</span> <span>11:00 AM - 9:00 PM</span></li>
+                </ul>
+            </div>
+            
+            <div class="location-box">
+                <h2>Find Us</h2>
+                <p style="font-size: 1.2rem; margin-bottom: 10px;">123 Sweetness Lane, Sugarcreek, ST 55555</p>
+                <p style="margin-bottom: 20px;">Right next to the old oak tree park!</p>
+                <div class="map-placeholder" onclick="alert('Map integration would go here!')">
+                    View on Google Maps
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <span class="footer-logo">Scoops & Smiles</span>
+            <div class="social-links">
+                <a href="#" class="social-link" aria-label="Facebook">f</a>
+                <a href="#" class="social-link" aria-label="Instagram">📷</a>
+                <a href="#" class="social-link" aria-label="Twitter">𝕏</a>
+            </div>
+            <p class="copyright">&copy; 2026 Scoops & Smiles Ice Cream Parlour. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="pdfModal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h2>Full Menu</h2>
+            <p style="margin: 20px 0;">Our full menu is available as a downloadable PDF for easy access on the go.</p>
+            <button class="btn btn-primary" onclick="closeModal()">Download PDF</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Data ---
+        const flavors = [
+            { name: "Strawberry Sunrise", desc: "Fresh local berries swirled with vanilla cream.", price: "$4.50", type: "strawberry", icon: "🍓" },
+            { name: "Minty Fresh", desc: "Cool mint leaves infused into a creamy base.", price: "$4.50", type: "mint", icon: "🌿" },
+            { name: "Golden Vanilla", desc: "Madagascar vanilla beans, slow-churned.", price: "$4.00", type: "vanilla", icon: "🍦" },
+            { name: "Lime Zest", desc: "Tangy lime juice mixed with sweet condensed milk.", price: "$4.50", type: "limeade", icon: "🍋" },
+            { name: "Midnight Choco", desc: "70% dark chocolate gantry folded in.", price: "$5.00", type: "chocolate", icon: "🍫" },
+            { name: "Berry Bliss", desc: "A mix of blueberries, raspberries, and blackberries.", price: "$4.50", type: "berry", icon: "🫐" }
+        ];
+
+        const reviews = [
+            { name: "Sarah J.", text: "The best strawberry sundae in town! My kids are obsessed.", rating: 5 },
+            { name: "Mike T.", text: "Love the minty fresh flavor. It's so refreshing on a hot day.", rating: 5 },
+            { name: "Emily R.", text: "Such a wholesome atmosphere. You can feel the love in every scoop.", rating: 4 },
+            { name: "David L.", text: "Great selection of vegan options too. Highly recommend!", rating: 5 }
+        ];
+
+        // --- Render Functions ---
+
+        function renderFlavors() {
+            const grid = document.getElementById('flavor-grid');
+            grid.innerHTML = flavors.map((f, index) => `
+                <div class="flavor-card ${f.type}" style="animation: fadeIn 0.5s ease-out ${index * 0.1}s backwards;">
+                    <div class="flavor-icon">${f.icon}</div>
+                    <h3>${f.name}</h3>
+                    <p class="flavor-desc">${f.desc}</p>
+                    <span class="price-tag">${f.price}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderReviews() {
+            const slider = document.getElementById('review-slider');
+            slider.innerHTML = reviews.map(r => `
+                <div class="review-card">
+                    <div class="stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+                    <p class="review-text">"${r.text}"</p>
+                    <div class="reviewer">
+                        <div class="avatar">${r.name.charAt(0)}</div>
+                        <span style="font-weight: bold;">${r.name}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function generateSprinkles() {
+            const container = document.getElementById('sprinkles-container');
+            const colors = ['#FFB7B2', '#FFDAC1', '#E2F0CB', '#B5EAD7', '#FFF'];
+            
+            for(let i=0; i<30; i++) {
+                const s = document.createElement('div');
+                s.className = 'sprinkle';
+                s.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                s.style.left = Math.random() * 100 + '%';
+                s.style.top = Math.random() * 100 + '%';
+                s.style.transform = `rotate(${Math.random() * 360}deg)`;
+                container.appendChild(s);
+            }
+        }
+
+        // --- Interaction ---
+
+        function openModal() {
+            document.getElementById('pdfModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('pdfModal').classList.remove('active');
+        }
+
+        // Close modal on outside click
+        document.getElementById('pdfModal').addEventListener('click', (e) => {
+            if (e.target.id === 'pdfModal') closeModal();
+        });
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderFlavors();
+            renderReviews();
+            generateSprinkles();
+        });
+
+    </script>
+</body>
+</html>

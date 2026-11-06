@@ -1,0 +1,18 @@
+{
+  "name": "nexy-web",
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.0.0",
+    "@novnc/novnc": "1.5.0",
+    "astro": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.3.0"
+  }
+}

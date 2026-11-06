@@ -1,0 +1,13 @@
+{
+ "id": "cxe7mumbxp0d",
+ "pid": "_examples",
+ "title": "Product shot, made on the box",
+ "ts": 1790665381057,
+ "html": "<div class=\"msg m me\"><div class=\"bub t\">Generate an image of a sleek small black home server glowing softly on a wooden desk next to a plant, product photo</div><div class=\"macts\"><span class=\"faint\">03:02 PM</span><button type=\"button\" data-a=\"copy\" title=\"Copy\"><svg class=\"i\" viewBox=\"0 0 24 24\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"></rect><path d=\"M5 15V5a1 1 0 0 1 1-1h10\"></path></svg></button><button type=\"button\" data-a=\"edit\" title=\"Edit\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M4 20l4-1 11-11-3-3L5 16z\"></path></svg></button><button type=\"button\" data-a=\"retry\" title=\"Retry\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5\"></path></svg></button></div></div><div class=\"msg m ai\"><div class=\"bub t\">Asking Own Image Studio for that. It runs on this machine, so it takes a moment — one model is resident at a time.</div><div class=\"macts ai\"><button type=\"button\" data-a=\"copy\" title=\"Copy\"><svg class=\"i\" viewBox=\"0 0 24 24\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"></rect><path d=\"M5 15V5a1 1 0 0 1 1-1h10\"></path></svg></button><button type=\"button\" data-a=\"retry\" title=\"Try again\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5\"></path></svg></button></div></div><div class=\"msg m ai\"><div class=\"bub t\">Done. It is on the right, made by Own Image Studio on this machine. Want variations, or a crop for social?</div><div class=\"macts ai\"><button type=\"button\" data-a=\"copy\" title=\"Copy\"><svg class=\"i\" viewBox=\"0 0 24 24\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"></rect><path d=\"M5 15V5a1 1 0 0 1 1-1h10\"></path></svg></button><button type=\"button\" data-a=\"retry\" title=\"Try again\"><svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5\"></path></svg></button></div><div class=\"rate\" style=\"display: flex; gap: 4px; align-items: center; margin: 4px 0px 0px 4px; font-size: 12px; opacity: 0.7;\"><button class=\"btn small\" data-r=\"up\" title=\"Good\">👍</button><button class=\"btn small\" data-r=\"down\" title=\"Not right\">👎</button></div></div>",
+ "history": [],
+ "open": {
+  "kind": "image",
+  "title": "Product shot, made on the box",
+  "href": "/examples/product-shot.png"
+ }
+}
