@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { engineFor } from "../../../lib/engine";
+import { boxAllowed, boxRefused } from "../../../lib/box";
 
 export const prerender = false;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -7,6 +8,7 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 const mem = (r: Request) => { const e = engineFor(false, r.headers.get("x-nexy-eval") === "1"); return e.available() ? e.memory : undefined; };
 
 export const GET: APIRoute = async ({ url, request }) => {
+  if (!boxAllowed(request)) return boxRefused();
   const m = mem(request);
   if (!m) return json({ error: "The agent that keeps memory is not configured on this machine." }, 503);
   try {
@@ -15,6 +17,7 @@ export const GET: APIRoute = async ({ url, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ url, request }) => {
+  if (!boxAllowed(request)) return boxRefused();
   const m = mem(request);
   if (!m) return json({ error: "The agent that keeps memory is not configured on this machine." }, 503);
   const id = url.searchParams.get("id") ?? undefined;
