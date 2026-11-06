@@ -41,4 +41,8 @@ NEXY_DATA_DIR=./data node dist/server/entry.mjs
 
 ## Status
 
-Imported from the Own1 desktop repository at commit `6b605340` (2026-11-06), without its history. A license will be chosen before this repository is made public.
+Imported from the Own1 desktop repository at commit `6b605340` (2026-11-06), without its history.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
