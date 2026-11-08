@@ -8,7 +8,7 @@ const dir = mkdtempSync(join(tmpdir(),'nexy-chat-test-'));
 process.env.NEXY_DATA_DIR=dir;
 const code=buildSync({entryPoints:[resolve(__dirname,'../src/lib/chats.ts')],bundle:true,platform:'node',format:'cjs',write:false,define:{'import.meta.glob':'emptyExamples'}}).outputFiles[0].text;
 const m={exports:{}};new Function('require','module','exports','emptyExamples',code)(require,m,m.exports,()=>({}));
-const { clean,put,get,list }=m.exports;
+const { clean,put,get,list,adopt }=m.exports;
 after(()=>rmSync(dir,{recursive:true,force:true}));
 const raw={id:'ctestapple',pid:'_',title:'Apple',html:'<div>Apple transcript</div>',history:[{role:'user',content:'Build apples'}],outputs:[{id:'build:apple',kind:'html',title:'Apple site',source:'<h1>Apple</h1>',href:'/api/apps/build/api/director/runs/apple/preview'}],activeOutput:'build:apple'};
 test('conversation output data and preview selection survive real disk storage',async()=>{
@@ -28,4 +28,14 @@ test('output URLs exclude executable and off-site schemes',()=>{
 });
 test('oversized output collections are rejected instead of losing data silently',()=>{
  assert.equal(clean({...raw,outputs:[{...raw.outputs[0],source:'x'.repeat(8_000_001)}]}),null);
+});
+test('a device\'s earlier chats join the signed-in owner once, by copy, without overwriting',async()=>{
+ const a=clean({...raw,id:'cadoptone',title:'Old phone chat'}),b=clean({...raw,id:'cadopttwo',title:'Owner chat'});
+ await put('o_dev_1',a);await put('o_dev_1',clean({...raw,id:'cadopttwo',title:'Device copy'}));await put('o_xauth_x',b);
+ assert.equal(await adopt('o_dev_1','o_xauth_x'),1);
+ assert.equal((await get('o_xauth_x','cadoptone')).title,'Old phone chat');
+ assert.equal((await get('o_xauth_x','cadopttwo')).title,'Owner chat');
+ assert(await get('o_dev_1','cadoptone'));
+ assert.equal(await adopt('o_dev_1','o_xauth_x'),0);
+ assert.equal(await adopt('o_xauth_x','o_xauth_x'),0);
 });

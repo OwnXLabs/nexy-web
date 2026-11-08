@@ -1,5 +1,6 @@
 import type { APIContext } from "astro";
 import { createHash } from "node:crypto";
+import { adopt } from "./chats";
 
 export const COOKIE = "own_owner";
 
@@ -22,9 +23,13 @@ export function identityOwner(request: Request): string | null {
 
 export function owner(ctx: APIContext): string {
   const signedIn = identityOwner(ctx.request);
-  if (signedIn) return signedIn;
-
   const existing = ctx.cookies.get(COOKIE)?.value;
+  if (signedIn) {
+    if (existing && SHAPE.test(existing) && existing !== signedIn)
+      adopt(existing, signedIn).catch((e) => console.warn(`[nexy] adopting chats failed: ${(e as Error).message}`));
+    return signedIn;
+  }
+
   if (existing && SHAPE.test(existing)) return existing;
 
   const id = fresh();
@@ -35,7 +40,7 @@ export function owner(ctx: APIContext): string {
     ...(domain ? { domain: `.${domain}` } : {}),
     sameSite: "lax",
     httpOnly: true,
-    secure: false,
+    secure: ctx.url.protocol === "https:",
   });
   return id;
 }

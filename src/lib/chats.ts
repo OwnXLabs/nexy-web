@@ -1,5 +1,5 @@
 import { cleanOutputs, type ChatOutput } from "./chat-output";
-import { promises as fs } from "node:fs";
+import { promises as fs, constants } from "node:fs";
 import * as path from "node:path";
 
 const DIR = process.env.NEXY_DATA_DIR ? path.join(process.env.NEXY_DATA_DIR, "chats") : "/var/lib/nexy/chats";
@@ -50,6 +50,23 @@ export async function put(owner: string, c: SavedChat): Promise<void> {
   const tmp = `${fileOf(owner, c.id)}.${process.pid}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(c), { mode: 0o600 });
   await fs.rename(tmp, fileOf(owner, c.id));
+}
+
+// A device's earlier chats (kept under its browser owner) join the signed-in owner once.
+// Copies only: nothing is moved or deleted, and chats already there win.
+export async function adopt(from: string, to: string): Promise<number> {
+  if (from === to) return 0;
+  const mark = path.join(dirOf(to), `.adopted-${from.replace(/[^\w-]/g, "_")}`);
+  if (await fs.stat(mark).then(() => true, () => false)) return 0;
+  const names = await fs.readdir(dirOf(from)).catch((e) => { if (e.code !== "ENOENT") throw e; return [] as string[]; });
+  await fs.mkdir(dirOf(to), { recursive: true, mode: 0o700 });
+  let n = 0;
+  for (const name of names.filter((x) => x.endsWith(".json"))) {
+    try { await fs.copyFile(path.join(dirOf(from), name), path.join(dirOf(to), name), constants.COPYFILE_EXCL); n++; }
+    catch (e: any) { if (e?.code !== "EEXIST") throw e; }
+  }
+  await fs.writeFile(mark, String(n), { mode: 0o600 });
+  return n;
 }
 
 export async function remove(owner: string, id: string): Promise<void> {
