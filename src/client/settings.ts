@@ -56,7 +56,7 @@ async function section(sec: string): Promise<string> {
     row("Where new projects live", sel("defloc", [["own1", "Own 1, this desk"]], "own1"));
   if (sec === "nexy") {
     await loadVoices();
-    return `<h3>Nexy</h3>` +
+    return `<h3>Nexy</h3>` + await engineRow() +
       row("Voice", voices.length ? sel("voice", voices.map((v) => [v.id, v.name]), P.voice) : not("Own Voice is not answering"), "Spoken by Own Voice on this machine") +
       row("Speak replies aloud", sw(P.speakAlways, "speakAlways"), "Off: only in voice mode") +
       row("Hold space to talk", sw(P.wakeKey, "wakeKey")) +
@@ -109,6 +109,17 @@ async function section(sec: string): Promise<string> {
     row("Speech", not("Own Voice, on this machine")) + row("Web pages", not("Read on this machine"), "No cloud reader");
 }
 
+// the agent engine for this owner's chats; names come from the server, which lists what runs here
+type EngineList = { engines: { id: string; label: string; note: string }[]; selected: string | null };
+async function engineRow(): Promise<string> {
+  const r = await fetch("/api/v1/engines").then(async (x) => (x.ok ? ((await x.json()) as EngineList) : null)).catch((e) => { console.warn("[nexy] engines unavailable", e); return null; });
+  if (!r || !r.engines.length) return row("Agent engine", not("One engine on this machine"));
+  if (r.engines.length === 1) return row("Agent engine", not(r.engines[0].label), r.engines[0].note);
+  const cur = r.engines.find((e) => e.id === r.selected) ?? r.engines[0];
+  return row("Agent engine", `<select data-engine>${r.engines.map((e) => `<option value="${esc(e.id)}"${e.id === cur.id ? " selected" : ""}>${esc(e.label)}</option>`).join("")}</select>`,
+    `${esc(cur.note)}. New chats use it; each chat keeps the history it already has.`);
+}
+
 export async function renderSettings(sec = "general"): Promise<void> {
   const nav = $("#setNav"), body = $("#setBody");
   if (!nav || !body) return;
@@ -121,6 +132,11 @@ export async function renderSettings(sec = "general"): Promise<void> {
   }));
   body.querySelectorAll<HTMLSelectElement>("[data-sel]").forEach((s) => s.addEventListener("change", () => {
     (P as any)[s.dataset.sel!] = s.value; save(); applyPrefs();
+  }));
+  body.querySelectorAll<HTMLSelectElement>("[data-engine]").forEach((s) => s.addEventListener("change", async () => {
+    const r = await fetch("/api/v1/engines", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: s.value }) }).catch(() => null);
+    H.toast(r?.ok ? `Agent engine: ${s.selectedOptions[0]?.textContent ?? s.value}` : "The engine wasn't changed");
+    void renderSettings(sec);
   }));
   body.querySelectorAll<HTMLInputElement>("[data-txt]").forEach((i) => i.addEventListener("change", () => {
     (P as any)[i.dataset.txt!] = i.value.trim().slice(0, 40); save(); applyPrefs();

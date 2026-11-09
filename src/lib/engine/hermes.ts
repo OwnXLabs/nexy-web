@@ -1,9 +1,9 @@
 import type { ChatResult, ChatTurn, MemoryItem, NexyEngine, Routine } from "./types";
 
-const KEY = process.env.NEXY_AGENT_KEY ?? "";
+const DEFAULT_KEY = process.env.NEXY_AGENT_KEY ?? "";
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
 
-function gatewayEngine(url: string): NexyEngine {
+export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngine {
   const URL_ = url.replace(/\/+$/, "");
   const api = async (path: string, init: RequestInit = {}): Promise<any> => {
     if (!URL_) throw new Error("no agent gateway is configured");

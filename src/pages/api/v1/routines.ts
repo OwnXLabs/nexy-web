@@ -1,10 +1,11 @@
 import type { APIRoute } from "astro";
 import { engineFor } from "../../../lib/engine";
 import { boxAllowed, boxRefused } from "../../../lib/box";
+import { identityOwner } from "../../../lib/owner";
 
 export const prerender = false;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
-const rt = (r: Request) => { const e = engineFor(false, r.headers.get("x-nexy-eval") === "1"); return e.available() ? e.routines : undefined; };
+const rt = (r: Request) => { const e = engineFor(false, r.headers.get("x-nexy-eval") === "1", identityOwner(r)); return e.available() ? e.routines : undefined; };
 const NONE = "Routines need the agent's scheduler, which is not configured on this machine.";
 
 export const GET: APIRoute = async ({ request }) => {

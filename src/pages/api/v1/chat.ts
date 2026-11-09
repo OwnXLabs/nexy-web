@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { owner, remember, upstreamFor } from "./private/_session";
+import { owner as signedOwner } from "../../../lib/owner";
 
 function logTurn(fields: Record<string, unknown>, isPrivate: boolean): void {
   if (isPrivate) return;
@@ -214,9 +215,10 @@ export const POST: APIRoute = async (ctx) => {
       remember(who, { role: "assistant", content: text, ts: Date.now() }, priv);
   };
 
-  const decided = upstreamFor(engineFor(false).id === "gateway", priv);
+  const picker = signedOwner(ctx);
+  const decided = upstreamFor(engineFor(false, false, picker).id === "gateway", priv);
   const isEval = body?.eval === true;
-  const eng = engineFor(priv, isEval);
+  const eng = engineFor(priv, isEval, picker);
   // one agent session per chat, so its browser keeps the page between turns. The chat id comes
   // from the browser and is guessable, so the key also binds the caller and their demo sign-in:
   // nobody can name another visitor's chat and load its history.
