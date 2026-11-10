@@ -322,7 +322,7 @@ function deleteChat(pid: string, id: string): void {
   const wasCurrent = cur?.pid === pid && cur.cid === id;
   chats.set(pid, list.filter((c) => c.id !== id));
   if (list.find((c) => c.id === id)?.saved) {
-    fetch(`/api/v1/chats?id=${encodeURIComponent(id)}`, { method: "DELETE" })
+    fetch(`/api/v1/chats?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { "content-type": "application/json" } })
       .then((r) => { if (!r.ok) throw new Error(httpMsg(r.status)); })
       .catch((e: Error) => H.toast(`The saved copy was not deleted: ${e.message}`));
   }

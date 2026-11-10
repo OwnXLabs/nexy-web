@@ -246,7 +246,7 @@ export async function approveConnector(
 
 export async function revokeConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {
   const id = entry.id;
-  const g = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(id)}`), { method: "DELETE" });
+  const g = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(id)}`), { method: "DELETE", headers: { "content-type": "application/json" } });
   const gBody = await readJson(g);
   if (!g.ok) return { ok: false, right: "still connected", note: `Not revoked — ${gBody?.error ?? httpMsg(g.status)}` };
 

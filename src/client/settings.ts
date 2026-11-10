@@ -196,7 +196,7 @@ async function act(a: string, n?: string): Promise<void> {
   }
   if (a === "tgoff") {
     if (!confirm("Disconnect Telegram? The bot stops answering until you connect it again.")) return;
-    const r = await fetch(TG, { method: "DELETE" });
+    const r = await fetch(TG, { method: "DELETE", headers: { "content-type": "application/json" } });
     H.toast(r.ok ? "Telegram disconnected" : `Could not disconnect: ${httpMsg(r.status)}`);
     void renderSettings("connections");
   }
