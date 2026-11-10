@@ -142,3 +142,17 @@ test("a cut-off plan is asked for again once", async () => {
   assert.match(html, /<section id="hero"/);
   assert.ok(events.some(e => e.type === "task" && e.task.id === "plan-2" && e.task.state === "done"));
 });
+
+test("images: placed once with their own data, a forgotten one is added, broken ones are dropped", async () => {
+  const { stitch } = await import("../src/lib/swarm.ts");
+  const p = { ...plan, images: [...plan.images, { id: "shop", prompt: "shop front", section: "visit" }] } as any;
+  const img = { b64: "QUJD", mime: "image/png" };
+  const html = stitch(p, new Map([
+    ["hero", `<section id="hero"><img src="placeholder.jpg" alt="x"></section>`],
+    ["menu", `<section id="menu"><img data-img="strawberry" src="#" alt="a"><img data-img="strawberry" alt="b"><img data-img="mint"></section>`],
+    ["visit", `<section id="visit"><p>come by</p></section>`],
+  ]), new Map([["strawberry", img], ["mint", img], ["shop", img]]));
+  assert.equal((html.match(/data:image\/png;base64,QUJD/g) ?? []).length, 3, "three images, each once");
+  assert.doesNotMatch(html, /placeholder\.jpg|src="#"/);
+  assert.match(html, /<section id="visit"><p>come by<\/p><img alt="" src="data:image\/png/);
+});

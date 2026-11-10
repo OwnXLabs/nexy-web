@@ -44,7 +44,8 @@ Use 3 to ${MAX_SECTIONS} sections and 0 to ${MAX_IMAGES} images. Ids are lowerca
 const SECTION_PROMPT = (p: Plan, s: Plan["sections"][number], imgs: string[]) => `Write the HTML for ONE section of the website "${p.title}".
 Section "${s.title}": ${s.brief}
 Return only a single <section id="${s.id}">…</section> element. Inline styles only, no <script>, no external links or fonts.
-Colours: background ${p.style.bg}, text ${p.style.fg}, accent ${p.style.accent}.${imgs.length ? `\nPlace these images where they fit, exactly as written: ${imgs.map(i => `<img data-img="${i}" alt="">`).join(" ")}` : ""}`;
+Colours: background ${p.style.bg}, text ${p.style.fg}, accent ${p.style.accent}.
+No maps, videos, iframes or forms that need a server. Don't add any other <img> tags.${imgs.length ? `\nPlace each of these images once, exactly as written, and make the first one large (width:100%): ${imgs.map(i => `<img data-img="${i}" alt="">`).join(" ")}` : ""}`;
 
 /** The JSON object in a model reply: thinking, code fences and prose around it are dropped. */
 export function jsonIn(text: string): any {
@@ -95,11 +96,27 @@ export function clean(html: string, id: string): string {
 
 export function stitch(p: Plan, sections: Map<string, string>, images: Map<string, { b64: string; mime: string }>): string {
   const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
-  const body = p.sections.map(s => sections.get(s.id) ?? `<section id="${s.id}"><h2>${esc(s.title)}</h2></section>`).join("\n")
-    .replace(/<img([^>]*?)data-img="([a-z0-9-]+)"([^>]*)>/g, (all, a, id, b) => {
-      const im = images.get(id);
-      return im && /^image\/(png|jpeg|webp)$/.test(im.mime) ? `<img${a}src="data:${im.mime};base64,${im.b64}"${b}>` : "";
-    });
+  const ok = (id: string) => { const im = images.get(id); return im && /^image\/(png|jpeg|webp)$/.test(im.mime) ? im : undefined; };
+  const placed = new Set<string>();
+  const body = p.sections.map(s => {
+    let h = (sections.get(s.id) ?? `<section id="${s.id}"><h2>${esc(s.title)}</h2></section>`)
+      // each made image once, with its own data; any src the model wrote is dropped
+      .replace(/<img([^>]*?)data-img="([a-z0-9-]+)"([^>]*)>/g, (_all, a: string, id: string, b: string) => {
+        const im = ok(id);
+        if (!im || placed.has(id)) return "";
+        placed.add(id);
+        const attrs = (a + " " + b).replace(/\ssrc\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "").replace(/\s*\/\s*$/, "");
+        return `<img${attrs} src="data:${im.mime};base64,${im.b64}">`;
+      })
+      // other images can't load here (no outside requests): drop them rather than show a broken box
+      .replace(/<img(?![^>]*src="data:)[^>]*>/gi, "");
+    // a made image the section forgot to place goes at its end
+    const left = p.images.filter(im => im.section === s.id && !placed.has(im.id) && ok(im.id));
+    if (left.length) {
+      h = h.replace(/<\/section>\s*$/i, left.map(im => { placed.add(im.id); const m = ok(im.id)!; return `<img alt="" src="data:${m.mime};base64,${m.b64}">`; }).join("") + "</section>");
+    }
+    return h;
+  }).join("\n");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(p.title)}</title><style>body{margin:0;background:${p.style.bg};color:${p.style.fg};font-family:${p.style.font}}
 section{padding:48px 20px;max-width:1040px;margin:0 auto}img{max-width:100%;height:auto;border-radius:12px}a{color:${p.style.accent}}</style></head>
