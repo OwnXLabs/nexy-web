@@ -1670,15 +1670,21 @@ function offerTakeover(holder: HTMLElement, what: string): void {
 }
 
 // Streams a reply as it is written. A dropped connection reconnects to the same reply, which kept
-// going on the server, instead of asking again.
+// going on the server, instead of asking again. The server pings every 15 s, so this long without
+// a byte means the socket is dead: reconnect rather than wait forever.
+const STREAM_IDLE_MS = 40_000;
 async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: () => void): Promise<T> {
   let id = "";
+  let abort = new AbortController(), idle = 0;
+  const alive = () => { clearTimeout(idle); const a = abort; idle = window.setTimeout(() => a.abort(new Error("the reply stream went silent")), STREAM_IDLE_MS); };
+  const attempt = () => { abort.abort(); abort = new AbortController(); alive(); return abort.signal; };
   const read = async (r: Response): Promise<T | null> => {
     const reader = r.body!.getReader();
     const dec = new TextDecoder();
     let buf = "", ev = "";
     for (;;) {
       const { value, done } = await reader.read();
+      alive();
       if (done) return null;
       buf += dec.decode(value, { stream: true });
       let i: number;
@@ -1697,30 +1703,35 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
       }
     }
   };
-  let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body });
-  if (!r.ok) {
-    const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
-    throw new HttpError(r.status, detail || r.statusText);
-  }
-  if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return (await r.json()) as T;
-  for (let n = 0; ; n++) {
-    try {
-      const out = r && await read(r);
-      if (out) return out;
-    } catch (e) {
-      if (e instanceof HttpError) throw e;
-      console.warn("[nexy] the reply stream broke", e);
+  try {
+    let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body, signal: attempt() });
+    if (!r.ok) {
+      const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
+      throw new HttpError(r.status, detail || r.statusText);
     }
-    if (!id) throw new Error("the connection dropped before the reply started");
-    if (n >= 30) throw new Error("the connection kept dropping. Send it again when it is steady");
-    onDrop();
-    await sleep(Math.min(1000 * 2 ** n, 10_000));
-    r = await fetch(`/api/v1/chat-turn?id=${encodeURIComponent(id)}`, { headers: { accept: "text/event-stream" } }).catch((e) => {
-      console.warn("[nexy] could not reconnect yet", e);
-      return null;
-    });
-    if (r?.status === 404) throw new Error("that reply was lost when the connection dropped. Send it again");
-    if (r && !r.ok) r = null;
+    if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return (await r.json()) as T;
+    for (let n = 0; ; n++) {
+      try {
+        const out = r && await read(r);
+        if (out) return out;
+      } catch (e) {
+        if (e instanceof HttpError) throw e;
+        console.warn("[nexy] the reply stream broke", e);
+      }
+      if (!id) throw new Error("the connection dropped before the reply started");
+      if (n >= 30) throw new Error("the connection kept dropping. Send it again when it is steady");
+      onDrop();
+      await sleep(Math.min(1000 * 2 ** n, 10_000));
+      r = await fetch(`/api/v1/chat-turn?id=${encodeURIComponent(id)}`, { headers: { accept: "text/event-stream" }, signal: attempt() }).catch((e) => {
+        console.warn("[nexy] could not reconnect yet", e);
+        return null;
+      });
+      if (r?.status === 404) throw new Error("that reply was lost when the connection dropped. Send it again");
+      if (r && !r.ok) r = null;
+    }
+  } finally {
+    clearTimeout(idle);
+    abort.abort();
   }
 }
 

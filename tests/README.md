@@ -54,3 +54,12 @@ publisher requires owner-scoped requests and serves saved snapshots only.
 The integration test covers session rejection/acceptance, configured origins,
 cross-owner status/unpublish rejection and successful owner unpublishing, as well
 as compatibility with the separate private publisher.
+
+Network fault checks
+====================
+
+After `npm run build`, `PLAYWRIGHT_MODULE=/path/to/playwright node --test tests/network-faults.cjs`
+drives the real page and server through a TCP fault proxy: 300 ms latency, a dropped stream, the
+box offline for 8 s, a 20 s stall, a connection that goes silent for good, a model silent for 50 s,
+a server restart mid-reply and two quick drops. Each checks what the person sees and that the
+model was asked once. About 2.5 minutes; `CASES=2,4b` runs some.
