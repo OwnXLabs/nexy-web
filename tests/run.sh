@@ -22,19 +22,28 @@ echo "Building…"
 npm run build >/tmp/nexy-web-build.log 2>&1 || { echo "FAIL  build (see /tmp/nexy-web-build.log)"; exit 1; }
 echo "PASS  build"
 
-ts() { node --experimental-strip-types --no-warnings --test "$@"; }
+ts() { node --experimental-strip-types --no-warnings --test --test-timeout=120000 "$@"; }
 check "swarm: plan, parallel pieces across devices, stitch, cleaning" ts tests/swarm.test.ts
 check "swarm: progress replays after a dropped connection, owner only" ts tests/swarm-api.test.ts
 check "swarm: progress rows name the device and escape server text" ts tests/swarm-view.test.ts
-check "swarm: website request in the browser, built across a fake Own 1 and Gaming PC" node --test tests/swarm-browser.cjs
-check "chat streams, resumes, hides engine faults" node --test tests/chat-stream.cjs
-check "network faults: latency, drops, silence" node --test tests/network-faults.cjs
-check "engine picker" node --test tests/engine-picker.cjs
-check "engine-neutral replies" node --test tests/engine-neutral.cjs
-check "chat storage and owner separation" node --test tests/chat-storage.cjs
-check "screen control" node --test tests/screen.cjs
-check "routines" node --test tests/routines.cjs
-check "problem reports" node --test tests/problem-report.cjs
+check "swarm: website request in the browser, built across a fake Own 1 and Gaming PC" node --test --test-timeout=180000 tests/swarm-browser.cjs
+check "chat streams, resumes, hides engine faults" node --test --test-timeout=180000 tests/chat-stream.cjs
+check "network faults: latency, drops, silence" node --test --test-timeout=180000 tests/network-faults.cjs
+check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
+check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
+check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
+# browser checks against a served build (empty screen dir, throwaway data and reports)
+tmp=$(mktemp -d)
+mkdir -p "$tmp/screen" "$tmp/reports" "$tmp/data"
+HOST=127.0.0.1 PORT=4389 NEXY_SCREEN_DIR="$tmp/screen" NEXY_DATA_DIR="$tmp/data" \
+  node dist/server/entry.mjs >"$tmp/server.log" 2>&1 &
+srv=$!
+trap 'kill $srv 2>/dev/null; rm -rf "$tmp"' EXIT
+for _ in $(seq 1 60); do curl -fs -o /dev/null http://127.0.0.1:4389/api/v1/health && break; sleep 0.25; done
+export NEXY_BASE=http://127.0.0.1:4389 REPORTS_DIR="$tmp/data/reports"
+check "screen control" node tests/screen.cjs
+check "routines" node tests/routines.cjs
+check "problem reports" node tests/problem-report.cjs
 
 echo
 echo "$pass passed, $fail failed"
