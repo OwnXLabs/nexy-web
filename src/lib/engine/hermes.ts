@@ -1,4 +1,5 @@
 import type { ChatResult, ChatTurn, MemoryItem, NexyEngine, Routine } from "./types";
+import { readCompletion } from "./sse";
 
 const DEFAULT_KEY = process.env.NEXY_AGENT_KEY ?? "";
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
@@ -29,7 +30,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngin
 
     available: () => URL_ !== "",
 
-    async chat(message, history, system, signal, session): Promise<ChatResult> {
+    async chat(message, history, system, signal, session, onText): Promise<ChatResult> {
       if (!URL_) throw new Error("no agent gateway is configured for this turn");
       const messages = [
         { role: "system", content: system },
@@ -47,14 +48,13 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngin
           // turn, so each turn opened a fresh browser on about:blank. It needs the key to be honoured.
           ...(KEY && session ? { "X-Hermes-Session-Id": `nexy-${session}` } : {}),
         },
-        body: JSON.stringify({ model: "nexy", messages, stream: false }),
+        body: JSON.stringify({ model: "nexy", messages, stream: !!onText }),
       });
 
       if (!res.ok) {
         throw new Error(`agent gateway ${res.status}`);
       }
-      const body = await res.json();
-      const reply = String(body?.choices?.[0]?.message?.content ?? "");
+      const { content: reply, last: body } = await readCompletion(res, onText);
       // 0.22 marks a failed turn in the response itself; its reply text changes between
       // versions (an overload read "…send /retry, or switch models with /model…", which
       // reached a visitor on 2026-10-24), so trust the flag before the wording

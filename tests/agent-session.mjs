@@ -19,7 +19,7 @@ const seen = [];
 const gw = createServer((req, res) => {
   req.resume();
   req.on("end", () => {
-    seen.push(req.headers["x-hermes-session-id"] ?? null);
+    if (req.url.startsWith("/v1/chat")) seen.push(req.headers["x-hermes-session-id"] ?? null);
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ choices: [{ message: { content: "ok" }, finish_reason: "stop" }] }));
   });

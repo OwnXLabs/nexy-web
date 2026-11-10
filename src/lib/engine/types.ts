@@ -19,7 +19,7 @@ export interface NexyEngine {
   readonly id: string;
   available(): boolean;
   // session: a stable id per chat, so the agent keeps one browser (and its own history) across turns
-  chat(message: string, history: ChatTurn[], system: string, signal?: AbortSignal, session?: string): Promise<ChatResult>;
+  chat(message: string, history: ChatTurn[], system: string, signal?: AbortSignal, session?: string, onText?: (delta: string) => void): Promise<ChatResult>;
   // whether the agent has used its browser in this session since `since` (ms): the agent's screen
   // is shown only then, never on a guess from the person's wording
   browsed?(session: string, since: number): Promise<boolean>;

@@ -20,14 +20,14 @@ const desk = createServer((req, res) => { res.statusCode = /own1_demo_sid=holder
 await new Promise((r) => desk.listen(0, "127.0.0.1", r));
 const DESK = `http://127.0.0.1:${desk.address().port}/api/demo-session`;
 
-async function serve({ trust = false, session = DESK } = {}) {
+async function serve({ trust = false, session = DESK, local = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "screen-ctl-"));
   writeFileSync(join(dir, "view"), "VIEWPASS");
   writeFileSync(join(dir, "full"), "FULLPASS");
   mkdirSync(join(dir, "control"));
   const p = spawn(process.execPath, [ENTRY], {
     env: { ...process.env, HOST: "127.0.0.1", PORT: String(PORT), NEXY_DATA_DIR: join(dir, "data"), NEXY_SCREEN_DIR: dir,
-      NEXY_DEMO_SESSION_URL: session, NEXY_TRUST_XNODE_AUTH: trust ? "1" : "" },
+      NEXY_DEMO_SESSION_URL: session, NEXY_TRUST_XNODE_AUTH: trust ? "1" : "", NEXY_SCREEN_LOCAL: local ? "1" : "" },
     stdio: "ignore",
   });
   for (let i = 0; i < 50; i++) { if (await fetch(B + "/api/v1/screen").then(() => true, () => false)) break; await sleep(200); }
@@ -71,7 +71,11 @@ await s.stop();
 
 s = await serve({ session: "http://127.0.0.1:9/none" });
 g = await screen();
-check("no desktop to ask (local development): watch only", g.watch === true && g.password === "VIEWPASS", g);
+check("session check unreachable: no watching, no password", g.watch === false && !g.password, g);
+await s.stop();
+s = await serve({ session: "http://127.0.0.1:9/none", local: true });
+g = await screen();
+check("no desktop to ask (local development, opted in): watch only", g.watch === true && g.password === "VIEWPASS", g);
 r = await post({ take: true });
 check("…but never control on a guess", r.status === 403 && !s.driven(), r);
 await s.stop();

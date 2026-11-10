@@ -11,6 +11,7 @@ function logTurn(fields: Record<string, unknown>, isPrivate: boolean): void {
 import { engineFor, localEngine } from "../../../lib/engine";
 import { agentSessionKey, deniesTools, dropInlineImages, wantsResearch } from "../../../lib/agent-turn";
 import { guardIdentity } from "../../../lib/engine/identity-guard";
+import { canStart, sse, startTurn } from "../../../lib/turns";
 
 const AGENT_BUDGET_MS = Number(process.env.NEXY_AGENT_BUDGET_MS ?? 90_000);
 // research and browsing (see wantsResearch), kept, fallback included, under the 300 s proxy
@@ -229,80 +230,90 @@ export const POST: APIRoute = async (ctx) => {
 
   const research = wantsResearch(String(said ?? ""), history);
   const startedAt = Date.now();
-  // asked to open a site: open it on the agent's screen first and hand the agent the page, so
-  // the person watches it there even when the model would have searched instead
-  let browse = priv ? "" : browserTurn(String(said ?? ""));
-  const page = !priv && eng !== localEngine ? pageToOpen(String(said ?? "")) : null;
-  let onScreen = false;
-  if (page) {
-    const opened = await openOnScreen(page);
-    onScreen = "text" in opened;
-    if ("text" in opened && opened.text.trim()) browse = openedPage(page, opened.text);
-    else if ("error" in opened) console.warn(`[nexy] could not open ${new URL(page).hostname} on the agent's screen: ${opened.error}`);
-  }
-  try {
-    const r = await eng.chat(
-      String(said ?? ""),
-      history,
-      systemPrompt(body?.context, priv, body?.docs, isEval) + browse,
-      // the agent gets a budget, then the model answers instead (below); a stuck agent
-      // turn must not leave the person waiting four minutes for nothing
-      AbortSignal.timeout(eng === localEngine ? 240_000 : research ? RESEARCH_BUDGET_MS : AGENT_BUDGET_MS),
-      agentSession,
-    );
-    const browsed = !!agentSession && !!eng.browsed && await eng.browsed(agentSession, startedAt).catch((e) => {
-      console.warn("[nexy] could not read the agent's tool use", (e as Error).message);
-      return false;
-    });
-    r.reply = dropInlineImages(r.reply, browsed);
-    r.reply = guard(r.reply);
-    answered(r.reply);
-    logTurn({
-      via: r.via,
-      grounded: r.grounded,
-      ms: Date.now() - startedAt,
-      turns: history.length + 1,
-      contextKeys: Object.keys(body?.context ?? {}),
-      replyChars: typeof r.reply === "string" ? r.reply.length : 0,
-      ...(isEval ? { eval: true } : {}),
-    }, priv);
-    return json({
-      choices: [{ message: { role: "assistant", content: r.reply } }],
-      via: r.via,
-      grounded: r.grounded,
-      // the agent used its browser, or the page was opened on its screen: the client shows the screen
-      browsed: browsed || onScreen || undefined,
-      upstream: decided.why,
-      private: priv || undefined,
-    });
-  } catch (e: any) {
-    logTurn({ via: eng.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
-    // The agent adds memory and tools; the model alone can still answer. A broken agent
-    // must not mean a broken chat.
-    const timedOut = e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message ?? ""));
-    // A search that ran out of time: say so. The model alone would guess at current facts.
-    if (eng !== localEngine && research && timedOut) {
-      const secs = Math.round(RESEARCH_BUDGET_MS / 1000);
-      const reply = `That search was still running after ${secs} seconds, so I stopped it rather than keep you waiting. ` +
-        "Ask again in a moment, or narrow it down (one topic, or fewer sources) and it will come back faster.";
-      answered(reply);
-      logTurn({ via: eng.id, fallback: "timeout-notice", ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
-      return json({ choices: [{ message: { role: "assistant", content: reply } }], via: eng.id, grounded: false, fallback: true });
+  const run = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
+    // asked to open a site: open it on the agent's screen first and hand the agent the page, so
+    // the person watches it there even when the model would have searched instead
+    let browse = priv ? "" : browserTurn(String(said ?? ""));
+    const page = !priv && eng !== localEngine ? pageToOpen(String(said ?? "")) : null;
+    let onScreen = false;
+    if (page) {
+      const opened = await openOnScreen(page);
+      onScreen = "text" in opened;
+      if ("text" in opened && opened.text.trim()) browse = openedPage(page, opened.text);
+      else if ("error" in opened) console.warn(`[nexy] could not open ${new URL(page).hostname} on the agent's screen: ${opened.error}`);
     }
-    if (eng !== localEngine) {
-      try {
-        const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + NO_TOOLS_THIS_TURN, AbortSignal.timeout(150_000));
-        r.reply = guard(r.reply);
-        // the model alone must not contradict what the agent just did on screen
-        if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";
-        answered(r.reply);
-        logTurn({ via: r.via, fallback: true, ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
-        return json({ choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true });
-      } catch (e2: any) {
-        logTurn({ via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ...(isEval ? { eval: true } : {}) }, priv);
+    try {
+      const r = await eng.chat(
+        String(said ?? ""),
+        history,
+        systemPrompt(body?.context, priv, body?.docs, isEval) + browse,
+        // the agent gets a budget, then the model answers instead (below); a stuck agent
+        // turn must not leave the person waiting four minutes for nothing
+        AbortSignal.timeout(eng === localEngine ? 240_000 : research ? RESEARCH_BUDGET_MS : AGENT_BUDGET_MS),
+        agentSession,
+        onText,
+      );
+      const browsed = !!agentSession && !!eng.browsed && await eng.browsed(agentSession, startedAt).catch((e) => {
+        console.warn("[nexy] could not read the agent's tool use", (e as Error).message);
+        return false;
+      });
+      r.reply = dropInlineImages(r.reply, browsed);
+      r.reply = guard(r.reply);
+      answered(r.reply);
+      logTurn({
+        via: r.via,
+        grounded: r.grounded,
+        ms: Date.now() - startedAt,
+        turns: history.length + 1,
+        contextKeys: Object.keys(body?.context ?? {}),
+        replyChars: typeof r.reply === "string" ? r.reply.length : 0,
+        ...(isEval ? { eval: true } : {}),
+      }, priv);
+      return { status: 200, body: {
+        choices: [{ message: { role: "assistant", content: r.reply } }],
+        via: r.via,
+        grounded: r.grounded,
+        // the agent used its browser, or the page was opened on its screen: the client shows the screen
+        browsed: browsed || onScreen || undefined,
+        upstream: decided.why,
+        private: priv || undefined,
+      } };
+    } catch (e: any) {
+      logTurn({ via: eng.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
+      // The agent adds memory and tools; the model alone can still answer. A broken agent
+      // must not mean a broken chat.
+      const timedOut = e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message ?? ""));
+      // A search that ran out of time: say so. The model alone would guess at current facts.
+      if (eng !== localEngine && research && timedOut) {
+        const secs = Math.round(RESEARCH_BUDGET_MS / 1000);
+        const reply = `That search was still running after ${secs} seconds, so I stopped it rather than keep you waiting. ` +
+          "Ask again in a moment, or narrow it down (one topic, or fewer sources) and it will come back faster.";
+        answered(reply);
+        logTurn({ via: eng.id, fallback: "timeout-notice", ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
+        return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via: eng.id, grounded: false, fallback: true } };
       }
+      if (eng !== localEngine) {
+        try {
+          restart?.();
+          const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + NO_TOOLS_THIS_TURN, AbortSignal.timeout(150_000), undefined, onText);
+          r.reply = guard(r.reply);
+          // the model alone must not contradict what the agent just did on screen
+          if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";
+          answered(r.reply);
+          logTurn({ via: r.via, fallback: true, ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
+          return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true } };
+        } catch (e2: any) {
+          logTurn({ via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ...(isEval ? { eval: true } : {}) }, priv);
+        }
+      }
+      // details stay in the log: an engine error can carry file paths and internal names
+      return { status: 502, body: { error: "the model on this machine did not answer" } };
     }
-    // details stay in the log: an engine error can carry file paths and internal names
-    return json({ error: "the model on this machine did not answer" }, 502);
+  };
+  if (body?.stream === true) {
+    if (!canStart(picker)) return json({ error: "too many replies are running; wait for one to finish" }, 429);
+    return sse(startTurn(picker, run), picker)!;
   }
+  const r = await run();
+  return json(r.body, r.status);
 };

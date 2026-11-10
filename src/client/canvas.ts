@@ -438,7 +438,9 @@ function paint(): void {
       // the page as it is on the right, edits included; Own Build's preview is the original
       const page = a.kind === "html" || a.kind === "game" ? a.source?.get() : undefined;
       if (page?.trim()) {
-        const url = URL.createObjectURL(new Blob([page], { type: "text/html" }));
+        const attr = page.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+        const shell = `<!doctype html><meta charset="utf-8"><title>${esc(a.title ?? "Preview")}</title><style>html,body,iframe{margin:0;border:0;width:100%;height:100%;display:block}</style><iframe sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads" srcdoc="${attr}"></iframe>`;
+        const url = URL.createObjectURL(new Blob([shell], { type: "text/html" }));
         window.open(url, "_blank", "noopener");
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         return;

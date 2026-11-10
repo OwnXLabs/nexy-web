@@ -1669,6 +1669,61 @@ function offerTakeover(holder: HTMLElement, what: string): void {
   holder.querySelector(".bub")?.appendChild(card);
 }
 
+// Streams a reply as it is written. A dropped connection reconnects to the same reply, which kept
+// going on the server, instead of asking again.
+async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: () => void): Promise<T> {
+  let id = "";
+  const read = async (r: Response): Promise<T | null> => {
+    const reader = r.body!.getReader();
+    const dec = new TextDecoder();
+    let buf = "", ev = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return null;
+      buf += dec.decode(value, { stream: true });
+      let i: number;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        if (line.startsWith("event:")) { ev = line.slice(6).trim(); continue; }
+        if (!line.startsWith("data:")) continue;
+        const d = JSON.parse(line.slice(5));
+        if (ev === "turn") id = String(d.id ?? "");
+        else if (ev === "text") onText(String(d.text ?? ""));
+        else if (ev === "done") {
+          if (d.status >= 400) throw new HttpError(d.status, String(d.body?.error ?? ""));
+          return d.body as T;
+        }
+      }
+    }
+  };
+  let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body });
+  if (!r.ok) {
+    const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
+    throw new HttpError(r.status, detail || r.statusText);
+  }
+  if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return (await r.json()) as T;
+  for (let n = 0; ; n++) {
+    try {
+      const out = r && await read(r);
+      if (out) return out;
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      console.warn("[nexy] the reply stream broke", e);
+    }
+    if (!id) throw new Error("the connection dropped before the reply started");
+    if (n >= 30) throw new Error("the connection kept dropping. Send it again when it is steady");
+    onDrop();
+    await sleep(Math.min(1000 * 2 ** n, 10_000));
+    r = await fetch(`/api/v1/chat-turn?id=${encodeURIComponent(id)}`, { headers: { accept: "text/event-stream" } }).catch((e) => {
+      console.warn("[nexy] could not reconnect yet", e);
+      return null;
+    });
+    if (r?.status === 404) throw new Error("that reply was lost when the connection dropped. Send it again");
+    if (r && !r.ok) r = null;
+  }
+}
+
 async function playChat(text: string, priv = false): Promise<void> {
   const { push, showArtifact, conversation, context, attachedDocs } = captureWork();
   const holder = push("ai", "");
@@ -1680,8 +1735,19 @@ async function playChat(text: string, priv = false): Promise<void> {
   thread.push({ role: "user", content: text });
   try {
     type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean };
-    const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
-    const d = await patient(() => api<Reply>("/api/v1/chat", { method: "POST", body }), (n, secs, of) =>
+    const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
+    const bub = holder.querySelector<HTMLElement>(".bub")!;
+    let streamed = false;
+    const d = await patient(() => streamReply<Reply>(body, (t) => {
+      const shown = t && takeoverAsk(t).answer;
+      if (!shown) {
+        if (streamed) { streamed = false; bub.innerHTML = ""; status(holder, "Thinking", typicalMs("chat")); }
+        return;
+      }
+      streamed = true;
+      bub.innerHTML = `${bubbleText(shown)}<span class="cur"></span>`;
+      const th = $("#thread"); if (th) th.scrollTop = th.scrollHeight;
+    }, () => status(holder, "The connection dropped. Reconnecting, and the reply keeps going meanwhile.")), (n, secs, of) =>
       status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`));
 
     browsing?.stop(d.browsed);
@@ -1711,7 +1777,8 @@ async function playChat(text: string, priv = false): Promise<void> {
       offer();
       return;
     }
-    await typeOut(holder.querySelector<HTMLElement>(".bub")!, answer);
+    if (streamed) bub.innerHTML = bubbleText(answer);
+    else await typeOut(bub, answer);
     offer();
   } catch (e) {
     thread.pop();

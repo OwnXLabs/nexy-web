@@ -6,7 +6,8 @@ export const COOKIE = "own_owner";
 
 const MAX_AGE = 60 * 60 * 24 * 365;
 
-export const SHAPE = /^o_[a-z0-9]{1,12}_[a-f0-9]{16}$/;
+// o_xauth_ and o_gate_ ids are derived from a signed-in identity, so a cookie may never carry one
+const fromCookie = (v: string | undefined): v is string => !!v && /^o_[a-z0-9]{1,12}_[a-f0-9]{16}$/.test(v) && !/^o_(?:xauth|gate)_/.test(v);
 
 const fresh = () =>
   `o_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
@@ -25,12 +26,12 @@ export function owner(ctx: APIContext): string {
   const signedIn = identityOwner(ctx.request);
   const existing = ctx.cookies.get(COOKIE)?.value;
   if (signedIn) {
-    if (existing && SHAPE.test(existing) && existing !== signedIn)
+    if (fromCookie(existing) && existing !== signedIn)
       adopt(existing, signedIn).catch((e) => console.warn(`[nexy] adopting chats failed: ${(e as Error).message}`));
     return signedIn;
   }
 
-  if (existing && SHAPE.test(existing)) return existing;
+  if (fromCookie(existing)) return existing;
 
   const id = fresh();
   const domain = process.env.OWN_OWNER_DOMAIN || undefined;

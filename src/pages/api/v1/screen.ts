@@ -38,7 +38,9 @@ const secret = (name: string) => fs.readFile(`${DIR}/${name}`, "utf8").then((t) 
 export const GET: APIRoute = async ({ request }) => {
   const password = await secret("view");
   if (!password) return json({ available: false });
-  if ((await session(request)) === "no") return json({ available: true, watch: false, reason: "Sign in to the demo to watch the agent's screen." });
+  // local development opts in to watching without a demo session; nowhere else may a failed check open it
+  const local = process.env.NEXY_SCREEN_LOCAL === "1" && (await session(request)) === "unknown";
+  if (!local && !identityOwner(request) && (await session(request)) !== "yes") return json({ available: true, watch: false, reason: "Sign in to the demo to watch the agent's screen." });
   return json({ available: true, watch: true, control: true, driving: await driving(), password, path: "/screen/ws" });
 };
 

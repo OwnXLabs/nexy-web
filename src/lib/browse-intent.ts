@@ -12,13 +12,26 @@ const FILE = /\.(pdf|docx?|xlsx?|pptx?|csv|tsv|txt|md|json|png|jpe?g|gif|webp|sv
 const IN_BROWSER = /\b(in|with|using|on) (your|the) browser\b/i;
 
 /** The web address a message asks to open, or null. */
+// loopback, private, link-local, mesh and local-network names: never opened for a prompt
+export function internal(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || !h.includes(".") && !h.includes(":")) return true;
+  const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h)?.slice(1).map(Number);
+  if (v4) {
+    const [a, b] = v4;
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+  if (h.includes(":")) return h === "::1" || h === "::" || /^(fe8|fe9|fea|feb|fc|fd|[23][0-9a-f]{2}:)/.test(h) || h.startsWith("::ffff:");
+  return /^\d+$/.test(h) || /^0x/.test(h);
+}
+
 export function pageToOpen(said: string): string | null {
   const m = OPEN.exec(said)?.[1]?.replace(/[),.;:!?]+$/, "");
   if (!m) return null;
   // "open report.pdf" names a file, not a site
   if (!/^https?:\/\//i.test(m) && FILE.test(m)) return null;
   const url = /^https?:\/\//i.test(m) ? m : `https://${m}`;
-  try { const u = new URL(url); return /^https?:$/.test(u.protocol) && url.length <= 500 ? u.href : null; }
+  try { const u = new URL(url); return /^https?:$/.test(u.protocol) && url.length <= 500 && !internal(u.hostname) ? u.href : null; }
   catch { return null; }
 }
 
