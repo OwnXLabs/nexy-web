@@ -156,3 +156,13 @@ test("images: placed once with their own data, a forgotten one is added, broken 
   assert.doesNotMatch(html, /placeholder\.jpg|src="#"/);
   assert.match(html, /<section id="visit"><p>come by<\/p><img alt="" src="data:image\/png/);
 });
+
+test("spare images don't break a layout; map placeholders are removed", async () => {
+  const { stitch } = await import("../src/lib/swarm.ts");
+  const img = { b64: "QUJD", mime: "image/png" };
+  const html = stitch(plan as any, new Map([
+    ["menu", `<section id="menu"><div class="grid"><img data-img="strawberry"></div><div style="height:200px">Map Placeholder (Interactive map requires external iframe)</div></section>`],
+  ]), new Map([["strawberry", img], ["mint", img]]));
+  assert.equal((html.match(/QUJD/g) ?? []).length, 1, "mint is spare: left out, not appended after the grid");
+  assert.doesNotMatch(html, /Map Placeholder/);
+});

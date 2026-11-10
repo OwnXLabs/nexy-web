@@ -39,7 +39,7 @@ Reply with JSON only, no prose:
 {"title":"…","style":{"bg":"#rrggbb","fg":"#rrggbb","accent":"#rrggbb","font":"a Google-safe font stack"},
  "sections":[{"id":"hero","title":"…","brief":"what this section says and shows"}],
  "images":[{"id":"…","prompt":"a photo or illustration prompt","section":"<section id>"}]}
-Use 3 to ${MAX_SECTIONS} sections and 0 to ${MAX_IMAGES} images. Ids are lowercase words with dashes.`;
+Use 3 to ${MAX_SECTIONS} sections and 0 to ${MAX_IMAGES} images. The page is static: no maps, videos, forms or embeds in any brief. Ids are lowercase words with dashes.`;
 
 const SECTION_PROMPT = (p: Plan, s: Plan["sections"][number], imgs: string[]) => `Write the HTML for ONE section of the website "${p.title}".
 Section "${s.title}": ${s.brief}
@@ -110,8 +110,11 @@ export function stitch(p: Plan, sections: Map<string, string>, images: Map<strin
       })
       // other images can't load here (no outside requests): drop them rather than show a broken box
       .replace(/<img(?![^>]*src="data:)[^>]*>/gi, "");
-    // a made image the section forgot to place goes at its end
-    const left = p.images.filter(im => im.section === s.id && !placed.has(im.id) && ok(im.id));
+    // placeholders for things a static page can't show (maps, embeds)
+    h = h.replace(/<(div|p|figure|span)[^>]*>[^<]*(map placeholder|interactive map|embed(ded)? map|requires (an )?(external )?iframe)[^<]*<\/\1>/gi, "");
+    // a section that placed none of its images gets one at its end; spare ones are left out rather than break a layout
+    const mine = p.images.filter(im => im.section === s.id);
+    const left = mine.some(im => placed.has(im.id)) ? [] : mine.filter(im => ok(im.id)).slice(0, 1);
     if (left.length) {
       h = h.replace(/<\/section>\s*$/i, left.map(im => { placed.add(im.id); const m = ok(im.id)!; return `<img alt="" src="data:${m.mime};base64,${m.b64}">`; }).join("") + "</section>");
     }
