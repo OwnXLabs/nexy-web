@@ -83,3 +83,31 @@ test("plans and pieces from the model are bounded and cleaned", () => {
   assert.doesNotMatch(p.style.font, /[;{}]/);
   assert.doesNotMatch(clean(`<section id="a"><iframe src="https://x"></iframe><img src="https://tracker/x.png"><div style="background:url(https://x)">`, "a"), /iframe|https:/);
 });
+
+test("plans wrapped in thinking, fences or prose still parse", async () => {
+  const { jsonIn } = await import("../src/lib/swarm.ts");
+  const body = JSON.stringify(plan);
+  for (const reply of [
+    `<think>Let me plan {this} carefully…</think>\n${body}`,
+    "Here is the plan:\n```json\n" + body + "\n```\nHope it helps!",
+    `<think>still thinking about {braces} and "quotes"`, // cut off inside thinking: nothing usable
+  ].slice(0, 2)) assert.equal(jsonIn(reply).title, "Ice cream shop");
+  assert.throws(() => jsonIn(`<think>never finished {`));
+  assert.equal(jsonIn(`{"a":"has } brace", "b": 1}`).b, 1);
+});
+
+test("a cut-off plan is asked for again once", async () => {
+  let n = 0;
+  const { deps } = doubles({
+    async chat(body: any, route) {
+      if (body.messages[0].content.includes("You plan")) return { text: ++n === 1 ? '{"title":"Ice cr' : JSON.stringify(plan), ranOn: "box" };
+      const id = body.messages[0].content.match(/<section id="([a-z-]+)">/)![1];
+      return { text: `<section id="${id}">x</section>`, ranOn: route };
+    },
+  });
+  const events: Event[] = [];
+  const html = await run("site", deps, e => events.push(e));
+  assert.equal(n, 2);
+  assert.match(html, /<section id="hero"/);
+  assert.ok(events.some(e => e.type === "task" && e.task.id === "plan-2" && e.task.state === "done"));
+});

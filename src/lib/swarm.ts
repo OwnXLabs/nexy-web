@@ -26,10 +26,13 @@ export interface Deps {
 }
 
 const MAX_SECTIONS = 6, MAX_IMAGES = 6;
+// answers without visible thinking, on servers that support the switch; others ignore it
+const QUIET = { chat_template_kwargs: { enable_thinking: false }, reasoning_effort: "low" };
 const ID = /^[a-z][a-z0-9-]{0,30}$/;
 const COLOR = /^#[0-9a-f]{6}$/i;
 
-const PLAN_PROMPT = `You plan a one-page website that several computers will build in parallel.
+const PLAN_PROMPT = `/no_think
+You plan a one-page website that several computers will build in parallel.
 Reply with JSON only, no prose:
 {"title":"…","style":{"bg":"#rrggbb","fg":"#rrggbb","accent":"#rrggbb","font":"a Google-safe font stack"},
  "sections":[{"id":"hero","title":"…","brief":"what this section says and shows"}],
@@ -41,10 +44,26 @@ Section "${s.title}": ${s.brief}
 Return only a single <section id="${s.id}">…</section> element. Inline styles only, no <script>, no external links or fonts.
 Colours: background ${p.style.bg}, text ${p.style.fg}, accent ${p.style.accent}.${imgs.length ? `\nPlace these images where they fit, exactly as written: ${imgs.map(i => `<img data-img="${i}" alt="">`).join(" ")}` : ""}`;
 
+/** The JSON object in a model reply: thinking, code fences and prose around it are dropped. */
+export function jsonIn(text: string): any {
+  const t = text.replace(/<think>[\s\S]*?(<\/think>|$)/gi, "").replace(/```(?:json)?/gi, "");
+  for (let start = t.indexOf("{"); start >= 0; start = t.indexOf("{", start + 1)) {
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < t.length; i++) {
+      const c = t[i];
+      if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) {
+        try { return JSON.parse(t.slice(start, i + 1)); } catch { break; }
+      }
+    }
+  }
+  throw new Error("the plan was not JSON");
+}
+
 export function parsePlan(text: string): Plan {
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("the plan was not JSON");
-  const j = JSON.parse(m[0]);
+  const j = jsonIn(text);
   const sections = (Array.isArray(j.sections) ? j.sections : [])
     .filter((s: any) => ID.test(String(s?.id)) && s?.title && s?.brief).slice(0, MAX_SECTIONS)
     .map((s: any) => ({ id: String(s.id), title: String(s.title).slice(0, 80), brief: String(s.brief).slice(0, 600) }));
@@ -108,10 +127,16 @@ export async function run(prompt: string, deps: Deps, emit: (e: Event) => void):
     }
   };
   try {
-    const planned = await step({ id: "plan", kind: "plan", label: "Plan the site", on: "box", state: "queued" },
-      () => deps.chat({ model: "txt2txt", messages: [{ role: "system", content: PLAN_PROMPT }, { role: "user", content: prompt }], max_tokens: 1500 }, "box"));
-    if (!planned) throw new Error("planning failed");
-    const plan = parsePlan(planned.text);
+    let plan: Plan | undefined, lastText = "";
+    for (let attempt = 1; attempt <= 2 && !plan; attempt++) {
+      const planned = await step({ id: attempt === 1 ? "plan" : "plan-2", kind: "plan", label: attempt === 1 ? "Plan the site" : "Plan the site, again", on: "box", state: "queued" },
+        () => deps.chat({ ...QUIET, model: "txt2txt", messages: [{ role: "system", content: PLAN_PROMPT }, { role: "user", content: prompt }], max_tokens: 3000 }, "box"));
+      if (!planned) continue;
+      lastText = planned.text;
+      try { plan = parsePlan(planned.text); }
+      catch { console.warn(`[swarm] plan reply was not usable (${planned.text.length} chars): ${planned.text.slice(0, 300).replace(/\s+/g, " ")}`); }
+    }
+    if (!plan) throw new Error(lastText ? "the plan was not JSON" : "planning failed");
     emit({ type: "plan", plan });
 
     const workers = await deps.workers().catch(() => [] as Worker[]);
@@ -120,7 +145,7 @@ export async function run(prompt: string, deps: Deps, emit: (e: Event) => void):
     await Promise.all([
       ...plan.sections.map((s, i) => step({ id: `s-${s.id}`, kind: "chat", label: `${s.title} section`, on: chatRoutes[i], state: "queued" }, async () => {
         const imgs = plan.images.filter(im => im.section === s.id).map(im => im.id);
-        const r = await deps.chat({ model: "txt2txt", messages: [{ role: "user", content: SECTION_PROMPT(plan, s, imgs) }], max_tokens: 2000 }, chatRoutes[i]);
+        const r = await deps.chat({ ...QUIET, model: "txt2txt", messages: [{ role: "user", content: SECTION_PROMPT(plan!, s, imgs) }], max_tokens: 3000 }, chatRoutes[i]);
         sections.set(s.id, clean(r.text, s.id));
         return r;
       })),
