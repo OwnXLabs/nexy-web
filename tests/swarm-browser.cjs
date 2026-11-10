@@ -26,9 +26,9 @@ function fakeBox() {
       const b = body ? JSON.parse(body) : {};
       seen.push({ url: req.url, route: b.route, auth: req.headers['x-internal'] });
       res.setHeader('content-type', 'application/json');
-      if (req.url.endsWith('/v1/workers')) return res.end(JSON.stringify({ devices: [{ address: '0xbbb', name: 'Nexy on Gaming PC', caps: ['chat:q', 'image:sd'], online: true }] }));
+      if (req.url.endsWith('/v1/workers')) return res.end(JSON.stringify({ devices: [{ address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'Nexy on Gaming PC', caps: ['chat:q', 'image:sd'], online: true }] }));
       await sleep(300);
-      const ranOn = b.route === 'device:0xbbb' ? 'device:Nexy on Gaming PC' : 'box';
+      const ranOn = b.route === 'device:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ? 'device:Nexy on Gaming PC' : 'box';
       res.setHeader('x-ran-on', ranOn);
       if (req.url.endsWith('/v1/images/generations')) return res.end(JSON.stringify({ data: [{ b64_json: PNG }] }));
       const sys = b.messages?.[0]?.content ?? '';
@@ -75,7 +75,7 @@ test('a website request builds across devices and shows the page', async () => {
     assert.match(html, /hero built/);
     assert.doesNotMatch(html, /<script/);
     assert.ok(box.seen.every((x) => x.auth === 't0k'), 'every call carries the internal identity');
-    assert.ok(box.seen.some((x) => x.route === 'device:0xbbb'));
+    assert.ok(box.seen.some((x) => x.route === 'device:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'));
     assert.deepEqual(errors, []);
   } finally { await b.close(); s.p.kill(); box.srv.close(); }
 });

@@ -2,17 +2,18 @@
 // node --experimental-strip-types --test tests/swarm.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { run, parsePlan, clean, routes, type Deps, type Event } from "../src/lib/swarm.ts";
+import { run, parsePlan, clean, lanes, type Deps, type Event } from "../src/lib/swarm.ts";
 
 const plan = {
   title: "Ice cream shop", style: { bg: "#111111", fg: "#ffffff", accent: "#ff9a7a", font: "Georgia, serif" },
   sections: [{ id: "hero", title: "Hero", brief: "big welcome" }, { id: "menu", title: "Menu", brief: "flavours" }, { id: "visit", title: "Visit us", brief: "address" }],
   images: [{ id: "strawberry", prompt: "strawberry ice cream, photo", section: "menu" }, { id: "mint", prompt: "mint chip, photo", section: "menu" }],
 };
+const A = "0x" + "a".repeat(40), B = "0x" + "b".repeat(40), C = "0x" + "c".repeat(40);
 const workers = [
-  { address: "0xaaa", name: "MacBook", caps: ["chat:qwen3:8b"], online: true },
-  { address: "0xbbb", name: "Gaming PC", caps: ["chat:qwen3:8b", "image:sd"], online: true },
-  { address: "0xccc", name: "Off", caps: ["image:sd"], online: false },
+  { address: A, name: "MacBook", caps: ["chat:qwen3:8b"], online: true },
+  { address: B, name: "Gaming PC", caps: ["chat:qwen3:8b", "image:sd"], online: true },
+  { address: C, name: "Off", caps: ["image:sd"], online: false },
 ];
 
 function doubles(over: Partial<Deps> = {}) {
@@ -35,6 +36,7 @@ function doubles(over: Partial<Deps> = {}) {
       return { b64: "AAAA", mime: "image/webp", ranOn: route };
     },
     async workers() { return workers; },
+    async sleep() {},
     ...over,
   };
   return { deps, calls };
@@ -46,17 +48,23 @@ test("plan → pieces in parallel on several devices → one stitched page", asy
   const html = await run("an ice cream shop site", deps, e => events.push(e));
   const pieces = calls.slice(1);
   assert.equal(pieces.length, 5, "3 sections + 2 images");
-  // all pieces start before the first one finishes: parallel, not one after another
-  assert.ok(Math.max(...pieces.map(c => c.at)) < Math.min(...pieces.map(c => c.end!)));
   const used = new Set(pieces.map(c => c.route));
-  assert.ok(used.has("device:0xaaa") && used.has("device:0xbbb") && used.has("box"), [...used].join(","));
-  assert.ok(!pieces.some(c => c.route.includes("0xccc")), "offline devices get nothing");
-  assert.ok(!pieces.some(c => c.kind === "image" && c.route === "device:0xaaa"), "only image-capable devices get images");
+  assert.ok(used.has(`device:${A}`) && used.has(`device:${B}`) && used.has("box"), [...used].join(","));
+  // one piece at a time per device, but the devices work at the same time
+  for (const r of used) {
+    const mine = pieces.filter(c => c.route === r).sort((x, y) => x.at - y.at);
+    for (let i = 1; i < mine.length; i++) assert.ok(mine[i].at >= mine[i - 1].end!, `${r} ran two at once`);
+  }
+  const firstEnd = Math.min(...pieces.map(c => c.end!));
+  assert.ok(pieces.filter(c => c.at < firstEnd).length >= 3, "three devices start before any finishes");
+  assert.ok(!pieces.some(c => c.route.includes(C)), "offline devices get nothing");
+  assert.ok(!pieces.some(c => c.kind === "image" && c.route === `device:${A}`), "only image-capable devices get images");
+  assert.ok(pieces.filter(c => c.kind === "image").every(c => c.route === `device:${B}`), "the graphics card takes the images");
   for (const id of ["hero", "menu", "visit"]) assert.match(html, new RegExp(`<section id="${id}"`));
   assert.equal((html.match(/data:image\/webp;base64,AAAA/g) ?? []).length, 2);
   assert.doesNotMatch(html, /<script|onclick|javascript:/i);
   assert.equal(events.at(-1)!.type, "done");
-  assert.ok(events.some(e => e.type === "task" && e.task.state === "done" && e.task.on === "device:0xbbb"));
+  assert.ok(events.some(e => e.type === "task" && e.task.state === "done" && e.task.on === `device:${B}`));
 });
 
 test("a failed piece doesn't sink the site; a failed plan does", async () => {
@@ -71,8 +79,31 @@ test("a failed piece doesn't sink the site; a failed plan does", async () => {
   assert.equal(ev2.at(-1)!.type, "failed");
 });
 
-test("no devices: everything runs on the Own1", () => {
-  assert.deepEqual(routes("image", 3, []), ["box", "box", "box"]);
+test("no devices: everything runs on the Own1, one piece at a time, and busy is retried", async () => {
+  assert.deepEqual(lanes([]).map(l => l.route), ["box"]);
+  let busyLeft = 2, inFlight = 0, most = 0;
+  const { deps } = doubles({
+    async workers() { return []; },
+    async chat(body: any, route) {
+      if (body.messages[0].content.includes("You plan")) return { text: JSON.stringify(plan), ranOn: "box" };
+      if (busyLeft-- > 0) throw new Error("busy");
+      inFlight++; most = Math.max(most, inFlight); await new Promise(r => setTimeout(r, 20)); inFlight--;
+      const id = body.messages[0].content.match(/<section id="([a-z-]+)">/)![1];
+      return { text: `<section id="${id}">x</section>`, ranOn: route };
+    },
+  });
+  const html = await run("site", deps, () => {});
+  assert.equal(most, 1, "the Own1 is never asked for two at once");
+  for (const id of ["hero", "menu", "visit"]) assert.match(html, new RegExp(`<section id="${id}"`));
+});
+
+test("a piece that keeps failing is reported, the rest of the page still ships", async () => {
+  const { deps } = doubles({ async workers() { return []; }, async image() { throw new Error("busy"); } });
+  const events: Event[] = [];
+  const html = await run("site", deps, e => events.push(e));
+  assert.match(html, /<section id="menu"/);
+  const failed = events.filter(e => e.type === "task" && e.task.state === "failed");
+  assert.ok(failed.length >= 1);
 });
 
 test("plans and pieces from the model are bounded and cleaned", () => {

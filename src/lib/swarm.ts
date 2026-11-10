@@ -23,6 +23,8 @@ export interface Deps {
   image(body: object, route: string): Promise<{ b64: string; mime: string; ranOn: string }>;
   workers(): Promise<Worker[]>;
   publish?(name: string, html: string): Promise<string>;
+  /** Waits between retries; tests pass a short one. */
+  sleep?(ms: number): Promise<void>;
 }
 
 const MAX_SECTIONS = 6, MAX_IMAGES = 6;
@@ -104,12 +106,23 @@ section{padding:48px 20px;max-width:1040px;margin:0 auto}img{max-width:100%;heig
 <body>${body}</body></html>`;
 }
 
-/** Spread tasks over online devices that can do them; the Own1 decides when none can. */
-export function routes(kind: "chat" | "image", n: number, workers: Worker[]): string[] {
-  const able = workers.filter(w => w.online && w.caps.some(c => c.startsWith(kind === "chat" ? "chat:" : "image:")));
-  const order = ["box", ...able.map(w => `device:${w.address}`)];
-  return Array.from({ length: n }, (_, i) => order[i % order.length]);
+export interface Lane { route: string; can: Set<"chat" | "image">; prefers: "chat" | "image" }
+
+/** Who can take pieces: the Own1 and each online device, one piece at a time each. Devices with a
+ *  graphics card take images first, the Own1 takes writing first. */
+export function lanes(workers: Worker[]): Lane[] {
+  const out: Lane[] = [{ route: "box", can: new Set(["chat", "image"]), prefers: "chat" }];
+  for (const w of workers) {
+    if (!w.online || !/^0x[0-9a-fA-F]{40}$/.test(w.address)) continue;
+    const can = new Set<"chat" | "image">();
+    if (w.caps.some(c => c.startsWith("chat:"))) can.add("chat");
+    if (w.caps.some(c => c.startsWith("image:"))) can.add("image");
+    if (can.size) out.push({ route: `device:${w.address}`, can, prefers: can.has("image") ? "image" : "chat" });
+  }
+  return out;
 }
+
+const RETRYABLE = /busy|answered 5\d\d|didn't pick it up|fetch failed|timeout/i;
 
 export async function run(prompt: string, deps: Deps, emit: (e: Event) => void): Promise<string> {
   const tasks: Task[] = [];
@@ -128,8 +141,10 @@ export async function run(prompt: string, deps: Deps, emit: (e: Event) => void):
   };
   try {
     let plan: Plan | undefined, lastText = "";
-    for (let attempt = 1; attempt <= 2 && !plan; attempt++) {
-      const planned = await step({ id: attempt === 1 ? "plan" : "plan-2", kind: "plan", label: attempt === 1 ? "Plan the site" : "Plan the site, again", on: "box", state: "queued" },
+    const sleep = deps.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
+    for (let attempt = 1; attempt <= 3 && !plan; attempt++) {
+      if (attempt > 1) await sleep(4000);
+      const planned = await step({ id: attempt === 1 ? "plan" : `plan-${attempt}`, kind: "plan", label: attempt === 1 ? "Plan the site" : "Plan the site, again", on: "box", state: "queued" },
         () => deps.chat({ ...QUIET, model: "txt2txt", messages: [{ role: "system", content: PLAN_PROMPT }, { role: "user", content: prompt }], max_tokens: 3000 }, "box"));
       if (!planned) continue;
       lastText = planned.text;
@@ -140,21 +155,51 @@ export async function run(prompt: string, deps: Deps, emit: (e: Event) => void):
     emit({ type: "plan", plan });
 
     const workers = await deps.workers().catch(() => [] as Worker[]);
-    const chatRoutes = routes("chat", plan.sections.length, workers), imageRoutes = routes("image", plan.images.length, workers);
+    const p = plan;
     const sections = new Map<string, string>(), images = new Map<string, { b64: string; mime: string }>();
-    await Promise.all([
-      ...plan.sections.map((s, i) => step({ id: `s-${s.id}`, kind: "chat", label: `${s.title} section`, on: chatRoutes[i], state: "queued" }, async () => {
-        const imgs = plan.images.filter(im => im.section === s.id).map(im => im.id);
-        const r = await deps.chat({ ...QUIET, model: "txt2txt", messages: [{ role: "user", content: SECTION_PROMPT(plan!, s, imgs) }], max_tokens: 3000 }, chatRoutes[i]);
-        sections.set(s.id, clean(r.text, s.id));
-        return r;
-      })),
-      ...plan.images.map((im, i) => step({ id: `i-${im.id}`, kind: "image", label: im.prompt.split(/[,.]/)[0].slice(0, 40), on: imageRoutes[i], state: "queued" }, async () => {
-        const r = await deps.image({ model: "txt2img", prompt: im.prompt, size: "768x512", n: 1 }, imageRoutes[i]);
-        images.set(im.id, { b64: r.b64, mime: r.mime });
-        return r;
-      })),
-    ]);
+    type Piece = { task: Task; kind: "chat" | "image"; go(route: string): Promise<{ ranOn?: string }> };
+    const pieces: Piece[] = [
+      ...p.sections.map((s): Piece => ({ kind: "chat", task: { id: `s-${s.id}`, kind: "chat", label: `${s.title} section`, state: "queued" },
+        async go(route) {
+          const imgs = p.images.filter(im => im.section === s.id).map(im => im.id);
+          const r = await deps.chat({ ...QUIET, model: "txt2txt", messages: [{ role: "user", content: SECTION_PROMPT(p, s, imgs) }], max_tokens: 3000 }, route);
+          sections.set(s.id, clean(r.text, s.id));
+          return r;
+        } })),
+      ...p.images.map((im): Piece => ({ kind: "image", task: { id: `i-${im.id}`, kind: "image", label: im.prompt.split(/[,.]/)[0].slice(0, 40), state: "queued" },
+        async go(route) {
+          const r = await deps.image({ model: "txt2img", prompt: im.prompt, size: "768x512", n: 1 }, route);
+          images.set(im.id, { b64: r.b64, mime: r.mime });
+          return r;
+        } })),
+    ];
+    for (const pc of pieces) { tasks.push(pc.task); update(pc.task); }
+    const queue = [...pieces];
+    const take = (l: Lane) => {
+      let k = queue.findIndex(pc => pc.kind === l.prefers);
+      if (k < 0) k = queue.findIndex(pc => l.can.has(pc.kind));
+      return k < 0 ? undefined : queue.splice(k, 1)[0];
+    };
+    // each lane takes one piece at a time and the next when it's done, so a busy Own1 never refuses a crowd
+    await Promise.all(lanes(workers).map(async (l) => {
+      for (let pc = take(l); pc; pc = take(l)) {
+        const t = pc.task;
+        Object.assign(t, { state: "running", on: l.route }); update(t);
+        const t0 = Date.now();
+        for (let attempt = 1; ; attempt++) {
+          try {
+            const r = await pc.go(l.route);
+            Object.assign(t, { state: "done", ms: Date.now() - t0, on: r.ranOn ?? l.route, error: undefined }); update(t);
+            break;
+          } catch (e) {
+            const msg = String((e as Error)?.message ?? e).slice(0, 200);
+            if (attempt < 3 && RETRYABLE.test(msg)) { await sleep(4000); continue; }
+            Object.assign(t, { state: "failed", ms: Date.now() - t0, error: msg }); update(t);
+            break;
+          }
+        }
+      }
+    }));
     if (!sections.size) throw new Error("no section was built");
     const html = stitch(plan, sections, images);
     let url: string | undefined;
