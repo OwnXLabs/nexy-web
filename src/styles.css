@@ -1101,3 +1101,20 @@ img.revealing{animation:reveal 1.6s ease-out both}
 .pickchip{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:6px 10px;border-radius:10px;background:rgba(138,202,184,.12);border:1px solid rgba(138,202,184,.35);font-size:12.5px;color:var(--ink,#e8e8ea)}
 .pickchip b{font-weight:600}.pickchip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pickchip button{background:none;border:0;color:inherit;font-size:16px;line-height:1;cursor:pointer;opacity:.7}
+
+/* a site built across the owner's devices */
+.swarm { display: grid; gap: 10px; max-width: 640px; }
+.swarm .sw-head { margin: 0; font-weight: 500; }
+.swarm .sw-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.swarm .sw-list li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.1); font-size: 14px; }
+.swarm .sw-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff9a7a; }
+.swarm li[data-state="running"] .sw-dot { animation: swpulse 1s ease-in-out infinite; }
+.swarm li[data-state="done"] .sw-dot { background: #7fdca4; }
+.swarm li[data-state="failed"] .sw-dot { background: transparent; box-shadow: inset 0 0 0 1px #ff9a7a; }
+.swarm .sw-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.swarm .sw-on, .swarm .sw-st { font-size: 12px; opacity: .7; white-space: nowrap; }
+.swarm .sw-foot { margin: 0; font-size: 13px; opacity: .75; }
+.swarm .sw-page { width: 100%; height: 480px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: #fff; }
+@keyframes swpulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .swarm li[data-state="running"] .sw-dot { animation: none; } }
+@media (max-width: 560px) { .swarm .sw-list li { grid-template-columns: 10px minmax(0, 1fr) auto; } .swarm .sw-st { display: none; } }

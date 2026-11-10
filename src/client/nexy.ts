@@ -1,4 +1,5 @@
 import { chatScope, visibleChat, bindChat, inChat } from "./chat-scope";
+import { playSwarm } from "./swarm-view";
 import { shape, typeLabel, plainName, type Project, type FileRow, type Event, type UpstreamProject } from "./state";
 import { initCanvas, show as showArtifact, generating, setFirstWork, current as currentArtifact, outputsForChat, forgetPrivateOutputs, isOpen } from "./canvas";
 import { planArtifact, planBrief, buildable } from "./plan-view";
@@ -2221,7 +2222,9 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
       push("ai", esc(intent.say));
     } else if (intent.kind === "make") {
       S.job = "build"; S.eta = { start: Date.now(), ms: typicalMs(intent.deliverable === "diagram" ? "diagram" : "site") };
-      await playMake(intent.brief, intent.deliverable);
+      // a site goes across the owner's devices when this Own 1 can; otherwise the normal builder
+      if (intent.deliverable === "diagram" || !(await playSwarm(intent.brief, (el) => pushBlock(el))))
+        await playMake(intent.brief, intent.deliverable);
       madeIt(`I built ${intent.deliverable === "diagram" ? "a diagram" : "it"}: ${titleFor(intent.brief)}. It is open on the right.`);
     } else if (intent.kind === "build") {
       S.job = "build"; S.eta = { start: Date.now(), ms: typicalMs("site") };
