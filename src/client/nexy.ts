@@ -182,7 +182,11 @@ async function loadBuilds(): Promise<void> {
 }
 
 async function loadProjects(): Promise<void> {
-  const d = await api<{ projects?: UpstreamProject[] }>("/api/apps/startup/api/pm/projects");
+  // no Own Startup on this machine (a computer without an Own1): no projects, not an error
+  const d = await api<{ projects?: UpstreamProject[] }>("/api/apps/startup/api/pm/projects").catch((e) => {
+    if (e instanceof HttpError && e.status === 404) return { projects: [] };
+    throw e;
+  });
   S.projects = (d.projects ?? []).map(shape);
 }
 

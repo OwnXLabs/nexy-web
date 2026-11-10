@@ -9,7 +9,10 @@ export interface AppTarget {
 
 const env = (k: string, d: string) => process.env[k] ?? d;
 
-export const APPS: AppTarget[] = [
+// a computer without an Own1 has no studios: "not here", never "not answering"
+const NONE = process.env.NEXY_STUDIOS === "off";
+
+export const APPS: AppTarget[] = NONE ? [] : [
   { id: "qiki",     label: "Qiki",              base: env("NEXY_QIKI_URL",    "http://127.0.0.1:4331"),
     history: "/api/v1/director/runs?limit=200", kind: "site" },
   { id: "images",   label: "Own Image Studio",  base: env("NEXY_IMAGES_URL",  "http://127.0.0.1:4335"),
