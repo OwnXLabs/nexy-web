@@ -43,7 +43,7 @@ test('a computer without an Own1: only what works here', async () => {
     assert.ok(!chips.some((c) => /landing page|Telegram/.test(c)), `no suggestion it can't do: ${chips}`);
 
     assert.deepEqual(await items(page), ['Ask your first thing', 'Get Nexy on your phone', 'Connect an app', 'Add more power']);
-    assert.equal(await count(page), '0 of 3');
+    assert.equal(await count(page), '0 of 4');
 
     for (const t of ['apps', 'activity']) assert.equal(await page.locator(`[data-tab="${t}"]`).isVisible(), false, `${t} tab hidden`);
     assert.equal(await page.locator('[data-tab="files"]').isVisible(), true);
@@ -59,7 +59,7 @@ test('a computer without an Own1: only what works here', async () => {
     await page.locator('#gs [data-g="power"]').click();
     await page.locator('.gs-tip').getByText('coming in an update').waitFor();
     await page.locator('.gs-tip [data-do]').click();
-    assert.equal(await count(page), '1 of 3');
+    assert.equal(await count(page), '1 of 4');
     assert.equal(await page.locator('#gs [data-g="power"]').getAttribute('class'), 'gi ok');
 
     // Connect an app opens Connections, which says what can connect here
@@ -82,7 +82,7 @@ test('a computer without an Own1: only what works here', async () => {
     // asking ticks the first step; the greeting gives way to the chat
     await page.locator('#emptyState .sugg .chip').nth(1).click();
     await page.locator('.msg.me').first().waitFor({ timeout: 10000 });
-    assert.equal(await count(page), '2 of 3');
+    assert.equal(await count(page), '2 of 4');
     assert.equal(await page.locator('#emptyState').count(), 0);
     assert.deepEqual(errors, []);
   } finally { await b.close(); s.p.kill(); }
