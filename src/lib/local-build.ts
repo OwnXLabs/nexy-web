@@ -92,9 +92,11 @@ export function checkPage(html: string, brief: string): string {
 
 // nothing the page asks for can load: the browser enforces what the check above reads
 const CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; worker-src blob:">`;
+// first, so the page's own rules win: width:100% plus padding no longer spills off the side
+const BASE = "<style>*,::before,::after{box-sizing:border-box}</style>";
 export function offline(html: string): string {
   const m = /<head[^>]*>/i.exec(html) ?? /<html[^>]*>/i.exec(html) ?? /<!doctype[^>]*>/i.exec(html);
-  return m ? html.slice(0, m.index + m[0].length) + CSP + html.slice(m.index + m[0].length) : CSP + html;
+  return m ? html.slice(0, m.index + m[0].length) + CSP + BASE + html.slice(m.index + m[0].length) : CSP + BASE + html;
 }
 
 // "a ping pong ball business" is a shop, not a game
