@@ -31,3 +31,17 @@ export const DELETE: APIRoute = async ({ url, request }) => {
   const id = url.searchParams.get("id"); if (!id) return json({ error: "id required" }, 400);
   try { await r.remove(id); return json({ ok: true }); } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
 };
+
+// the owner's answer to a routine made while outside content was in the agent's context
+export const PATCH: APIRoute = async ({ request }) => {
+  if (!boxAllowed(request)) return boxRefused();
+  const r = rt(request); if (!r) return json({ error: NONE }, 503);
+  let b: any; try { b = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
+  const id = String(b?.id ?? "").trim(), action = b?.action;
+  if (!id || (action !== "confirm" && action !== "discard")) return json({ error: "id and action (confirm or discard) are required" }, 400);
+  if (!r.confirm || !r.discard) return json({ error: "This agent does not hold routines for confirmation." }, 501);
+  try {
+    if (action === "confirm") return json({ routine: { id, ...(await r.confirm(id)) } });
+    await r.discard(id); return json({ ok: true });
+  } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+};
