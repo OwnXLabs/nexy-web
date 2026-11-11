@@ -14,7 +14,7 @@ const SANDBOX = 'sandbox="allow-scripts allow-forms"';
 // The sandbox has no allow-same-origin, so a built app touching localStorage threw
 // "SecurityError: ... the document is sandboxed" and died (a kanban board, 2026-10-08 feedback).
 // An in-memory stand-in keeps it working for the session; nothing is stored.
-const STORAGE_SHIM =
+export const STORAGE_SHIM =
   `(function(){try{localStorage.getItem("_")}catch(_){var m=function(){var d={};return{getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},` +
   `setItem:function(k,v){d[k]=String(v)},removeItem:function(k){delete d[k]},clear:function(){d={}},key:function(i){return Object.keys(d)[i]||null},` +
   `get length(){return Object.keys(d).length}}};["localStorage","sessionStorage"].forEach(function(n){try{Object.defineProperty(window,n,{value:m(),configurable:true})}catch(_){}})}})();`;

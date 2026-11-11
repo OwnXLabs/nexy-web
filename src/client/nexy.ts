@@ -26,7 +26,8 @@ import { takeoverAsk } from "./takeover";
 import { pickedFor, clearPick, renderedFor, type Picked } from "./pick";
 import { initPrivate, guard, conversation as privateConversation, isPrivate, privateConversationId, noteEphemeralDoc, setPrivate } from "./private";
 import { matchSocial, playSocial } from "./social";
-import { hasApp, here, isBeta, notHereYet, siteHost } from "./place";
+import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost } from "./place";
+import { renderGate } from "./build-gate";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine } from "./memory";
@@ -890,7 +891,83 @@ function failedReply(bub: Element, sentence: string, detail: string, retry: () =
   });
 }
 
+// On a computer the engine's builder writes the page: the server checks it is what was asked,
+// the browser runs it unseen, and a failed check gets one more try, then a plain no.
+const LOCAL_BUILD_MS = 90_000;
+const GAME_BRIEF = /\b(?:game|pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
+type LocalEnd = { type: "done"; html: string; title: string; secs: number } | { type: "failed"; error: string; check: boolean; secs: number };
+
+function followBuild(id: string, onStep: (text: string) => void): Promise<LocalEnd> {
+  return new Promise((resolve) => {
+    let tries = 0;
+    const open = () => {
+      const es = new EventSource(`/api/v1/build?id=${encodeURIComponent(id)}`);
+      es.onmessage = (m) => {
+        let e: LocalEnd | { type: "step"; text: string };
+        try { e = JSON.parse(m.data); } catch { return; } // a cut event; a reconnect replays it
+        if (e.type === "step") return onStep(e.text);
+        es.close();
+        resolve(e);
+      };
+      // a dropped stream picks up again: the server replays what happened so far
+      es.onerror = () => {
+        es.close();
+        if (++tries > 20) resolve({ type: "failed", error: "lost touch with the builder on this computer", check: false, secs: 0 });
+        else setTimeout(open, Math.min(1000 * tries, 8000));
+      };
+    };
+    open();
+  });
+}
+
+async function playLocalMake(brief: string): Promise<void> {
+  const localTurn = turnState();
+  const { push, generating, saveChat } = captureWork();
+  localTurn.lastMake = { brief, deliverable: "web_app" };
+  const game = GAME_BRIEF.test(brief);
+  const holder = push("ai", "Building that on this computer, not in a datacentre. It will open on the right when it is ready.");
+  const gen = generating(titleFor(brief), game ? "game" : "html", "Writing it on this computer", LOCAL_BUILD_MS);
+  status(holder, "Starting…", LOCAL_BUILD_MS);
+  const t0 = Date.now();
+  let fix = "", why = "", checked = false;
+  try {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      if (attempt === 2) { status(holder, "That version did not pass my checks. Trying once more…"); gen.live("Trying once more"); }
+      const started = await patient(() => api<{ id?: string; error?: string }>("/api/v1/build", {
+        method: "POST", body: JSON.stringify({ brief, fix }),
+      }), retrying(holder, gen));
+      if (!started.id) throw new Error(started.error ?? "the builder did not start");
+      const r = await followBuild(started.id, (t) => { status(holder, `${t}…`); gen.live(t); });
+      if (r.type === "failed") { why = r.error; checked ||= r.check; fix = r.check ? r.error : ""; continue; }
+      status(holder, "Running it to check it works…");
+      gen.live("Running it to check it works");
+      const g = await renderGate(r.html);
+      if (!g.ok) { why = fix = g.why; checked = true; continue; }
+      const secs = Math.round((Date.now() - t0) / 1000);
+      const made = { title: (r.title || titleFor(brief)).replace(/\s+/g, " ").trim().slice(0, 48) || "Your build", meta: `Built on this computer · ${secs}s`, html: r.html };
+      const output = game ? gameArtifact(made) : htmlArtifact({ ...made, url: siteHost });
+      output.id = `build:local-${started.id}`;
+      gen.replaceWith(output);
+      push("ai", `Done. It is on the right and it runs. Built on this computer in ${secs}s.`);
+      window.dispatchEvent(new CustomEvent("nexy:files-changed"));
+      saveChat();
+      return;
+    }
+    throw new Error(why || "the build did not finish");
+  } catch (e) {
+    const detail = (e as Error).message;
+    gen.fail("It did not work this time");
+    failedReply(holder.querySelector(".bub")!, checked
+      ? "I could not build that well enough to show you. I tried twice and neither version passed my checks, so I kept them back. Try again, or describe it a little differently."
+      : "I could not build that: the builder on this computer did not finish. It usually works on a second try.",
+      detail, () => void playLocalMake(brief));
+  } finally {
+    settle(holder);
+  }
+}
+
 async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web_app", mode?: "phaser"): Promise<void> {
+  if (buildsHere && deliverable === "web_app") return playLocalMake(brief);
   const localTurn = turnState();
   const { push, generating, saveChat } = captureWork();
   localTurn.lastMake = { brief, deliverable };
@@ -2224,7 +2301,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
       push("ai", esc(r ? r.say : "That edit did not reach the page."));
     } else if (intent.kind === "generate" && !hasApp(intent.medium === "image" ? "images" : "beat")) {
       push("ai", esc(notHereYet(intent.medium === "image" ? "Making images" : "Making music")));
-    } else if (intent.kind === "make" && !hasApp("build")) {
+    } else if (intent.kind === "make" && !(intent.deliverable === "diagram" ? hasStudio("build") : hasApp("build"))) {
       push("ai", esc(notHereYet(intent.deliverable === "diagram" ? "Drawing diagrams" : "Building websites and apps")));
     } else if (intent.kind === "build" && !hasApp("startup")) {
       push("ai", esc(notHereYet("Running projects with a team of agents")));

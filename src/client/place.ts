@@ -5,7 +5,10 @@ export const here = onOwn1 ? "this Own1" : "this computer";
 const apps = new Set((root?.dataset.apps ?? "").split(" ").filter(Boolean));
 // a beta build shows the BETA badge and can send reports to the Nexy team
 export const isBeta = root?.dataset.beta === "1";
-export const hasApp = (id: string): boolean => apps.has(id);
+export const hasStudio = (id: string): boolean => apps.has(id);
+// building pages: the Own Build studio, or on a computer the engine's builder
+export const buildsHere = !onOwn1 && apps.has("builder");
+export const hasApp = (id: string): boolean => apps.has(id) || (id === "build" && buildsHere);
 // speech on this computer (the desktop app) or Own Voice on an Own1: same calls, different home
 export const localVoice = root?.dataset.voice === "local";
 export const voiceApi = (op: "stt" | "tts" | "voices"): string => (localVoice ? `/api/v1/voice/${op}` : `/api/apps/voice/api/${op}`);
