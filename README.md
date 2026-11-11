@@ -31,6 +31,7 @@ NEXY_DATA_DIR=./data node dist/server/entry.mjs
 | `NEXY_BETA_REPORT_URL`, `NEXY_INSTALL_KEY` | Where beta reports go, and this install's random key (sent as `X-Install`) |
 | `NEXY_LOG_TAIL_URL` | Optional: where the app's own scrubbed log tail is fetched for a beta report |
 | `NEXY_APP_VERSION` | App version shown in beta reports |
+| `NEXY_MODEL_STATUS` | Optional file the host app writes while it downloads the model (`{"model", "completed", "total"}`); the chat home shows the download and holds jobs until it is done |
 | `HOST`, `PORT` | Listen address (default `0.0.0.0:4321`; bind to loopback unless it sits behind an authenticating proxy) |
 
 **Security:** nexy-web has no sign-in of its own. Run it on loopback, or behind an authenticating proxy (Own1's xnode-auth, Nexy Cloud's gate, or the Nexy app's local gate).

@@ -38,6 +38,7 @@ export function applyPrefs(): void {
   document.body.dataset.size = P.size === "standard" ? "" : P.size;
   document.body.classList.toggle("reduce", P.reduce);
   const wp = $(".wp"); if (wp) wp.style.backgroundImage = P.bg ? `url("${P.bg}")` : "";
+  document.body.classList.toggle("ownbg", !!P.bg);
   if (P.name) document.querySelectorAll(".user .n, .pm-h .n").forEach((n) => { n.textContent = P.name; });
 }
 
@@ -87,7 +88,7 @@ async function section(sec: string): Promise<string> {
     try {
       const cat = await loadCatalog();
       return `<h3>Connections</h3>` + tg + `<p class="sp">Outside apps come from this machine's catalogue. Nexy asks before the first use of each one.</p>` +
-        (cat.length ? cat.map((c) => row(esc(c.label), c.auth?.credentialStored ? not("Connected") : `<button class="btn small primary" type="button" data-act="conn" data-n="${esc(c.label)}">Connect</button>`,
+        (cat.length ? cat.map((c) => row(esc(c.label), c.auth?.credentialStored ? `<span class="faint connected">Connected</span>` : `<button class="btn small primary" type="button" data-act="conn" data-n="${esc(c.label)}">Connect</button>`,
           c.auth?.credentialStored ? `Scopes: ${esc((c.auth.grantedScopes ?? c.scopes ?? []).join(", ") || "as granted")}` : "Not connected")).join("") : row("Catalogue", not("Empty")));
     } catch (e) {
       return `<h3>Connections</h3>` + tg + row("Catalogue", not(`Not answering: ${(e as Error).message}`));
@@ -108,7 +109,7 @@ async function section(sec: string): Promise<string> {
     row("Web search", not("Only when you ask"), "Through this machine's own search; the query is the only thing that leaves") +
     `<div class="sbtns"><button class="btn small" type="button" data-act="feedback">Show my feedback</button><button class="btn small" type="button" data-act="clearfb">Clear my feedback</button><button class="btn small" type="button" data-act="forget">Forget what Nexy remembers</button></div>`;
   if (sec === "appearance") return `<h3>Appearance</h3><h4>Theme</h4><div class="themes">` +
-    ([["default", "Default", "the sunset, warm glass"], ["standard", "Standard", "black, no glass, like the chat apps"], ["cyberpunk", "Cyberpunk", "neon on black"],
+    ([["default", "Default", "the aurora, glass"], ["standard", "Standard", "black, no glass, like the chat apps"], ["cyberpunk", "Cyberpunk", "neon on black"],
       ["win95", "Windows 95", "bevels, teal, Tahoma"], ["lcars", "LCARS", "elbows, amber, lavender"], ["topgun", "Top Gun", "tarmac, sunset, chrome"]] as const)
       .map(([id, n, d]) => `<button type="button" class="theme${P.theme === id ? " sel" : ""}" data-theme="${id}"><span class="sw-${id}">${id === "topgun" ? "<i></i>" : ""}</span><b>${n}</b><small>${d}</small></button>`).join("") + `</div>` +
     `<h4>Background</h4>` + row("Your own image", `<button class="btn small" type="button" data-act="bg">Upload</button> <button class="btn small ghost" type="button" data-act="bgreset">Reset</button>`, "Stays in this browser, on this machine") +
@@ -138,6 +139,8 @@ export async function renderSettings(sec = "general"): Promise<void> {
   nav.innerHTML = SECTIONS.map(([id, t]) => `<button type="button" class="snav${id === sec ? " active" : ""}" data-sec="${id}">${t}</button>`).join("");
   nav.querySelectorAll<HTMLElement>("[data-sec]").forEach((b) => b.addEventListener("click", () => void renderSettings(b.dataset.sec!)));
   body.innerHTML = await section(sec);
+  // an app connected here ticks "Connect an app" in Get started
+  if (sec === "connections" && body.querySelector('[data-act="tgoff"], .sc .connected')) window.dispatchEvent(new CustomEvent("nexy:did", { detail: "apps" }));
   body.querySelectorAll<HTMLElement>("[data-sw]").forEach((b) => b.addEventListener("click", () => {
     const k = b.dataset.sw as "speakAlways" | "wakeKey" | "notif" | "reduce"; P[k] = !P[k]; save(); applyPrefs(); void renderSettings(sec);
     if (k === "notif" && P.notif && "Notification" in window && Notification.permission === "default") void Notification.requestPermission();
@@ -273,8 +276,22 @@ async function dataRows(): Promise<DataRow[]> {
 const fmtB = (b: number) => b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.round(b / 1e3)} KB`;
 let dataCache: DataRow[] = [];
 
+// chats are kept by this Nexy's own server, per owner; ultra-private ones never reach it
+async function chatRow(): Promise<DataRow> {
+  const sub = "saved by Nexy on this machine, for you only; ultra-private chats are never kept";
+  try {
+    const r = await fetch("/api/v1/chats");
+    if (!r.ok) throw new Error(httpMsg(r.status));
+    const l = ((await r.json()) as { chats?: Record<string, unknown>[] }).chats ?? [];
+    return { name: "Chats", sub, count: l.length, bytes: null, list: l };
+  } catch (e) {
+    return { name: "Chats", sub: `not answering: ${(e as Error).message}`, count: 0, bytes: null, list: [] };
+  }
+}
+
 async function dataSection(): Promise<string> {
-  dataCache = await dataRows();
+  const [chats, rows] = await Promise.all([chatRow(), dataRows()]);
+  dataCache = [chats, ...rows];
   const total = dataCache.reduce((a, r) => a + (r.bytes ?? 0), 0) || 1;
   const lock = `<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
   return `<h3>Your data</h3><div class="securebox">${lock}<div><b>All of it is on this machine.</b><span>Nothing here is synced or mirrored; each app keeps its own records on ${here}. Sizes are what each app reports${total > 1 ? `, ${fmtB(total)} in all` : ""}.</span></div></div>` +
@@ -282,7 +299,7 @@ async function dataSection(): Promise<string> {
       `<div class="drow"><span class="led${r.list.length || r.count ? " ok" : " off"}"></span><div class="dl"><b>${esc(r.name)}</b><small>${esc(r.sub)} · ${r.count} item${r.count === 1 ? "" : "s"}</small></div>` +
       `<span class="dsz num">${r.bytes === null ? "—" : fmtB(r.bytes)}</span><span class="dbar"><i style="width:${r.bytes ? Math.max(2, (r.bytes / total) * 100) : 0}%"></i></span>` +
       `<button class="btn small ghost" type="button" data-dexp="${i}">Export</button></div>`).join("") + `</div>` +
-    row("Chat history", not("kept in this browser tab only; not stored on the machine")) +
+    row("Ultra-private chats", not("Never saved"), "Kept in this tab only and gone when you leave it") +
     row("Export everything", `<button class="btn small" type="button" data-dexp="all">Export</button>`, "One JSON file listing everything above");
 }
 

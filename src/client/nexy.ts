@@ -30,7 +30,9 @@ import { hasApp, here, isBeta, notHereYet, siteHost } from "./place";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine } from "./memory";
-import { initSettings, notify } from "./settings";
+import { initSettings, notify, openSettings } from "./settings";
+import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
+import { initAurora } from "./aurora";
 import { httpMsg } from "./http";
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s);
@@ -2138,9 +2140,14 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
   };
   // the message that tripped the switch was posted before it: it is private too
   if (nowPrivate) mine.dataset.private = "1";
-  else noteUserMessage(text);
+  else { noteUserMessage(text); did("ask"); }
   typingOn();
   try {
+    // a job given while the model downloads waits for it, and says so
+    if (!modelState().ready) {
+      push("ai", `Got it. I’ll start the moment ${esc(modelState().model ?? "the model")} finishes downloading.`);
+      await modelReady();
+    }
     if (nowPrivate && /connect|telegram|instagram|linkedin|slack|gmail|drive|owncloud|cloud|render on|publish|share/i.test(text) && !/local/i.test(text)) {
       push("ai", "This is an encrypted, device-only chat, so I will not connect an outside app, use the cloud, or publish from here. I can do all of it locally, or you can start a regular chat for that.");
       return;
@@ -2369,9 +2376,13 @@ function emptyState(): void {
   const cur = th.querySelector("#emptyState");
   const empty = !th.querySelector(".msg");
   const name = P()?.name;
-  if (!empty || !name) { cur?.remove(); return; }
+  document.body.classList.toggle("home", empty && !name && !viewingExample());
+  if (!empty || viewingExample()) { cur?.remove(); return; }
+  // no project open: the home greeting and its suggestions
+  if (!name) { if (!cur?.classList.contains("home")) { cur?.remove(); th.appendChild(homeNode()); } return; }
+  if (cur?.classList.contains("home")) cur.remove();
   const html = `This is <b>${esc(name)}</b>. Ask me anything, or tell me what to build and I will put a team on it. Everything runs on this machine unless you say otherwise.`;
-  if (cur) { const t = cur.querySelector(".t"); if (t && t.innerHTML !== html) t.innerHTML = html; return; }
+  if (cur?.isConnected) { const t = cur.querySelector(".t"); if (t && t.innerHTML !== html) t.innerHTML = html; return; }
   const d = document.createElement("div");
   d.className = "m ai";
   d.id = "emptyState";
@@ -2380,6 +2391,7 @@ function emptyState(): void {
 }
 
 async function boot(): Promise<void> {
+  initAurora();
   wireTabs(); wireComposer(); wireProfile(); wireNewProject(); wireUnbuilt(); initCanvas();
   document.querySelectorAll<HTMLElement>("[data-close]").forEach((b) => b.addEventListener("click", () => b.closest(".ov")?.classList.remove("open")));
   setFirstWork(() => {
@@ -2398,6 +2410,7 @@ async function boot(): Promise<void> {
   });
   initSettings({ send, toast, roster: ROSTER, projects: () => S.projects.map((p) => ({ name: p.name, taskCount: p.taskCount, doneCount: p.doneCount })) });
   initPrivate({ history, say: (t) => { push("ai", esc(t)); }, toast });
+  initLanding({ send: (t) => void send(t), settings: openSettings, toast, talk: () => $("#waveBtn")?.click() });
   installReporter({
     endpoint: "/api/v1/problem-report", app: "nexy",
     team: isBeta ? "/api/v1/beta-report" : undefined,
@@ -2483,6 +2496,8 @@ async function boot(): Promise<void> {
     onReview(d.pid, d.taskId, d.verdict);
   });
 
+  // the greeting doesn't wait for the studios to answer
+  emptyState();
   // The saved chats (and the examples list) were fetched only after projects, then builds, one
   // after the other: ~1.6 s of waiting before the examples showed. All three start together now;
   // what renders, and in what order, is unchanged.
@@ -2499,7 +2514,10 @@ async function boot(): Promise<void> {
   await Promise.all([projectsLoaded, loadBuilds()]);
   renderAll();
   emptyState();
-  restoreChats(chatsReq).catch((e: Error) => console.warn("[nexy] saved chats unavailable", e));
+  restoreChats(chatsReq)
+    .then(() => { if (!$("#chatWrap")?.hidden) did("ask"); })
+    .catch((e: Error) => console.warn("[nexy] saved chats unavailable", e));
+  welcome();
   const th = $("#thread");
   if (th) new MutationObserver(emptyState).observe(th, { childList: true });
   setTimeout(() => $<HTMLTextAreaElement>("#input")?.focus(), 200);
