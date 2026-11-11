@@ -124,7 +124,7 @@ test('the Routines view shows a pending routine with Confirm and Discard', async
     await p.locator('#thread .m.ai', { hasText: 'Discarded Old notes' }).waitFor();
     assert.ok(g2.seen.some((s) => s.method === 'POST' && s.path === '/api/jobs/8/discard'));
     const all = (await p.locator('#thread').textContent()).toLowerCase();
-    for (const name of ['hermes', 'nexy engine', 'openclaw', 'read_page']) assert.ok(!all.includes(name), `the view says "${name}"`);
+    for (const word of ['engine', 'read_page', 'web_search']) assert.ok(!all.includes(word), `the view says "${word}"`);
     assert.deepEqual(errs, []);
   } finally {
     await b.close(); a2.p.kill(); g2.srv.close(); fs.rmSync(a2.data, { recursive: true, force: true });
