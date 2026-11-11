@@ -63,3 +63,12 @@ drives the real page and server through a TCP fault proxy: 300 ms latency, a dro
 box offline for 8 s, a 20 s stall, a connection that goes silent for good, a model silent for 50 s,
 a server restart mid-reply and two quick drops. Each checks what the person sees and that the
 model was asked once. About 2.5 minutes; `CASES=2,4b` runs some.
+
+Routine approval checks
+=======================
+
+`node --test tests/routine-approval.cjs` (after `npm run build`) serves the build against a
+stand-in agent. A routine the agent made while outside content was in its context is listed
+as pending with its prompt, schedule and source; Confirm and Discard in the Routines view and
+the routines API reach the agent; and chat vouches for a clean context only when no file,
+mail or page is in the system message. `SHOTS_DIR` saves a screenshot of the pending routine.
