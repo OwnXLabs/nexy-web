@@ -3,10 +3,14 @@ import "../fonts.css";
 import "../styles.css";
 import { APPS } from "../lib/apps";
 import { localVoice } from "../lib/voice";
+import { builderAvailable } from "../lib/local-build";
 // a computer without an Own1 runs chat only, plus speech when it has it; the page hides what isn't here
 const local = process.env.NEXY_STUDIOS === "off";
 const voice = local && localVoice();
-const apps = [...APPS.map((a) => a.id), ...(voice ? ["voice"] : [])].join(" ");
+// building on this computer: the engine's builder, with or without the Own Build studio
+const builder = local && await builderAvailable();
+const ids = APPS.map((a) => a.id);
+const apps = [...ids, ...(voice ? ["voice"] : []), ...(builder ? ["builder"] : [])].join(" ");
 const projects = APPS.some((a) => a.id === "startup");
 const beta = process.env.NEXY_BETA === "1";
 ---

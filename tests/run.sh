@@ -32,6 +32,8 @@ check "network faults: latency, drops, silence" node --test --test-timeout=18000
 check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
 check "a computer without an Own1: no studio it lacks, no Own1 wording" node --test --test-timeout=180000 tests/local-mode.cjs
+check "building on this computer: names, subject, no outside files" ts tests/local-build.test.ts
+check "building on this computer: engine builder, checks, one retry, plain no; Own1 still uses Own Build" node --test --test-timeout=180000 tests/local-build.cjs
 check "speech on this computer: model fetch, transcripts, spoken replies" ts tests/voice.test.ts
 check "connected apps in chat: lookups recognised, granted tool read as data, missing or failing said plainly" ts tests/connectors.test.ts
 check "speech on this computer in the browser, missing speech still gated, Own1 unchanged" node --test --test-timeout=180000 tests/local-voice.cjs
