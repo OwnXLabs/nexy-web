@@ -1,5 +1,5 @@
 import { hasApp, here, localVoice, onOwn1, voiceApi } from "./place";
-import { loadCatalog } from "./perm";
+import { HUB, loadCatalog } from "./perm";
 import { httpMsg } from "./http";
 
 export interface SettingsHooks {
@@ -87,9 +87,12 @@ async function section(sec: string): Promise<string> {
     const tg = await telegramRow();
     try {
       const cat = await loadCatalog();
-      return `<h3>Connections</h3>` + tg + `<p class="sp">Outside apps come from this machine's catalogue. Nexy asks before the first use of each one.</p>` +
-        (cat.length ? cat.map((c) => row(esc(c.label), c.auth?.credentialStored ? `<span class="faint connected">Connected</span>` : `<button class="btn small primary" type="button" data-act="conn" data-n="${esc(c.label)}">Connect</button>`,
-          c.auth?.credentialStored ? `Scopes: ${esc((c.auth.grantedScopes ?? c.scopes ?? []).join(", ") || "as granted")}` : "Not connected")).join("") : row("Catalogue", not("Empty")));
+      const google = cat.some((c) => c.id === "gmail" || c.id === "drive") ? await googleRow() : "";
+      return `<h3>Connections</h3>` + tg + `<p class="sp">Outside apps come from this machine's catalogue. Nexy asks before the first use of each one.</p>` + google +
+        (cat.length ? cat.map((c) => row(esc(c.label), c.auth?.credentialStored
+          ? `<span class="faint connected">Connected</span> <button class="btn small ghost" type="button" data-act="disc" data-n="${esc(c.label)}">Disconnect</button>`
+          : `<button class="btn small primary" type="button" data-act="conn" data-n="${esc(c.label)}">Connect</button>`,
+          c.auth?.credentialStored ? `Scopes: ${esc((c.auth.grantedScopes ?? c.scopes ?? []).map((x) => x.split("/").pop()).join(", ") || "as granted")}` : "Not connected")).join("") : row("Catalogue", not("Empty")));
     } catch (e) {
       return `<h3>Connections</h3>` + tg + row("Catalogue", not(`Not answering: ${(e as Error).message}`));
     }
@@ -190,6 +193,25 @@ async function telegramRow(): Promise<string> {
     `<button class="btn small primary" type="button" data-act="tgon">Connect</button></div></div>`;
 }
 
+// Gmail and Drive sign in with a Google OAuth client (type Desktop app). The owner's own, from
+// their Google Cloud project, is kept by the connector hub on this machine; its secret is never shown.
+const GCLIENT = `${HUB.replace(/\/registry$/, "")}/connectors/google`;
+async function googleRow(): Promise<string> {
+  let g: { configured?: boolean; source?: string | null; clientIdEnd?: string | null; error?: string };
+  try {
+    const r = await fetch(GCLIENT);
+    g = await r.json();
+    if (!r.ok) return row("Google sign-in", not(g.error ?? `Not answering: ${httpMsg(r.status)}`));
+  } catch (e) {
+    return row("Google sign-in", not(`Not answering: ${(e as Error).message}`));
+  }
+  const pick = `<input type="file" id="gClientPick" accept="application/json,.json" hidden>`;
+  if (g.configured) return row("Google sign-in", `<span class="faint">${g.source === "owner" ? `Your OAuth client …${esc(g.clientIdEnd ?? "")}` : "Built in"}</span>` +
+    (g.source === "owner" ? ` <button class="btn small ghost" type="button" data-act="gclientoff">Remove</button>` : ""), "Gmail and Drive sign in through it, in your browser");
+  return row("Google sign-in", `<button class="btn small" type="button" data-act="gclient">Choose the client file…</button>${pick}`,
+    "Gmail and Drive need a Google OAuth client of type Desktop app, from your Google Cloud project with the Gmail and Drive APIs turned on. Download its JSON file and choose it here. It stays on this computer.");
+}
+
 async function act(a: string, n?: string): Promise<void> {
   if (a === "testVoice") {
     const r = await fetch(voiceApi("tts"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "Hi, I am Nexy. I live on this machine.", voice_id: P.voice }) });
@@ -202,6 +224,26 @@ async function act(a: string, n?: string): Promise<void> {
   const say: Record<string, string> = { mem: "what do you remember", routines: "show my routines", feedback: "show my feedback", clearfb: "clear my feedback", forget: "forget everything" };
   if (say[a]) { close(); await H.send(say[a]); return; }
   if (a === "conn" && n) { close(); await H.send(`Connect ${n}`); }
+  if (a === "disc" && n) { close(); await H.send(`Disconnect ${n}`); }
+  if (a === "gclient") {
+    const input = $<HTMLInputElement>("#gClientPick");
+    if (!input) return;
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const r = await fetch(`${GCLIENT}?as=nexy`, { method: "PUT", headers: { "content-type": "application/json" }, body: await file.text() });
+      const d = (await r.json().catch(() => ({}))) as { error?: string };
+      H.toast(r.ok ? "Google sign-in is set up. Connect Gmail or Drive below." : (d.error ?? `Not saved: ${httpMsg(r.status)}`));
+      void renderSettings("connections");
+    };
+    input.click();
+  }
+  if (a === "gclientoff") {
+    if (!confirm("Remove your Google OAuth client? Connected apps keep working until their sign-in needs renewing.")) return;
+    const r = await fetch(`${GCLIENT}?as=nexy`, { method: "DELETE" });
+    H.toast(r.ok ? "Google OAuth client removed" : `Not removed: ${httpMsg(r.status)}`);
+    void renderSettings("connections");
+  }
   if (a === "tgon") {
     const token = $<HTMLInputElement>("#tgToken")?.value.trim() ?? "", users = $<HTMLInputElement>("#tgUsers")?.value.trim() ?? "";
     const r = await fetch(TG, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, users }) });

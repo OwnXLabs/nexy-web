@@ -69,7 +69,8 @@ function suggestions(): [string, string][] {
   return [
     hasApp("build") ? [I.globe, "Build a landing page for my bakery"] : [I.pen, "Write the story for my bakery's website"],
     [I.chart, "Research my top 5 competitors"],
-    hasApp("hub") ? [I.send, "Send me a summary on Telegram every morning"] : [I.sun, "Give me a news brief every morning"],
+    !hasApp("hub") ? [I.sun, "Give me a news brief every morning"]
+      : onOwn1 ? [I.send, "Send me a summary on Telegram every morning"] : [I.send, "Find the latest invoice in my email"],
   ];
 }
 
@@ -122,7 +123,8 @@ function items(): Item[] {
     : { k: "phone", t: "Get Nexy on your phone", act: "Copy link", run: () => void copyLink(),
       tip: `<b>Approve from anywhere</b>Open <span class="gs-key">${esc(location.host)}</span> in your phone’s browser. It is this same Nexy, with your chats and approvals.` });
   out.push({ k: "apps", t: "Connect an app", act: "Choose an app", run: () => H.settings("connections"),
-    tip: hasApp("hub") ? "<b>Work where you work</b>Telegram, Gmail, GitHub, Notion… each one gets only the access it needs, and you can see exactly what."
+    tip: hasApp("hub") && !onOwn1 ? "<b>Work where you work</b>Gmail and Google Drive, read-only, each one only after you approve it in your browser. Its sign-in stays on this computer."
+      : hasApp("hub") ? "<b>Work where you work</b>Telegram, Gmail, GitHub, Notion… each one gets only the access it needs, and you can see exactly what."
       : "<b>Work where you work</b>See what Nexy can connect to on this computer. Gmail, Drive and others arrive in an update." });
   out.push(onOwn1
     ? { k: "power", t: "Add more power", act: "Set up", run: () => { did("power"); H.settings("cloud"); },
@@ -205,7 +207,7 @@ export function welcome(): void {
 // the box's hint line cycles through things to try, each one something that works here
 function rotatePlaceholder(): void {
   const R = ["Try: “Summarise my week”", ...(hasApp("images") ? ["Try: “Make a logo for my bakery”"] : []),
-    ...(hasApp("hub") ? ["Try: “What’s on my calendar tomorrow?”"] : []), ...(hasApp("voice") && !isPhone() ? ["Hold Space to talk"] : [])];
+    ...(hasApp("hub") ? [onOwn1 ? "Try: “What’s on my calendar tomorrow?”" : "Try: “Search my email for invoices”"] : []), ...(hasApp("voice") && !isPhone() ? ["Hold Space to talk"] : [])];
   const own = new Set(["Talk to Nexy", ...R]);
   let i = 0;
   setInterval(() => {

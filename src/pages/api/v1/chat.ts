@@ -27,6 +27,8 @@ const NO_TOOLS_THIS_TURN = [
 ].join("\n");
 import { overlayLines } from "../../../lib/overlay";
 import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/browse-intent";
+import { connectorAsk, connectorTurn } from "../../../lib/connectors";
+import { byId } from "../../../lib/apps";
 
 export const prerender = false;
 
@@ -228,7 +230,8 @@ export const POST: APIRoute = async (ctx) => {
     (m: any) => m?.role === "user" || m?.role === "assistant",
   );
 
-  const research = wantsResearch(String(said ?? ""), history);
+  // a question about a connected app is answered from it, not from a web search
+  const research = !connectorAsk(String(said ?? "")) && wantsResearch(String(said ?? ""), history);
   const startedAt = Date.now();
   const run = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
     // asked to open a site: open it on the agent's screen first and hand the agent the page, so
@@ -236,6 +239,8 @@ export const POST: APIRoute = async (ctx) => {
     let browse = priv ? "" : browserTurn(String(said ?? ""));
     const page = !priv && eng !== localEngine ? pageToOpen(String(said ?? "")) : null;
     let onScreen = false;
+    // an ultra-private chat reaches nothing off the machine, so no connected app either
+    const conn = priv ? null : await connectorTurn(String(said ?? ""), byId("hub")?.base);
     if (page) {
       const opened = await openOnScreen(page);
       onScreen = "text" in opened;
@@ -246,7 +251,7 @@ export const POST: APIRoute = async (ctx) => {
       const r = await eng.chat(
         String(said ?? ""),
         history,
-        systemPrompt(body?.context, priv, body?.docs, isEval) + browse,
+        systemPrompt(body?.context, priv, body?.docs, isEval) + browse + (conn?.prompt ?? ""),
         // the agent gets a budget, then the model answers instead (below); a stuck agent
         // turn must not leave the person waiting four minutes for nothing
         AbortSignal.timeout(eng === localEngine ? 240_000 : research ? RESEARCH_BUDGET_MS : AGENT_BUDGET_MS),
@@ -267,6 +272,7 @@ export const POST: APIRoute = async (ctx) => {
         turns: history.length + 1,
         contextKeys: Object.keys(body?.context ?? {}),
         replyChars: typeof r.reply === "string" ? r.reply.length : 0,
+        ...(conn ? { connector: conn.id, connectorOutcome: conn.outcome } : {}),
         ...(isEval ? { eval: true } : {}),
       }, priv);
       return { status: 200, body: {
@@ -295,7 +301,7 @@ export const POST: APIRoute = async (ctx) => {
       if (eng !== localEngine) {
         try {
           restart?.();
-          const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + NO_TOOLS_THIS_TURN, AbortSignal.timeout(150_000), undefined, onText);
+          const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + (conn?.prompt ?? "") + NO_TOOLS_THIS_TURN, AbortSignal.timeout(150_000), undefined, onText);
           r.reply = guard(r.reply);
           // the model alone must not contradict what the agent just did on screen
           if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";

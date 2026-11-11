@@ -17,6 +17,8 @@ export interface Outcome {
   right: string;
   note: string;
   authorizeUrl?: string;
+  // the sign-in finishes in the browser: resolves with the result, or null if it never did
+  wait?: () => Promise<Outcome | null>;
 }
 
 export function permMarkup(spec: PermSpec, right = "needs you"): string {
@@ -47,7 +49,10 @@ export function permBlock(spec: PermSpec, onDecide: (approved: boolean) => Promi
   const decide = async (approved: boolean) => {
     const ba = root.querySelector(".ba");
     if (ba) ba.innerHTML = `<span class="done">${esc(approved ? "Asking the registry…" : "Declining…")}</span>`;
-    settle(root, await onDecide(approved));
+    const out = await onDecide(approved);
+    settle(root, out);
+    const done = await out.wait?.();
+    if (done) settle(root, done);
   };
 
   root.querySelector<HTMLElement>('[data-a="ok"]')?.addEventListener("click", () => void decide(true));
@@ -159,16 +164,20 @@ const hostOf = (u?: string) => {
   }
 };
 
+// what a scope lets Nexy do, in words, with the scope itself after it
+const SCOPES: Record<string, string> = {
+  "https://www.googleapis.com/auth/gmail.readonly": "read your email, read-only; cannot send, change or delete",
+  "https://www.googleapis.com/auth/drive.readonly": "read your Drive files, read-only; cannot change or delete",
+};
+const scopeText = (s: string) => (SCOPES[s] ? `${SCOPES[s]} (${s.split("/").pop()})` : s);
+
 export function consentRows(entry: CatalogEntry): [string, string][] {
+  // a connector served on this machine may still reach a provider: its egress says where
+  const reaches = entry.egress?.length ? entry.egress.join(", ") : entry.external ? hostOf(entry.url) : "";
   const rows: [string, string][] = [
-    ["Connector", entry.url ? `${entry.label}, ${hostOf(entry.url)}` : entry.label],
-    ["Scopes", entry.scopes?.length ? entry.scopes.join(", ") : "none declared in this machine's catalogue"],
-    [
-      "Leaves this machine",
-      entry.external
-        ? `requests to ${entry.egress?.join(", ") || hostOf(entry.url)}`
-        : "nothing — this connector runs on this machine",
-    ],
+    ["Connector", reaches ? `${entry.label}, ${reaches}` : entry.url ? `${entry.label}, ${hostOf(entry.url)}` : entry.label],
+    ["Scopes", entry.scopes?.length ? entry.scopes.map(scopeText).join("; ") : "none declared in this machine's catalogue"],
+    ["Leaves this machine", reaches ? `requests to ${reaches}` : "nothing — this connector runs on this machine"],
     ["Apps that inherit this", "Nexy only. Connectors are machine-level, permissions are per-app."],
     ["Sign-in", entry.auth.type === "oauth" ? "OAuth in your browser; the token is stored here at 0600" : entry.auth.type === "api_key" ? "an API key, stored here at 0600" : "none needed"],
     ["Credential now", entry.auth.credentialStored ? `stored${entry.auth.expiresAt ? `, expires ${entry.auth.expiresAt}` : ""}` : "none stored"],
@@ -201,7 +210,8 @@ async function grantedNow(id: string, f: Fetch): Promise<boolean> {
     const res = await f(`${HUB}/grants/${encodeURIComponent(APP)}`);
     const body = await readJson(res);
     return Array.isArray(body?.entries) && body.entries.includes(id);
-  } catch {
+  } catch (e) {
+    console.warn("[nexy] grants unavailable", e);
     return false;
   }
 }
@@ -214,7 +224,7 @@ export async function approveConnector(
   const id = entry?.id ?? slug(service);
 
   if (entry && entry.auth.type === "none") {
-    const res = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(id)}`), { method: "POST" });
+    const res = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(id)}`), { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     const body = await readJson(res);
     if (!res.ok) return { ok: false, right: "not granted", note: `Not granted — ${body?.error ?? httpMsg(res.status)}` };
     if (!(await grantedNow(id, f))) {
@@ -236,12 +246,31 @@ export async function approveConnector(
     return { ok: false, right: "not connected", note: `Not connected — ${why}.${extra} Nothing was granted and nothing left this machine` };
   }
 
+  const label = entry?.label ?? service;
   return {
     ok: false,
     right: "waiting on you",
     note: `Not connected yet. ${hostOf(body?.authorizeUrl) || "the provider"} must confirm the scopes in your browser; no token is stored here until it does`,
     authorizeUrl: String(body?.authorizeUrl ?? ""),
+    wait: () => connectedSoon(id, label, f),
   };
+}
+
+// the registry is the only witness: connected once it reports a credential and Nexy's grant
+async function connectedSoon(id: string, label: string, f: Fetch, ms = 600_000, every = 2000): Promise<Outcome | null> {
+  for (const end = Date.now() + ms; Date.now() < end;) {
+    await new Promise((r) => setTimeout(r, every));
+    try {
+      const res = await f(`${HUB}/catalog/${encodeURIComponent(id)}`);
+      const e = (await readJson(res)) as CatalogEntry | null;
+      if (res.ok && e?.auth?.credentialStored && (await grantedNow(id, f))) {
+        return { ok: true, right: "connected", note: `Connected ${label} to Nexy, confirmed by reading the registry back` };
+      }
+    } catch (err) {
+      console.warn("[nexy] connector status unavailable", err);
+    }
+  }
+  return null;
 }
 
 export async function revokeConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {
@@ -250,8 +279,10 @@ export async function revokeConnector(entry: CatalogEntry, f: Fetch = fetch): Pr
   const gBody = await readJson(g);
   if (!g.ok) return { ok: false, right: "still connected", note: `Not revoked — ${gBody?.error ?? httpMsg(g.status)}` };
 
-  const c = await f(as(`/oauth/${encodeURIComponent(id)}/revoke`), { method: "POST" });
+  const c = await f(as(`/oauth/${encodeURIComponent(id)}/revoke`), { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   const cBody = await readJson(c);
+  // the grant is gone, but a credential the registry did not delete must not read as deleted
+  if (!c.ok) return { ok: false, right: "grant revoked", note: `Nexy's grant is revoked, but the stored credential was not deleted — ${cBody?.error ?? httpMsg(c.status)}` };
   const stillGranted = await grantedNow(id, f);
   if (stillGranted) return { ok: false, right: "still connected", note: `The registry still lists ${entry.label} for Nexy. Nothing was revoked.` };
 
@@ -310,7 +341,7 @@ export async function playConnect(intent: ConnectIntent, ui: ConnectUI, f: Fetch
     ? {
         title: `Connect ${entry.label}`,
         why:
-          entry.external
+          entry.external || entry.egress?.length
             ? "This connector reaches off this machine, so I ask first. Every row below is read from this machine's connector catalogue, not written for the occasion."
             : "This connector runs on this machine. The grant below is what lets Nexy use it, and nothing wider.",
         rows: consentRows(entry),
