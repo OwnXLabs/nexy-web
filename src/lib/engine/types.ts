@@ -13,13 +13,18 @@ export interface MemoryItem { id: string; title: string; source: string; started
 export interface Routine {
   id: string; name: string; schedule: string; prompt: string; enabled: boolean;
   nextRunAt: string | null; lastRunAt: string | null; lastStatus: string | null; lastResult?: string;
+  // made while outside content was in the agent's context: it waits for the owner's confirm
+  pending?: boolean; origin?: string | null;
 }
+
+// outside: the system message holds content from outside (files, mail, pages), not only Nexy's own text
+export interface ChatOpts { outside?: boolean }
 
 export interface NexyEngine {
   readonly id: string;
   available(): boolean;
   // session: a stable id per chat, so the agent keeps one browser (and its own history) across turns
-  chat(message: string, history: ChatTurn[], system: string, signal?: AbortSignal, session?: string, onText?: (delta: string) => void): Promise<ChatResult>;
+  chat(message: string, history: ChatTurn[], system: string, signal?: AbortSignal, session?: string, onText?: (delta: string) => void, opts?: ChatOpts): Promise<ChatResult>;
   // whether the agent has used its browser in this session since `since` (ms): the agent's screen
   // is shown only then, never on a guess from the person's wording
   browsed?(session: string, since: number): Promise<boolean>;
@@ -32,5 +37,8 @@ export interface NexyEngine {
     list(): Promise<Routine[]>;
     create(r: { name: string; schedule: string; prompt: string }): Promise<Routine>;
     remove(id: string): Promise<void>;
+    // the owner's answer to a pending routine
+    confirm?(id: string): Promise<{ nextRunAt: string | null }>;
+    discard?(id: string): Promise<void>;
   };
 }

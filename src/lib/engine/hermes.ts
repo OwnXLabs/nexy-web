@@ -30,7 +30,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngin
 
     available: () => URL_ !== "",
 
-    async chat(message, history, system, signal, session, onText): Promise<ChatResult> {
+    async chat(message, history, system, signal, session, onText, opts): Promise<ChatResult> {
       if (!URL_) throw new Error("no agent gateway is configured for this turn");
       const messages = [
         { role: "system", content: system },
@@ -48,7 +48,8 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngin
           // turn, so each turn opened a fresh browser on about:blank. It needs the key to be honoured.
           ...(KEY && session ? { "X-Hermes-Session-Id": `nexy-${session}` } : {}),
         },
-        body: JSON.stringify({ model: "nexy", messages, stream: !!onText }),
+        // vouch for the system message only when the caller says it holds nothing from outside
+        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}) }),
       });
 
       if (!res.ok) {
@@ -116,6 +117,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngin
             schedule: typeof j.schedule === "string" ? j.schedule : String(j.schedule?.expr ?? j.schedule?.display ?? j.schedule_display ?? JSON.stringify(j.schedule ?? "")),
             nextRunAt: when(j.next_run_at), lastRunAt: when(j.last_run_at), lastStatus: j.last_status ?? null,
             lastResult: run ? (await lastReply(String(run.id)).catch(() => undefined))?.slice(0, 1500) : undefined,
+            pending: j.status === "pending", origin: j.origin == null ? null : String(j.origin),
           });
         }
         return out;
@@ -126,6 +128,11 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngin
         return { id: String(j.id ?? ""), name: r.name, schedule: r.schedule, prompt: r.prompt, enabled: true, nextRunAt: when(j.next_run_at), lastRunAt: null, lastStatus: null };
       },
       async remove(id) { await api(`/api/jobs/${encodeURIComponent(id)}`, { method: "DELETE" }); },
+      async confirm(id) {
+        const b = await api(`/api/jobs/${encodeURIComponent(id)}/confirm`, { method: "POST" });
+        return { nextRunAt: when(b?.job?.next_run_at) };
+      },
+      async discard(id) { await api(`/api/jobs/${encodeURIComponent(id)}/discard`, { method: "POST" }); },
     },
   };
 }
