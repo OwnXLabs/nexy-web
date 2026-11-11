@@ -309,7 +309,7 @@ export function chatRows(pid: string, max = Infinity): string {
   const open = chatsAll || all.findIndex((c) => c.id === cur?.cid) >= max;
   const list = open ? all : all.slice(0, max);
   const more = all.length > max ? `<button class="chat faint" type="button" data-chatmore>${open ? "Show fewer ▴" : `Show all ${all.length} ▾`}</button>` : "";
-  const lock = `<svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px;margin-right:6px;vertical-align:-1px"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+  const lock = `<svg class="i" viewBox="0 0 24 24" style="display:inline-block;width:12px;height:12px;margin-right:6px;vertical-align:-1px"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
   return list.map((c) => {
     const priv = isPrivate() && cur?.cid === c.id;
     return `<button class="chat${cur?.cid === c.id ? " active" : ""}" type="button" data-chat="${esc(c.id)}" data-pid="${esc(pid)}">${priv ? `${lock}Private: ` : ""}${esc(c.title)}</button>`;
