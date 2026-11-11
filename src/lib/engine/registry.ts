@@ -35,7 +35,7 @@ function build(): EngineChoice[] {
     if (!/^[a-z0-9-]{1,32}$/.test(id) || out.some((c) => c.id === id)) continue;
     const url = process.env[`NEXY_ENGINE_${envKey(id)}_URL`] ?? "";
     if (!url) { console.warn(`[nexy] engine ${id}: no NEXY_ENGINE_${envKey(id)}_URL, not listed`); continue; }
-    out.push(choice(id, gatewayEngine(url, readKey(id))));
+    out.push(choice(id, gatewayEngine(url, readKey(id), id)));
   }
   return out;
 }
@@ -52,7 +52,11 @@ let picks: Record<string, string> | null = null;
 function load(): Record<string, string> {
   if (picks) return picks;
   try { picks = JSON.parse(readFileSync(FILE, "utf8")) ?? {}; }
-  catch { picks = {}; }
+  catch (e) {
+    // no file yet: nobody has picked. Anything else is said, not silently treated as no picks
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") console.warn(`[nexy] engine picks unreadable, using defaults: ${(e as Error).message}`);
+    picks = {};
+  }
   return picks!;
 }
 export function pickedId(owner: string): string | null {

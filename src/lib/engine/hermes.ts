@@ -4,7 +4,8 @@ import { readCompletion } from "./sse";
 const DEFAULT_KEY = process.env.NEXY_AGENT_KEY ?? "";
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
 
-export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngine {
+// name: what a reply says it came via (an engine picked in Settings says which); the kind stays "gateway"
+export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "gateway"): NexyEngine {
   const URL_ = url.replace(/\/+$/, "");
   const api = async (path: string, init: RequestInit = {}): Promise<any> => {
     if (!URL_) throw new Error("no agent gateway is configured");
@@ -75,7 +76,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY): NexyEngin
           ? "agent gateway busy: the model is serving other requests"
           : `agent gateway upstream failed: ${fault.slice(0, 120)}`);
       }
-      return { reply, via: "gateway", grounded: true };
+      return { reply, via: name, grounded: true };
     },
 
     async browsed(session, since) {

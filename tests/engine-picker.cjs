@@ -64,11 +64,15 @@ test('owners pick an engine and their chats go to it', { timeout: 60000 }, async
       const r = await req('/api/v1/chat', { method: 'POST', body: JSON.stringify({ chat: 'picker-test', messages: [{ role: 'user', content: text }] }) });
       return r.text();
     };
-    assert.match(await chat('first question'), /answer from A/);
+    const first = await chat('first question');
+    assert.match(first, /answer from A/);
+    assert.match(first, /"via":"gateway"/, 'the default engine reports as before');
 
     assert.equal((await req('/api/v1/engines', { method: 'POST', body: JSON.stringify({ id: 'nope' }) })).status, 400, 'unknown engines are refused');
     assert.equal((await req('/api/v1/engines', { method: 'POST', body: JSON.stringify({ id: 'nexy-engine' }) })).status, 200);
-    assert.match(await chat('second question'), /answer from B/);
+    const second = await chat('second question');
+    assert.match(second, /answer from B/);
+    assert.match(second, /"via":"nexy-engine"/, 'a picked engine says which one answered');
     const toB = b.seen.filter((x) => x.path.startsWith('/v1/chat'));
     assert(toB.length && toB.every((x) => x.auth === 'Bearer secret-b'), 'engine B gets its own key from the key file');
     assert(a.seen.every((x) => !x.auth.includes('secret-b')), 'engine A never sees B\'s key');
