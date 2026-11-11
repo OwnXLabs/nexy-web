@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { append, clean, clear, list } from "../../../lib/feedback/store";
 import { owner } from "../../../lib/owner";
 import { count as heldPrivate, owner as sessionOwner } from "./private/_session";
+import { wantsEval } from "../../../lib/eval";
 
 export const prerender = false;
 
@@ -11,7 +12,7 @@ export const POST: APIRoute = async (ctx) => {
   let body: any;
   try { body = await ctx.request.json(); } catch { return json({ error: "invalid json" }, 400); }
   if (body?.private === true || heldPrivate(sessionOwner(ctx)) > 0) return json({ error: "private", note: "Private turns are never recorded." }, 409);
-  if (body?.eval === true) return json({ ok: true, skipped: "eval" });
+  if (wantsEval(body?.eval === true)) return json({ ok: true, skipped: "eval" });
   const e = clean(body);
   if (!e) return json({ error: "needs signal and prompt" }, 400);
   try {

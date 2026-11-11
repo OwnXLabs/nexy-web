@@ -2,11 +2,12 @@ import type { APIRoute } from "astro";
 import { engineFor } from "../../../lib/engine";
 import { boxAllowed, boxRefused } from "../../../lib/box";
 import { identityOwner } from "../../../lib/owner";
+import { wantsEval } from "../../../lib/eval";
 
 export const prerender = false;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-const mem = (r: Request) => { const e = engineFor(false, r.headers.get("x-nexy-eval") === "1", identityOwner(r)); return e.available() ? e.memory : undefined; };
+const mem = (r: Request) => { const e = engineFor(false, wantsEval(r.headers.get("x-nexy-eval") === "1"), identityOwner(r)); return e.available() ? e.memory : undefined; };
 
 export const GET: APIRoute = async ({ url, request }) => {
   if (!boxAllowed(request)) return boxRefused();

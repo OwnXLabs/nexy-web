@@ -5,6 +5,8 @@
 #   tests/run.sh swarm      only the checks whose name contains "swarm"
 # PLAYWRIGHT_MODULE overrides where Playwright is found.
 set -uo pipefail
+# the suite runs as an eval server: tests use the shared test engine and files (src/lib/eval.ts)
+export NEXY_EVAL=1
 cd "$(dirname "$0")/.."
 only=${1:-}
 export PLAYWRIGHT_MODULE=${PLAYWRIGHT_MODULE:-$(node -e 'try{console.log(require.resolve("playwright"))}catch{}' 2>/dev/null)}
@@ -31,6 +33,7 @@ check "chat streams, resumes, hides engine faults" node --test --test-timeout=18
 check "network faults: latency, drops, silence" node --test --test-timeout=180000 tests/network-faults.cjs
 check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
+check "eval mode only on a server started for evals; a request alone cannot switch it on" ts tests/eval-gate.test.ts
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
 # browser checks against a served build (empty screen dir, throwaway data and reports)
 tmp=$(mktemp -d)
