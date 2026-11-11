@@ -6,6 +6,7 @@ import { setPrivate, isPrivate, endPrivate } from "./private";
 import { isOpen, closeCanvas } from "./canvas";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { httpMsg } from "./http";
+import { hasApp, notHereYet } from "./place";
 
 export interface ShellHooks {
   send(text: string): Promise<void>;
@@ -614,6 +615,7 @@ async function stopAndTranscribe(): Promise<string> {
 }
 
 async function startV(): Promise<void> {
+  if (!hasApp("voice")) { H.toast(notHereYet("Talking to Nexy")); return; }
   if (listening) return;
   if (!(await startRecording())) return;
   $("#voice")?.classList.add("open");
@@ -742,7 +744,7 @@ async function vmSend(): Promise<void> {
 }
 
 export async function onReply(text: string): Promise<void> {
-  if (!text.trim() || (!VM.on && !prefs().speakAlways)) return;
+  if (!text.trim() || (!VM.on && !prefs().speakAlways) || !hasApp("voice")) return;
   const n = $("#vmNexy"); if (n && VM.on) n.textContent = text;
   if (VM.on) vmState("speak", "Speaking");
   try {
@@ -817,8 +819,10 @@ export function initShell(hooks: ShellHooks): void {
   });
   $("#micBtn")?.addEventListener("click", () => void (listening ? stopV() : startV()));
   $("#vstop")?.addEventListener("click", () => void stopV());
-  $("#waveBtn")?.addEventListener("click", vmOpen);
-  $("#voiceMode")?.addEventListener("click", vmOpen);
+  // speech runs in Own Voice; a computer without it says so instead of failing in the browser
+  const talk = () => hasApp("voice") ? vmOpen() : H.toast(notHereYet("Talking to Nexy"));
+  $("#waveBtn")?.addEventListener("click", talk);
+  $("#voiceMode")?.addEventListener("click", talk);
   $("#vmClose")?.addEventListener("click", vmClose);
   const tapOrSend = () => void (VM.state === "listen" ? vmSend() : vmListen());
   $("#vmTap")?.addEventListener("click", tapOrSend);

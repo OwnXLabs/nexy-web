@@ -1,3 +1,4 @@
+import { here, onOwn1 } from "./place";
 import { classifyEdit } from "./edit-loop";
 
 export type Intent =
@@ -65,12 +66,14 @@ const DELIVERABLE =
   /\b(app|application|game|canvas|website|web ?site|landing page|web ?page|tool|dashboard|calculator|clone|widget|prototype|one[- ]pager|sell ?sheet)\b/i;
 
 const NO_VIDEO =
-  "No video generator is installed in this demo. Own1 can run one — HunyuanVideo on the Arc GPU — but it is not part of this container, so there is nothing here to ask.";
+  `Making videos isn't in Nexy yet, so there is nothing on ${here} to ask.`;
 
 const INSTALL = /^\s*(?:please\s+)?(?:can you\s+)?install\s+\S/i;
 const NO_STORE =
-  "I cannot install that from here. The App Store on the desktop lists the apps this Own1 runs, and you can open them there, " +
-  "but installing new apps is not switched on in this demo yet. Nothing was changed.";
+  onOwn1
+    ? "I cannot install that from here. The App Store on the desktop lists the apps this Own1 runs, and you can open them there, " +
+      "but installing new apps is not switched on yet. Nothing was changed."
+    : "I cannot install apps on this computer. Nothing was changed.";
 
 const DESKTOP = /\b(?:clean\s*up|tidy(?:\s*up)?|organi[sz]e|arrange|sort\s+out)\s+(?:my\s+|the\s+)?desktop\b/i;
 const NO_DESKTOP =
@@ -79,7 +82,7 @@ const CLOUD_GPU = /\bcloud\b.*\b(?:gpu|render|compute|faster|power)\b|\b(?:gpu|r
 const STATUS = /^\s*(?:where are we|status|progress|update me|how are we doing|what(?:'s| is) the status|how is (?:it|the project) going)\b[\s?.!]*$/i;
 const CLOUD = /\b(?:render|move|migrate|send|upload|offload|run|sync|back\s*up|copy|transfer)\b.*\bown\s?cloud\b/i;
 const NO_CLOUD =
-  "OwnCloud offload is not connected to this machine yet, so nothing can be sent there. Everything here runs on this Own 1. Nothing was changed.";
+  `OwnCloud offload is not connected to this machine yet, so nothing can be sent there. Everything here runs on ${here}. Nothing was changed.`;
 const RENDER_VIDEO = /^\s*(?:please\s+)?render\s+(?:the\s+)?(?:shots?|scenes?|frames?|video|film|reel)\b/i;
 const NO_RENDER =
   "There is no video renderer in this demo, and OwnCloud offload is not connected, so there is nowhere to render that, locally or remotely. Nothing was started.";

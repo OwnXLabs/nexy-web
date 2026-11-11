@@ -1,3 +1,4 @@
+import { hasApp, here, onOwn1 } from "./place";
 import { loadCatalog } from "./perm";
 import { httpMsg } from "./http";
 
@@ -42,7 +43,7 @@ export function applyPrefs(): void {
 
 let voices: { id: string; name: string }[] = [];
 async function loadVoices(): Promise<void> {
-  if (voices.length) return;
+  if (voices.length || !hasApp("voice")) return;
   const r = await fetch("/api/apps/voice/api/voices").then((x) => x.json()).catch((e) => { console.warn("[nexy] voices unavailable", e); return {}; });
   voices = (r.voices ?? []).map((v: any) => ({ id: String(v.id), name: String(v.name ?? v.id).replace(/^en_US-/, "").replace(/-/g, " ") }));
 }
@@ -53,9 +54,13 @@ async function section(sec: string): Promise<string> {
     row("Language", sel("lang", [["en", "English"]], "en")) +
     row("Open at login", not("Nexy is ready before you sit down")) +
     row("Notifications", sw(P.notif, "notif"), "Approvals, finished work, and nothing else") +
-    row("Where new projects live", sel("defloc", [["own1", "Own 1, this desk"]], "own1"));
+    (hasApp("startup") ? row("Where new projects live", sel("defloc", [["own1", "Own 1, this desk"]], "own1")) : "");
   if (sec === "nexy") {
     await loadVoices();
+    if (!hasApp("voice")) return `<h3>Nexy</h3>` + await engineRow() +
+      row("Voice", not("Coming in an update"), "Talking to Nexy on this computer arrives in an update") +
+      row("Memory", `<button class="btn small" type="button" data-act="mem">What Nexy remembers</button>`, "List, export or forget the conversations the agent keeps") +
+      row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule, on this machine");
     return `<h3>Nexy</h3>` + await engineRow() +
       row("Voice", voices.length ? sel("voice", voices.map((v) => [v.id, v.name]), P.voice) : not("Own Voice is not answering"), "Spoken by Own Voice on this machine") +
       row("Speak replies aloud", sw(P.speakAlways, "speakAlways"), "Off: only in voice mode") +
@@ -64,12 +69,15 @@ async function section(sec: string): Promise<string> {
       row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule, on this machine") +
       `<div class="sbtns"><button class="btn small" type="button" data-act="testVoice">Test the voice</button></div>`;
   }
+  if (sec === "team" && !hasApp("startup")) return `<h3>Team</h3><p class="sp">A team of agents working through a plan runs on an Own1 or Nexy Cloud. On this computer, Nexy is one assistant.</p>`;
   if (sec === "team") {
     const live = H.projects().filter((p) => p.taskCount && p.doneCount < p.taskCount);
     return `<h3>Team</h3><p class="sp">Own Startup staffs plans from a fixed roster. Each role runs on this machine, one task at a time; there is no per-agent budget because nothing is paid for.</p>` +
       H.roster.map((n) => row(esc(n), not(live.length ? "available to your plans" : "idle"))).join("") +
       row("Plans with work left", not(String(live.length)));
   }
+  if (sec === "connections" && !hasApp("hub")) return `<h3>Connections</h3>` + await telegramRow() +
+    `<p class="sp">Connecting outside apps like Gmail and Drive is coming to Nexy on this computer in an update.</p>`;
   if (sec === "connections") {
     const tg = await telegramRow();
     try {
@@ -83,14 +91,14 @@ async function section(sec: string): Promise<string> {
   }
   if (sec === "data") return dataSection();
   if (sec === "permissions") return `<h3>Permissions</h3><p class="sp">What Nexy and its agents may touch on this machine.</p>` +
-    row("Apps on this machine", not("Read: builds, images, beats, docs, plans"), "Nexy reads each app's own records and hands work back to the app that owns it") +
+    (onOwn1 ? row("Apps on this machine", not("Read: builds, images, beats, docs, plans"), "Nexy reads each app's own records and hands work back to the app that owns it") : "") +
     row("Manage the desktop", not("Not available"), "Nexy has no control over the desktop's windows yet") +
-    row("Install from the App Store", not("Restricted"), "Installs are switched off on this Own1, by the owner's decision") +
+    (onOwn1 ? row("Install from the App Store", not("Restricted"), "Installs are switched off on this Own1, by the owner's decision") : "") +
     row("Agents inherit these", null, "An agent never has more than Nexy");
-  if (sec === "cloud") return `<h3>OwnXCloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on this Own1. Everything runs here.</p>` +
+  if (sec === "cloud") return `<h3>OwnXCloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on ${here}. Everything runs here.</p>` +
     row("Connection", not("Not connected")) + row("Spending", not("Nothing can be spent"), "There is no wallet or payment method on this machine");
   if (sec === "security") return `<h3>Security and privacy</h3>` +
-    row("Where your data lives", not("On this Own1"), "Chats, files, builds and memory stay on this machine") +
+    row("Where your data lives", not(onOwn1 ? "On this Own1" : "On this computer"), "Chats, files, builds and memory stay on this machine") +
     row("Telemetry", not("Off"), "Nothing is sent to OwnX Labs") +
     row("Ultra-private chats", not("In memory only"), "Nothing written to disk, nothing reaches the agent that keeps memory; gone when you leave") +
     row("Web search", not("Only when you ask"), "Through this machine's own search; the query is the only thing that leaves") +
@@ -103,10 +111,10 @@ async function section(sec: string): Promise<string> {
     row("Reduce transparency", sw(P.reduce, "reduce")) + row("Text size", sel("size", [["compact", "Compact"], ["standard", "Standard"], ["medium", "Medium"], ["large", "Large"]], P.size));
   if (sec === "workspaces") {
     const n = H.projects().length;
-    return `<h3>Workspaces</h3>` + row(esc($("#pmWsName")?.textContent?.trim() || "This Own1"), not(`${n} project${n === 1 ? "" : "s"}`)) + row("More workspaces", not("One per machine for now"));
+    return `<h3>Workspaces</h3>` + row(esc($("#pmWsName")?.textContent?.trim() || (onOwn1 ? "This Own1" : "This computer")), not(`${n} project${n === 1 ? "" : "s"}`)) + row("More workspaces", not("One per machine for now"));
   }
-  return `<h3>About</h3>` + row("Nexy", not("On this Own1")) + row("The agent", not("On this machine"), "Private chats use the local model directly and are never kept") +
-    row("Speech", not("Own Voice, on this machine")) + row("Web pages", not("Read on this machine"), "No cloud reader");
+  return `<h3>About</h3>` + row("Nexy", not(onOwn1 ? "On this Own1" : "On this computer")) + row("The agent", not("On this machine"), "Private chats use the local model directly and are never kept") +
+    row("Speech", not(hasApp("voice") ? "Own Voice, on this machine" : "Coming in an update")) + row("Web pages", not("Read on this machine"), "No cloud reader");
 }
 
 // the agent engine for this owner's chats; names come from the server, which lists what runs here
@@ -248,7 +256,7 @@ async function dataRows(): Promise<DataRow[]> {
     ["Sites and apps", "built by Qiki and Own Build", "qiki/api/v1/director/runs", "runs", false],
     ["Projects", "plans in Own Startup", "startup/api/pm/projects", "projects", false],
   ];
-  return Promise.all(src.map(async ([name, sub, path, key, sized]) => {
+  return Promise.all(src.filter(([, , path]) => hasApp(path.split("/")[0])).map(async ([name, sub, path, key, sized]) => {
     try {
       const l = await get(path, key);
       return { name, sub, count: l.length, bytes: sized ? sum(l) : null, list: l };
@@ -265,7 +273,7 @@ async function dataSection(): Promise<string> {
   dataCache = await dataRows();
   const total = dataCache.reduce((a, r) => a + (r.bytes ?? 0), 0) || 1;
   const lock = `<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
-  return `<h3>Your data</h3><div class="securebox">${lock}<div><b>All of it is on this machine.</b><span>Nothing here is synced or mirrored; each app keeps its own records on this Own1. Sizes are what each app reports${total > 1 ? `, ${fmtB(total)} in all` : ""}.</span></div></div>` +
+  return `<h3>Your data</h3><div class="securebox">${lock}<div><b>All of it is on this machine.</b><span>Nothing here is synced or mirrored; each app keeps its own records on ${here}. Sizes are what each app reports${total > 1 ? `, ${fmtB(total)} in all` : ""}.</span></div></div>` +
     `<div class="datalist">` + dataCache.map((r, i) =>
       `<div class="drow"><span class="led${r.list.length || r.count ? " ok" : " off"}"></span><div class="dl"><b>${esc(r.name)}</b><small>${esc(r.sub)} · ${r.count} item${r.count === 1 ? "" : "s"}</small></div>` +
       `<span class="dsz num">${r.bytes === null ? "—" : fmtB(r.bytes)}</span><span class="dbar"><i style="width:${r.bytes ? Math.max(2, (r.bytes / total) * 100) : 0}%"></i></span>` +
@@ -276,7 +284,7 @@ async function dataSection(): Promise<string> {
 
 function exportData(which: string): void {
   const rows = which === "all" ? dataCache : [dataCache[Number(which)]].filter(Boolean);
-  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), machine: "Own1", items: rows.map((r) => ({ category: r.name, count: r.count, bytes: r.bytes, list: r.list })) }, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), machine: onOwn1 ? "Own1" : "computer", items: rows.map((r) => ({ category: r.name, count: r.count, bytes: r.bytes, list: r.list })) }, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `nexy-${which === "all" ? "everything" : rows[0]?.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") ?? "data"}.json`;

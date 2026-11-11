@@ -26,6 +26,7 @@ import { takeoverAsk } from "./takeover";
 import { pickedFor, clearPick, renderedFor, type Picked } from "./pick";
 import { initPrivate, guard, conversation as privateConversation, isPrivate, privateConversationId, noteEphemeralDoc, setPrivate } from "./private";
 import { matchSocial, playSocial } from "./social";
+import { hasApp, here, notHereYet } from "./place";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine } from "./memory";
@@ -2214,6 +2215,12 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     } else if (intent.kind === "edit") {
       const r = handleEdit(text);
       push("ai", esc(r ? r.say : "That edit did not reach the page."));
+    } else if (intent.kind === "generate" && !hasApp(intent.medium === "image" ? "images" : "beat")) {
+      push("ai", esc(notHereYet(intent.medium === "image" ? "Making images" : "Making music")));
+    } else if (intent.kind === "make" && !hasApp("build")) {
+      push("ai", esc(notHereYet(intent.deliverable === "diagram" ? "Drawing diagrams" : "Building websites and apps")));
+    } else if (intent.kind === "build" && !hasApp("startup")) {
+      push("ai", esc(notHereYet("Running projects with a team of agents")));
     } else if (intent.kind === "generate") {
       S.eta = { start: Date.now(), ms: typicalMs("image") };
       await playGenerate(intent.medium, intent.prompt);
@@ -2237,7 +2244,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     typingOff();
     S.busy = false;
     S.job = "";
-    if (visible() && !nowPrivate) suggestProject(text, classify(text).kind);
+    if (visible() && !nowPrivate && hasApp("startup")) suggestProject(text, classify(text).kind);
     let el: Element | null = mine.nextElementSibling, last: HTMLElement | null = null;
     for (; el; el = el.nextElementSibling) if (el.classList.contains("ai")) last = el as HTMLElement;
     if (last) rateBar(last, text);
@@ -2332,7 +2339,7 @@ function wireNewProject(): void {
     if (goal) goal.value = "";
     newChat();
     showTab("chat");
-    if (cloud) toast("OwnCloud is not connected, so this project lives on this Own1");
+    if (cloud) toast(`OwnCloud is not connected, so this project lives on ${here}`);
     if (enc) {
       setPrivate(true);
       toast("Ultra-private: nothing is saved as a project, and nothing leaves this device");
@@ -2349,7 +2356,7 @@ function wireProfile(): void {
   $("#pmHelp")?.addEventListener("click", () => { m.classList.remove("open"); void send("What can you do?"); });
   const ws = $("#pmWs");
   if (ws) {
-    ws.innerHTML = `<button type="button" class="pm-i cur">${esc($("#pmWsName")?.textContent?.trim() || "This Own1")}<span class="led"></span></button><button type="button" class="pm-i" id="pmNewWs">New workspace</button>`;
+    ws.innerHTML = `<button type="button" class="pm-i cur">${esc($("#pmWsName")?.textContent?.trim() || here)}<span class="led"></span></button><button type="button" class="pm-i" id="pmNewWs">New workspace</button>`;
     $("#pmNewWs")?.addEventListener("click", () => { m.classList.remove("open"); toast("One workspace per machine for now; projects already keep their own files and history"); });
   }
   b.addEventListener("click", (e) => { e.stopPropagation(); m.classList.toggle("open"); });
@@ -2434,7 +2441,7 @@ async function boot(): Promise<void> {
       if (!a || a.gen) return null;
       const dl = $<HTMLElement>("#cvDownload");
       return {
-        title: a.title, kind: a.kind, project: P()?.name ?? "this Own1",
+        title: a.title, kind: a.kind, project: P()?.name ?? here,
         text: a.source ? () => a.source!.get() : undefined,
         download: dl && dl.style.display !== "none" ? () => dl.click() : undefined,
       };
