@@ -26,7 +26,7 @@ import { takeoverAsk } from "./takeover";
 import { pickedFor, clearPick, renderedFor, type Picked } from "./pick";
 import { initPrivate, guard, conversation as privateConversation, isPrivate, privateConversationId, noteEphemeralDoc, setPrivate } from "./private";
 import { matchSocial, playSocial } from "./social";
-import { hasApp, here, notHereYet } from "./place";
+import { hasApp, here, isBeta, notHereYet } from "./place";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine } from "./memory";
@@ -2400,6 +2400,8 @@ async function boot(): Promise<void> {
   initPrivate({ history, say: (t) => { push("ai", esc(t)); }, toast });
   installReporter({
     endpoint: "/api/v1/problem-report", app: "nexy",
+    team: isBeta ? "/api/v1/beta-report" : undefined,
+    conversation: () => history.map((t) => ({ role: t.role, text: String(t.content) })),
     blocked: () => (isPrivate() ? "Reports are off in an ultra-private chat, so nothing from it is ever kept." : null),
     // what is open, and the last few turns, so the owner can see what led up to it
     snapshot: () => {
@@ -2413,6 +2415,7 @@ async function boot(): Promise<void> {
     },
   });
   $("#reportBtn")?.addEventListener("click", openReporter);
+  $("#betaBtn")?.addEventListener("click", openReporter);
   addEventListener("nexy:report", openReporter);
   $("#cvEdit")?.addEventListener("click", () => {
     const inp = $<HTMLTextAreaElement>("#input");

@@ -6,9 +6,10 @@ import { APPS } from "../lib/apps";
 const local = process.env.NEXY_STUDIOS === "off";
 const apps = APPS.map((a) => a.id).join(" ");
 const projects = APPS.some((a) => a.id === "startup");
+const beta = process.env.NEXY_BETA === "1";
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={local ? "computer" : "own1"} data-apps={apps}>
+<html lang="en" data-place={local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -73,6 +74,7 @@ const projects = APPS.some((a) => a.id === "startup");
         <button class="hbtn" id="hdrNeeds" title="Needs you" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 3l9 16H3L12 3Z"/><path d="M12 10v4M12 17h.01"/></svg><b id="hdrNeedCount">0</b></button>
         <button class="hbtn" id="hdrProject" title="This project" hidden><svg class="i" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 10h8M8 14h5"/></svg></button>
         <button class="hbtn" id="hdrWork" title="Show or hide the work" hidden><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M3 9h18M8 21h8"/></svg></button>
+        {beta && <button class="betabadge" id="betaBtn" title="This is a beta. Report a problem to the Nexy team">BETA</button>}
         <button class="hbtn" id="reportBtn" title="Report a problem" aria-label="Report a problem"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M12 8v3M12 13.5h.01"/></svg></button>
       </div>
     </div>

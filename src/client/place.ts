@@ -3,6 +3,8 @@ const root = typeof document === "undefined" ? undefined : document.documentElem
 export const onOwn1 = root?.dataset.place !== "computer";
 export const here = onOwn1 ? "this Own1" : "this computer";
 const apps = new Set((root?.dataset.apps ?? "").split(" ").filter(Boolean));
+// a beta build shows the BETA badge and can send reports to the Nexy team
+export const isBeta = root?.dataset.beta === "1";
 export const hasApp = (id: string): boolean => apps.has(id);
 export const notHereYet = (what: string): string =>
   `${what} isn't in Nexy on this computer yet; it's coming in an update. It works today on an Own1 or Nexy Cloud.`;

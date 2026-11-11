@@ -6,7 +6,7 @@ import { setPrivate, isPrivate, endPrivate } from "./private";
 import { isOpen, closeCanvas } from "./canvas";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { httpMsg } from "./http";
-import { hasApp, notHereYet } from "./place";
+import { hasApp, isBeta, notHereYet } from "./place";
 
 export interface ShellHooks {
   send(text: string): Promise<void>;
@@ -427,6 +427,7 @@ function wireMobile(): void {
   bar.innerHTML =
     `<button class="hbtn" id="mMenu" title="Menu"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>` +
     `<div class="mt">${glyph}<span id="mTitle">Nexy</span></div>` +
+    (isBeta ? `<button class="betabadge" id="mBeta" title="This is a beta. Report a problem to the Nexy team">BETA</button>` : "") +
     `<button class="hbtn" id="mReport" title="Report a problem" aria-label="Report a problem"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M12 8v3M12 13.5h.01"/></svg></button>` +
     `<button class="hbtn" id="mNeeds" title="Needs you"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l9 16H3L12 3Z"/><path d="M12 10v4M12 17h.01"/></svg><b id="mNeedCount">0</b></button>` +
     `<button class="btn small" id="mChat" title="Back to the chat"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>Chat</button>` +
@@ -441,6 +442,7 @@ function wireMobile(): void {
     stage.appendChild(cs);
   }
   $("#mReport")?.addEventListener("click", () => window.dispatchEvent(new CustomEvent("nexy:report")));
+  $("#mBeta")?.addEventListener("click", () => window.dispatchEvent(new CustomEvent("nexy:report")));
   $("#mMenu")?.addEventListener("click", () => railDrawer(!document.body.classList.contains("rail-open")));
   $("#mChat")?.addEventListener("click", closeCanvas);
   $("#mNeeds")?.addEventListener("click", () => window.dispatchEvent(new CustomEvent("nexy:panel", { detail: "needs" })));
