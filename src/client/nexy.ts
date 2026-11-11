@@ -26,7 +26,7 @@ import { takeoverAsk } from "./takeover";
 import { pickedFor, clearPick, renderedFor, type Picked } from "./pick";
 import { initPrivate, guard, conversation as privateConversation, isPrivate, privateConversationId, noteEphemeralDoc, setPrivate } from "./private";
 import { matchSocial, playSocial } from "./social";
-import { hasApp, here, isBeta, notHereYet } from "./place";
+import { hasApp, here, isBeta, notHereYet, siteHost } from "./place";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine } from "./memory";
@@ -952,7 +952,7 @@ async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web
       html,
       href: done.runId ? `/api/apps/build/api/director/runs/${encodeURIComponent(done.runId)}/preview` : undefined,
     };
-    const output = isGame ? gameArtifact(made) : htmlArtifact({ ...made, url: "own1.local" });
+    const output = isGame ? gameArtifact(made) : htmlArtifact({ ...made, url: siteHost });
     output.id = done.runId ? `build:${done.runId}` : `build:${started.buildId}`;
     gen.replaceWith(output);
     window.dispatchEvent(new CustomEvent("nexy:files-changed"));

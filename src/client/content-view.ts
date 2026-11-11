@@ -1,3 +1,4 @@
+import { siteHost } from "./place";
 import { PICK } from "./pick";
 import type { Artifact, ArtifactKind } from "./canvas";
 import { sheetArtifact } from "./sheet-view";
@@ -63,7 +64,7 @@ export function htmlArtifact(m: Made & { html: string; url?: string }): Artifact
       }
       host.innerHTML =
         `<div class="browser"><div class="bbar"><span></span><span></span><span></span>` +
-        `<i>${esc(m.url ?? "own1.local")}</i></div>` +
+        `<i>${esc(m.url ?? siteHost)}</i></div>` +
         `<iframe ${SANDBOX} srcdoc="${esc(themedHTML(withProbe(html)))}"></iframe></div>`;
     },
   };
@@ -327,7 +328,7 @@ export function fromReply(reply: string, hint = ""): Lifted | null {
     const game = /<canvas\b/i.test(body) && /requestAnimationFrame|addEventListener\(\s*["']key/i.test(body);
     return game
       ? lift(gameArtifact({ title: plainName(`${name}.game`), html: body }), "game")
-      : lift(htmlArtifact({ title: plainName(`${name}.html`), html: body, url: `own1.local/${name}` }), "page");
+      : lift(htmlArtifact({ title: plainName(`${name}.html`), html: body, url: `${siteHost}/${name}` }), "page");
   }
 
   const ext = lang || "txt";

@@ -77,3 +77,18 @@ test('the same page on an Own1 keeps its studios, mic and wording', async () => 
     assert.match(await page.locator('html').getAttribute('data-apps'), /\bimages\b.*\bbuild\b/);
   } finally { await b.close(); s.p.kill(); }
 });
+
+test('a computer with some studios started shows exactly those, and still says this computer', async () => {
+  const s = await start({ NEXY_STUDIOS: 'off', NEXY_BUILD_URL: 'http://127.0.0.1:9/a', NEXY_STARTUP_URL: 'http://127.0.0.1:9/b' });
+  const b = await chromium.launch();
+  try {
+    const page = await b.newPage();
+    await page.goto(s.base + '/');
+    await page.locator('#input').waitFor({ timeout: 20000 });
+    assert.equal(await page.locator('html').getAttribute('data-place'), 'computer');
+    assert.equal(await page.locator('html').getAttribute('data-apps'), 'startup build');
+    assert.equal((await page.locator('#pmWsName').textContent()).trim(), 'This computer');
+    await ask(page, 'generate an image of a flying elephant');
+    await page.getByText("Making images isn't in Nexy on this computer yet").waitFor({ timeout: 15000 });
+  } finally { await b.close(); s.p.kill(); }
+});

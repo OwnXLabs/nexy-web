@@ -11,3 +11,5 @@ export const localVoice = root?.dataset.voice === "local";
 export const voiceApi = (op: "stt" | "tts" | "voices"): string => (localVoice ? `/api/v1/voice/${op}` : `/api/apps/voice/api/${op}`);
 export const notHereYet = (what: string): string =>
   `${what} isn't in Nexy on this computer yet; it's coming in an update. It works today on an Own1 or Nexy Cloud.`;
+// the address shown on built pages
+export const siteHost = onOwn1 ? "own1.local" : "this-computer.local";
