@@ -29,6 +29,7 @@ import { overlayLines } from "../../../lib/overlay";
 import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/browse-intent";
 import { connectorAsk, connectorTurn } from "../../../lib/connectors";
 import { byId } from "../../../lib/apps";
+import { wantsEval } from "../../../lib/eval";
 
 export const prerender = false;
 
@@ -220,7 +221,7 @@ export const POST: APIRoute = async (ctx) => {
 
   const picker = signedOwner(ctx);
   const decided = upstreamFor(engineFor(false, false, picker).id === "gateway", priv);
-  const isEval = body?.eval === true;
+  const isEval = wantsEval(body?.eval === true);
   const eng = engineFor(priv, isEval, picker);
   // one agent session per chat, so its browser keeps the page between turns. The chat id comes
   // from the browser and is guessable, so the key also binds the caller and their demo sign-in:

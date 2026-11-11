@@ -5,6 +5,8 @@
 #   tests/run.sh swarm      only the checks whose name contains "swarm"
 # PLAYWRIGHT_MODULE overrides where Playwright is found.
 set -uo pipefail
+# the suite runs as an eval server: tests use the shared test engine and files (src/lib/eval.ts)
+export NEXY_EVAL=1
 cd "$(dirname "$0")/.."
 only=${1:-}
 export PLAYWRIGHT_MODULE=${PLAYWRIGHT_MODULE:-$(node -e 'try{console.log(require.resolve("playwright"))}catch{}' 2>/dev/null)}
@@ -36,6 +38,7 @@ check "building on this computer: names, subject, no outside files" ts tests/loc
 check "building on this computer: engine builder, checks, one retry, plain no; Own1 still uses Own Build" node --test --test-timeout=180000 tests/local-build.cjs
 check "speech on this computer: model fetch, transcripts, spoken replies" ts tests/voice.test.ts
 check "connected apps in chat: lookups recognised, granted tool read as data, missing or failing said plainly" ts tests/connectors.test.ts
+check "eval mode only on a server started for evals; a request alone cannot switch it on" ts tests/eval-gate.test.ts
 check "speech on this computer in the browser, missing speech still gated, Own1 unchanged" node --test --test-timeout=180000 tests/local-voice.cjs
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
 check "beta reports: preview is what is sent, secrets removed, private sends nothing, no badge off beta" node --test --test-timeout=180000 tests/beta-report.cjs

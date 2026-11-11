@@ -4,6 +4,7 @@ import { owner } from "./private/_session";
 import { owner as signedOwner } from "../../../lib/owner";
 import { engineFor } from "../../../lib/engine";
 import { agentSessionKey } from "../../../lib/agent-turn";
+import { wantsEval } from "../../../lib/eval";
 
 export const prerender = false;
 
@@ -30,7 +31,7 @@ export const GET: APIRoute = async (ctx) => {
   const session = agentSessionKey(owner(ctx), ctx.cookies.get("own1_demo_sid")?.value, q.get("chat"));
   const since = Number(q.get("since"));
   if (Number.isFinite(since) && await openedOnScreen(since)) return json({ browsing: true });
-  const eng = engineFor(false, q.get("eval") === "1", signedOwner(ctx));
+  const eng = engineFor(false, wantsEval(q.get("eval") === "1"), signedOwner(ctx));
   if (!session || !Number.isFinite(since) || !eng.browsed) return json({ browsing: false });
   try {
     return json({ browsing: await eng.browsed(session, since) });
