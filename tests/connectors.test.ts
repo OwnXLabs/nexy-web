@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 
 const { connectorAsk, connectorTurn } = await import("../src/lib/connectors.ts");
+const { pauseConnector, resumeConnector, revokeConnector, loadCatalog, loadGrants, storageRows } = await import("../src/client/perm.ts");
 
 test("lookups in Gmail and Drive are recognised, with the words to search for", () => {
   const cases: [string, string | null, string?][] = [
@@ -35,6 +36,7 @@ function hub(tools: string[], call: (name: string, args: any) => any) {
   const got: any[] = [];
   const srv = http.createServer(async (req, res) => {
     let raw = ""; for await (const c of req) raw += c;
+    if (!req.url!.endsWith("/mcp")) { res.writeHead(404).end("{}"); return; }
     const m = JSON.parse(raw);
     got.push({ app: req.headers["x-own-agent-app"], path: req.url, ...m });
     const result = m.method === "tools/list" ? { tools: tools.map((name) => ({ name })) } : call(m.params.name, m.params.arguments);
@@ -79,4 +81,96 @@ test("a failing tool or hub is said plainly; no hub or no lookup: nothing at all
   assert.equal(down?.outcome, "failed");
   assert.equal(await connectorTurn("check my inbox", undefined), null);
   assert.equal(await connectorTurn("what is the capital of France", "http://127.0.0.1:9/x"), null);
+});
+
+// A stand-in hub that keeps a sign-in and Nexy's grant apart, as the real one does: tools/list
+// shows only granted apps, the registry reports the stored credential and the grants.
+function grantHub() {
+  const stored = new Set(["gmail", "drive"]), granted = new Set(["gmail", "drive"]);
+  const tools: Record<string, string> = { gmail: "gmail_search", drive: "drive_search" };
+  const label: Record<string, string> = { gmail: "Gmail", drive: "Google Drive" };
+  const calls: string[] = [];
+  const entry = (id: string) => ({ id, label: label[id], transport: "http", enabled: true, auth: { type: "oauth", credentialStored: stored.has(id) } });
+  const srv = http.createServer(async (req, res) => {
+    let raw = ""; for await (const c of req) raw += c;
+    const send = (code: number, body: unknown) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    const p = new URL(req.url!, "http://x").pathname.replace(/^\/secret/, "");
+    let m: RegExpExecArray | null;
+    if (p === "/mcp") {
+      const j = JSON.parse(raw);
+      if (j.method === "tools/list") return send(200, { jsonrpc: "2.0", id: j.id, result: { tools: [...granted].filter((id) => stored.has(id)).map((id) => ({ name: tools[id] })) } });
+      calls.push(j.params.name);
+      return send(200, { jsonrpc: "2.0", id: j.id, result: { content: [{ type: "text", text: "- Invoice 4471 | from Acme" }] } });
+    }
+    if (p === "/registry/catalog") return send(200, { entries: Object.keys(tools).map(entry) });
+    if ((m = /^\/registry\/catalog\/(\w+)$/.exec(p))) return send(200, entry(m[1]));
+    if (p === "/registry/grants/nexy") return send(200, { app: "nexy", entries: [...granted] });
+    if ((m = /^\/registry\/grants\/nexy\/(\w+)$/.exec(p))) {
+      if (req.method === "POST") granted.add(m[1]); else granted.delete(m[1]);
+      return send(200, { app: "nexy", entries: [...granted] });
+    }
+    if ((m = /^\/registry\/oauth\/(\w+)\/revoke$/.exec(p))) { stored.delete(m[1]); return send(200, { id: m[1], credentialStored: false }); }
+    send(404, { error: `no such route ${p}` });
+  });
+  return new Promise<{ base: string; calls: string[]; f: typeof fetch; close: () => void }>((ok) => srv.listen(0, "127.0.0.1", () => {
+    const base = `http://127.0.0.1:${(srv.address() as any).port}/secret`;
+    // the browser's /api/apps/hub/registry reaches the hub's /registry
+    const f = ((u: string, init?: RequestInit) => fetch(base + String(u).replace(/^\/api\/apps\/hub/, ""), init)) as typeof fetch;
+    ok({ base, calls, f, close: () => srv.close() });
+  }));
+}
+
+test("pause keeps the sign-in but Nexy can't read it; resume reads again; disconnect still disconnects", async () => {
+  const h = await grantHub();
+  try {
+    const gmail = (await loadCatalog(h.f)).find((e) => e.id === "gmail")!;
+    assert.equal((await connectorTurn("search my gmail for invoice", h.base))?.outcome, "read");
+
+    const p = await pauseConnector(gmail, h.f);
+    assert.equal(p.ok, true, p.note);
+    assert.deepEqual(await loadGrants(h.f), ["drive"]);
+    assert.equal((await loadCatalog(h.f)).find((e) => e.id === "gmail")!.auth.credentialStored, true, "the sign-in stays");
+    const before = h.calls.length;
+    const t = await connectorTurn("search my gmail for invoice", h.base);
+    assert.equal(t?.outcome, "paused");
+    assert.match(t!.prompt, /Gmail is paused and they can resume it in Settings > Connections/);
+    assert.match(t!.prompt, /Do not guess/);
+    assert.equal(h.calls.length, before, "no tool call while paused");
+    assert.equal((await connectorTurn("find the budget in my drive", h.base))?.outcome, "read", "other apps unaffected");
+
+    const r = await resumeConnector(gmail, h.f);
+    assert.equal(r.ok, true, r.note);
+    const back = await connectorTurn("search my gmail for invoice", h.base);
+    assert.equal(back?.outcome, "read");
+    assert.match(back!.prompt, /Invoice 4471/);
+
+    const d = await revokeConnector(gmail, h.f);
+    assert.equal(d.ok, true, d.note);
+    assert.equal((await loadCatalog(h.f)).find((e) => e.id === "gmail")!.auth.credentialStored, false, "disconnect deletes the sign-in");
+    assert.equal((await connectorTurn("search my gmail for invoice", h.base))?.outcome, "not-connected");
+  } finally { h.close(); }
+});
+
+test("pause or resume the registry refuses is never reported as done", async () => {
+  const entry = { id: "gmail", label: "Gmail", transport: "http", enabled: true, auth: { type: "oauth", credentialStored: true } };
+  const refuse = (async () => new Response(JSON.stringify({ error: "'nexy' may not change the connector catalogue" }), { status: 403 })) as typeof fetch;
+  const p = await pauseConnector(entry, refuse);
+  assert.equal(p.ok, false);
+  assert.match(p.note, /Not paused — 'nexy' may not change/);
+  // accepted, but the grants list read back disagrees
+  const ignore = (async (u: string, init?: RequestInit) => new Response(JSON.stringify(init?.method ? {} : { entries: [] }), { status: 200 })) as typeof fetch;
+  const r = await resumeConnector(entry, ignore);
+  assert.equal(r.ok, false);
+  assert.match(r.note, /still paused/);
+});
+
+test("the Connect card says how this computer keeps the sign-in, and warns of the prompt only when unsigned", () => {
+  const base: [string, string][] = [["Sign-in", "OAuth in your browser; the token is stored here at 0600"], ["Scopes", "read"]];
+  assert.deepEqual(storageRows(base, null), base);
+  const sealed = storageRows(base, { sealed: true, keychainAsks: false });
+  assert.match(sealed[0][1], /encrypted, with its key in your Keychain/);
+  assert.equal(sealed.length, 2);
+  const asks = storageRows(base, { sealed: true, keychainAsks: true });
+  assert.match(asks.at(-1)![1], /asks for your password once/);
+  assert.equal(storageRows(base, { sealed: false, keychainAsks: false })[0][1], base[0][1]);
 });

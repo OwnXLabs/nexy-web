@@ -8,7 +8,7 @@ const PID = /^[\w:-]{1,64}$/;
 const MAX_HTML = 2_000_000;
 
 export interface Turn { role: "user" | "assistant"; content: string }
-export interface SavedChat { id: string; pid: string; title: string; ts: number; html: string; history: Turn[]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; open?: { kind: string; title: string; href: string; project?: unknown; ex?: string } }
+export interface SavedChat { id: string; pid: string; title: string; ts: number; html: string; history: Turn[]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; open?: { kind: string; title: string; href: string; project?: unknown; ex?: string; needs?: string } }
 export type ChatMeta = Omit<SavedChat, "html" | "history" | "outputs">;
 
 const dirOf = (owner: string) => path.join(DIR, owner);

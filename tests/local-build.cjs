@@ -104,6 +104,11 @@ test('a computer builds with the engine: checked, shown in the canvas, one retry
     await pg.goto(s.base + '/');
     await pg.locator('#input').waitFor({ timeout: 20000 });
     assert.match(await pg.locator('html').getAttribute('data-apps'), /\bbuilder\b/);
+    // examples it can build are offered; a project board needs Own Startup, which isn't here
+    await pg.locator('#exList [data-ex]').first().waitFor({ timeout: 10000 });
+    const ex = await pg.locator('#exList').innerText();
+    assert.match(ex, /Website: ice cream parlour/);
+    assert.doesNotMatch(ex, /Project board|Launch plan/);
 
     // a brief with a name: built, checked, in the canvas
     await ask(pg, 'build me a website for a flower shop called Petal & Stem');

@@ -28,7 +28,7 @@ export interface ShellHooks {
   promote?(): void;
 }
 
-export interface ExampleOpen { kind: string; title: string; href: string; ts?: number; ex?: string }
+export interface ExampleOpen { kind: string; title: string; href: string; ts?: number; ex?: string; needs?: string }
 
 const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s);
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
@@ -854,9 +854,9 @@ export function initShell(hooks: ShellHooks): void {
 const EX_SHOWN = 5;
 let exAll = false;
 
-// what each kind of example needs; a computer without it doesn't offer the example
+// what each kind of example needs; an example may name its own app (a project board needs Own Startup)
 const NEEDS: Record<string, string> = { html: "build", game: "build", image: "images", plan: "startup", audio: "beat" };
-const makeable = (c: Chat) => !c.example || !NEEDS[c.example.kind] || hasApp(NEEDS[c.example.kind]);
+const makeable = (c: Chat) => { const app = c.example?.needs ?? NEEDS[c.example?.kind ?? ""]; return !app || hasApp(app); };
 
 export function exampleRows(): string {
   const list = (chats.get(EX) ?? []).filter(makeable);

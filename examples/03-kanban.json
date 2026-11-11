@@ -8,6 +8,7 @@
  "open": {
   "kind": "html",
   "title": "Project board: product launch",
-  "href": "/examples/kanban.html"
+  "href": "/examples/kanban.html",
+  "needs": "startup"
  }
 }

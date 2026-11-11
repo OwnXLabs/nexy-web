@@ -1,5 +1,5 @@
 import { hasApp, here, localVoice, onOwn1, voiceApi } from "./place";
-import { HUB, loadCatalog } from "./perm";
+import { HUB, loadCatalog, loadGrants, pauseConnector, resumeConnector, type CatalogEntry } from "./perm";
 import { httpMsg } from "./http";
 
 export interface SettingsHooks {
@@ -87,12 +87,12 @@ async function section(sec: string): Promise<string> {
     const tg = await telegramRow();
     try {
       const cat = await loadCatalog();
+      catalog = cat;
       const google = cat.some((c) => c.id === "gmail" || c.id === "drive") ? await googleRow() : "";
+      // without the grants list, Pause and Resume can't be told apart, so they are not offered
+      const granted = await loadGrants().catch((e) => { console.warn("[nexy] grants unavailable", e); return null; });
       return `<h3>Connections</h3>` + tg + `<p class="sp">Outside apps come from this machine's catalogue. Nexy asks before the first use of each one.</p>` + google +
-        (cat.length ? cat.map((c) => row(esc(c.label), c.auth?.credentialStored
-          ? `<span class="faint connected">Connected</span> <button class="btn small ghost" type="button" data-act="disc" data-n="${esc(c.label)}">Disconnect</button>`
-          : `<button class="btn small primary" type="button" data-act="conn" data-n="${esc(c.label)}">Connect</button>`,
-          c.auth?.credentialStored ? `Scopes: ${esc((c.auth.grantedScopes ?? c.scopes ?? []).map((x) => x.split("/").pop()).join(", ") || "as granted")}` : "Not connected")).join("") : row("Catalogue", not("Empty")));
+        (cat.length ? cat.map((c) => connRow(c, granted)).join("") : row("Catalogue", not("Empty")));
     } catch (e) {
       return `<h3>Connections</h3>` + tg + row("Catalogue", not(`Not answering: ${(e as Error).message}`));
     }
@@ -123,6 +123,18 @@ async function section(sec: string): Promise<string> {
   }
   return `<h3>About</h3>` + row("Nexy", not(onOwn1 ? "On this Own1" : "On this computer")) + row("The agent", not("On this machine"), "Private chats use the local model directly and are never kept") +
     row("Speech", not(localVoice ? "On this computer" : hasApp("voice") ? "Own Voice, on this machine" : "Coming in an update")) + row("Web pages", not("Read on this machine"), "No cloud reader");
+}
+
+// a connected app is in use or paused (sign-in kept, Nexy's grant dropped); Disconnect deletes the sign-in
+let catalog: CatalogEntry[] = [];
+function connRow(c: CatalogEntry, granted: string[] | null): string {
+  const n = esc(c.label), id = esc(c.id);
+  if (!c.auth?.credentialStored) return row(n, `<button class="btn small primary" type="button" data-act="conn" data-n="${n}">Connect</button>`, "Not connected");
+  const disc = `<button class="btn small ghost" type="button" data-act="disc" data-n="${n}">Disconnect</button>`;
+  const scopes = `Scopes: ${esc((c.auth.grantedScopes ?? c.scopes ?? []).map((x) => x.split("/").pop()).join(", ") || "as granted")}`;
+  if (granted && !granted.includes(c.id)) return row(n, `<span class="faint paused">Paused — Nexy can't read it</span> <button class="btn small" type="button" data-act="resume" data-n="${id}">Resume</button> ${disc}`, scopes);
+  const pause = granted ? ` <button class="btn small ghost" type="button" data-act="pause" data-n="${id}">Pause</button>` : "";
+  return row(n, `<span class="faint connected">Connected</span>${pause} ${disc}`, granted ? scopes : `${scopes}. Nexy's access can't be read right now`);
 }
 
 // the agent engine for this owner's chats; names come from the server, which lists what runs here
@@ -225,6 +237,16 @@ async function act(a: string, n?: string): Promise<void> {
   if (say[a]) { close(); await H.send(say[a]); return; }
   if (a === "conn" && n) { close(); await H.send(`Connect ${n}`); }
   if (a === "disc" && n) { close(); await H.send(`Disconnect ${n}`); }
+  if ((a === "pause" || a === "resume") && n) {
+    const entry = catalog.find((c) => c.id === n);
+    if (!entry) { H.toast("That app is no longer in this machine's catalogue"); void renderSettings("connections"); return; }
+    const out = await (a === "pause" ? pauseConnector(entry) : resumeConnector(entry)).catch((e): { ok: false; note: string } => {
+      console.warn(`[nexy] ${a} ${entry.id} failed`, e);
+      return { ok: false, note: `Not changed — ${(e as Error).message}` };
+    });
+    H.toast(out.note);
+    void renderSettings("connections");
+  }
   if (a === "gclient") {
     const input = $<HTMLInputElement>("#gClientPick");
     if (!input) return;

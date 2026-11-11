@@ -1,4 +1,4 @@
-import { httpMsg } from "./http";
+import { httpMsg } from "./http.ts";
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
@@ -273,6 +273,33 @@ async function connectedSoon(id: string, label: string, f: Fetch, ms = 600_000, 
   return null;
 }
 
+// the connectors Nexy may use now; throws when the registry can't say
+export async function loadGrants(f: Fetch = fetch): Promise<string[]> {
+  const res = await f(`${HUB}/grants/${encodeURIComponent(APP)}`);
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(body?.error ?? httpMsg(res.status));
+  if (!Array.isArray(body?.entries)) throw new Error("the connector registry returned no grants");
+  return body.entries.map(String);
+}
+
+// Pause drops only Nexy's grant: the sign-in stays, and the hub refuses Nexy on the next call.
+export async function pauseConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {
+  const res = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(entry.id)}`), { method: "DELETE", headers: { "content-type": "application/json" } });
+  const body = await readJson(res);
+  if (!res.ok) return { ok: false, right: "still connected", note: `Not paused — ${body?.error ?? httpMsg(res.status)}` };
+  if (await grantedNow(entry.id, f)) return { ok: false, right: "still connected", note: `The registry still lists ${entry.label} for Nexy. It is not paused.` };
+  return { ok: true, right: "paused", note: `Paused ${entry.label}. Nexy can't read it until you resume it` };
+}
+
+// Resume restores the grant; the owner consented at connect, and this click is the consent again.
+export async function resumeConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {
+  const res = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(entry.id)}`), { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  const body = await readJson(res);
+  if (!res.ok) return { ok: false, right: "paused", note: `Not resumed — ${body?.error ?? httpMsg(res.status)}` };
+  if (!(await grantedNow(entry.id, f))) return { ok: false, right: "paused", note: `The registry accepted it but does not list ${entry.label} for Nexy. It is still paused.` };
+  return { ok: true, right: "connected", note: `Resumed ${entry.label}. Nexy can read it again` };
+}
+
 export async function revokeConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {
   const id = entry.id;
   const g = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(id)}`), { method: "DELETE", headers: { "content-type": "application/json" } });
@@ -299,6 +326,27 @@ export async function revokeConnector(entry: CatalogEntry, f: Fetch = fetch): Pr
 export interface ConnectUI {
   block: (el: HTMLElement) => HTMLElement;
   say: (html: string) => void;
+}
+
+/** How a computer's hub keeps Google sign-ins (null on an Own1, whose hub has no such route). */
+export async function signInStorage(f: Fetch = fetch): Promise<{ sealed: boolean; keychainAsks: boolean } | null> {
+  try {
+    const r = await f(`${HUB.replace(/\/registry$/, "")}/connectors/google`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return { sealed: j?.sealed === true, keychainAsks: j?.keychainAsks === true };
+  } catch (e) {
+    console.warn("[nexy] sign-in storage unknown", e);
+    return null;
+  }
+}
+
+/** The consent rows, told how this computer keeps the sign-in. */
+export function storageRows(rows: [string, string][], s: { sealed: boolean; keychainAsks: boolean } | null): [string, string][] {
+  if (!s) return rows;
+  const out = rows.map(([k, v]): [string, string] => (k === "Sign-in" && s.sealed ? [k, "Google in your browser; the token is stored here encrypted, with its key in your Keychain"] : [k, v]));
+  if (s.keychainAsks) out.push(["After each Nexy update", "Your Mac asks for your password once, so Nexy can open your saved sign-ins. Choose Always Allow."]);
+  return out;
 }
 
 export async function playConnect(intent: ConnectIntent, ui: ConnectUI, f: Fetch = fetch): Promise<void> {
@@ -344,7 +392,7 @@ export async function playConnect(intent: ConnectIntent, ui: ConnectUI, f: Fetch
           entry.external || entry.egress?.length
             ? "This connector reaches off this machine, so I ask first. Every row below is read from this machine's connector catalogue, not written for the occasion."
             : "This connector runs on this machine. The grant below is what lets Nexy use it, and nothing wider.",
-        rows: consentRows(entry),
+        rows: entry.auth.type === "oauth" ? storageRows(consentRows(entry), await signInStorage(f)) : consentRows(entry),
         ok: `Connect ${entry.label}`,
         deny: "Not now",
       }
