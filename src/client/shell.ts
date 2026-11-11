@@ -6,7 +6,8 @@ import { setPrivate, isPrivate, endPrivate } from "./private";
 import { isOpen, closeCanvas } from "./canvas";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { httpMsg } from "./http";
-import { hasApp, notHereYet } from "./place";
+import { hasApp, localVoice, notHereYet, voiceApi } from "./place";
+import { speechReady, toWav } from "./voice-local";
 
 export interface ShellHooks {
   send(text: string): Promise<void>;
@@ -606,9 +607,10 @@ async function stopAndTranscribe(): Promise<string> {
   analyser = null;
   void ac?.close();
   ac = null;
-  const blob = new Blob(chunks, { type: r.mimeType || "audio/webm" });
+  let blob = new Blob(chunks, { type: r.mimeType || "audio/webm" });
   if (!blob.size) return "";
-  const res = await fetch("/api/apps/voice/api/stt", { method: "POST", headers: { "content-type": blob.type }, body: blob });
+  if (localVoice) blob = await toWav(blob);
+  const res = await fetch(voiceApi("stt"), { method: "POST", headers: { "content-type": blob.type }, body: blob });
   const d = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
   if (!res.ok) throw new Error(d.error ?? httpMsg(res.status));
   return (d.text ?? "").trim();
@@ -617,6 +619,10 @@ async function stopAndTranscribe(): Promise<string> {
 async function startV(): Promise<void> {
   if (!hasApp("voice")) { H.toast(notHereYet("Talking to Nexy")); return; }
   if (listening) return;
+  if (localVoice) {
+    try { await speechReady((m) => H.toast(m)); }
+    catch (e) { H.toast(`Speech is not ready: ${(e as Error).message}`); return; }
+  }
   if (!(await startRecording())) return;
   $("#voice")?.classList.add("open");
   $("#micBtn")?.classList.add("on");
@@ -725,6 +731,11 @@ function vmClose(): void {
 }
 async function vmListen(): Promise<void> {
   if (!VM.on || VM.state === "listen") return;
+  if (localVoice) {
+    try { await speechReady((m) => vmState("think", m)); }
+    catch (e) { vmState("idle", `Speech is not ready: ${(e as Error).message}`); return; }
+    if (!VM.on) return;
+  }
   if (!(await startRecording())) { vmClose(); return; }
   vmState("listen", "Listening — tap when you are done");
   const tap = $("#vmTap"); if (tap) tap.hidden = false;
@@ -749,7 +760,7 @@ export async function onReply(text: string): Promise<void> {
   if (VM.on) vmState("speak", "Speaking");
   try {
     const clean = text.replace(/\*\*/g, "").replace(/\s+/g, " ").slice(0, 600);
-    const res = await fetch("/api/apps/voice/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: clean, voice_id: prefs().voice }) });
+    const res = await fetch(voiceApi("tts"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: clean, voice_id: prefs().voice }) });
     if (!res.ok) throw new Error(httpMsg(res.status));
     const url = URL.createObjectURL(await res.blob());
     VM.audio = new Audio(url);
@@ -819,7 +830,7 @@ export function initShell(hooks: ShellHooks): void {
   });
   $("#micBtn")?.addEventListener("click", () => void (listening ? stopV() : startV()));
   $("#vstop")?.addEventListener("click", () => void stopV());
-  // speech runs in Own Voice; a computer without it says so instead of failing in the browser
+  // speech runs in Own Voice or on this computer; without either, Nexy says so instead of failing
   const talk = () => hasApp("voice") ? vmOpen() : H.toast(notHereYet("Talking to Nexy"));
   $("#waveBtn")?.addEventListener("click", talk);
   $("#voiceMode")?.addEventListener("click", talk);

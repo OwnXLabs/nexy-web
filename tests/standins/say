@@ -1,0 +1,9 @@
+#!/bin/sh
+# Stand-in for the system voices: lists a few, and writes a short silent WAV for -o.
+if [ "$1" = "-v" ] && [ "$2" = "?" ]; then
+  printf 'Samantha            en_US    # Hello! My name is Samantha.\nBells               en_US    # Hello!\nAnna                de_DE    # Hallo!\nEddy (English (UK)) en_GB    # Hello!\n'
+  exit 0
+fi
+v=; while [ $# -gt 0 ]; do case $1 in -o) o=$2; shift;; -f) f=$2; shift;; -v) v=$2; shift;; esac; shift; done
+echo "tts ${v:-default}: $(cat "$f")" >> "${STANDIN_LOG:-/dev/null}"
+printf 'RIFF\044\000\000\000WAVEfmt \020\000\000\000\001\000\001\000\042\126\000\000\104\254\000\000\002\000\020\000data\000\000\000\000' > "$o"

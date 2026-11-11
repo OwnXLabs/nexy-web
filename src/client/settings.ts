@@ -1,4 +1,4 @@
-import { hasApp, here, onOwn1 } from "./place";
+import { hasApp, here, localVoice, onOwn1, voiceApi } from "./place";
 import { loadCatalog } from "./perm";
 import { httpMsg } from "./http";
 
@@ -41,12 +41,16 @@ export function applyPrefs(): void {
   if (P.name) document.querySelectorAll(".user .n, .pm-h .n").forEach((n) => { n.textContent = P.name; });
 }
 
+const speech = localVoice ? "Speech" : "Own Voice";
 let voices: { id: string; name: string }[] = [];
 async function loadVoices(): Promise<void> {
   if (voices.length || !hasApp("voice")) return;
-  const r = await fetch("/api/apps/voice/api/voices").then((x) => x.json()).catch((e) => { console.warn("[nexy] voices unavailable", e); return {}; });
+  const r = await fetch(voiceApi("voices")).then((x) => x.json()).catch((e) => { console.warn("[nexy] voices unavailable", e); return {}; });
   voices = (r.voices ?? []).map((v: any) => ({ id: String(v.id), name: String(v.name ?? v.id).replace(/^en_US-/, "").replace(/-/g, " ") }));
+  // this computer speaks in its own default voice until one is picked
+  if (localVoice && voices.length) voices.unshift({ id: "", name: "This computer's voice" });
 }
+const pickedVoice = () => (voices.some((v) => v.id === P.voice) ? P.voice : localVoice ? "" : P.voice);
 
 async function section(sec: string): Promise<string> {
   if (sec === "general") return `<h3>General</h3>` +
@@ -62,7 +66,7 @@ async function section(sec: string): Promise<string> {
       row("Memory", `<button class="btn small" type="button" data-act="mem">What Nexy remembers</button>`, "List, export or forget the conversations the agent keeps") +
       row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule, on this machine");
     return `<h3>Nexy</h3>` + await engineRow() +
-      row("Voice", voices.length ? sel("voice", voices.map((v) => [v.id, v.name]), P.voice) : not("Own Voice is not answering"), "Spoken by Own Voice on this machine") +
+      row("Voice", voices.length ? sel("voice", voices.map((v) => [v.id, v.name]), pickedVoice()) : not(`${speech} is not answering`), localVoice ? "Spoken by this computer's own voices; nothing leaves it" : "Spoken by Own Voice on this machine") +
       row("Speak replies aloud", sw(P.speakAlways, "speakAlways"), "Off: only in voice mode") +
       row("Hold space to talk", sw(P.wakeKey, "wakeKey")) +
       row("Memory", `<button class="btn small" type="button" data-act="mem">What Nexy remembers</button>`, "List, export or forget the conversations the agent keeps") +
@@ -114,7 +118,7 @@ async function section(sec: string): Promise<string> {
     return `<h3>Workspaces</h3>` + row(esc($("#pmWsName")?.textContent?.trim() || (onOwn1 ? "This Own1" : "This computer")), not(`${n} project${n === 1 ? "" : "s"}`)) + row("More workspaces", not("One per machine for now"));
   }
   return `<h3>About</h3>` + row("Nexy", not(onOwn1 ? "On this Own1" : "On this computer")) + row("The agent", not("On this machine"), "Private chats use the local model directly and are never kept") +
-    row("Speech", not(hasApp("voice") ? "Own Voice, on this machine" : "Coming in an update")) + row("Web pages", not("Read on this machine"), "No cloud reader");
+    row("Speech", not(localVoice ? "On this computer" : hasApp("voice") ? "Own Voice, on this machine" : "Coming in an update")) + row("Web pages", not("Read on this machine"), "No cloud reader");
 }
 
 // the agent engine for this owner's chats; names come from the server, which lists what runs here
@@ -185,8 +189,8 @@ async function telegramRow(): Promise<string> {
 
 async function act(a: string, n?: string): Promise<void> {
   if (a === "testVoice") {
-    const r = await fetch("/api/apps/voice/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "Hi, I am Nexy. I live on this machine.", voice_id: P.voice }) });
-    if (!r.ok) { H.toast(`Own Voice did not answer: ${httpMsg(r.status)}`); return; }
+    const r = await fetch(voiceApi("tts"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "Hi, I am Nexy. I live on this machine.", voice_id: P.voice }) });
+    if (!r.ok) { H.toast(`${speech} did not answer: ${httpMsg(r.status)}`); return; }
     const url = URL.createObjectURL(await r.blob()); const au = new Audio(url); au.onended = () => URL.revokeObjectURL(url); void au.play();
     return;
   }
