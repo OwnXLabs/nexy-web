@@ -1,4 +1,4 @@
-import { httpMsg } from "./http";
+import { httpMsg } from "./http.ts";
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
@@ -271,6 +271,33 @@ async function connectedSoon(id: string, label: string, f: Fetch, ms = 600_000, 
     }
   }
   return null;
+}
+
+// the connectors Nexy may use now; throws when the registry can't say
+export async function loadGrants(f: Fetch = fetch): Promise<string[]> {
+  const res = await f(`${HUB}/grants/${encodeURIComponent(APP)}`);
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(body?.error ?? httpMsg(res.status));
+  if (!Array.isArray(body?.entries)) throw new Error("the connector registry returned no grants");
+  return body.entries.map(String);
+}
+
+// Pause drops only Nexy's grant: the sign-in stays, and the hub refuses Nexy on the next call.
+export async function pauseConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {
+  const res = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(entry.id)}`), { method: "DELETE", headers: { "content-type": "application/json" } });
+  const body = await readJson(res);
+  if (!res.ok) return { ok: false, right: "still connected", note: `Not paused — ${body?.error ?? httpMsg(res.status)}` };
+  if (await grantedNow(entry.id, f)) return { ok: false, right: "still connected", note: `The registry still lists ${entry.label} for Nexy. It is not paused.` };
+  return { ok: true, right: "paused", note: `Paused ${entry.label}. Nexy can't read it until you resume it` };
+}
+
+// Resume restores the grant; the owner consented at connect, and this click is the consent again.
+export async function resumeConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {
+  const res = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(entry.id)}`), { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  const body = await readJson(res);
+  if (!res.ok) return { ok: false, right: "paused", note: `Not resumed — ${body?.error ?? httpMsg(res.status)}` };
+  if (!(await grantedNow(entry.id, f))) return { ok: false, right: "paused", note: `The registry accepted it but does not list ${entry.label} for Nexy. It is still paused.` };
+  return { ok: true, right: "connected", note: `Resumed ${entry.label}. Nexy can read it again` };
 }
 
 export async function revokeConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {

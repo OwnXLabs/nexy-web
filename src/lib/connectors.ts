@@ -34,7 +34,24 @@ async function mcp(base: string, method: string, params: unknown): Promise<any> 
   return j?.result;
 }
 
-export interface ConnectorTurn { id: string; outcome: "read" | "not-connected" | "failed"; prompt: string }
+async function registry(base: string, path: string): Promise<any> {
+  const r = await fetch(`${base.replace(/\/$/, "")}/registry${path}`, { headers: { "x-own-agent-app": "nexy" }, signal: AbortSignal.timeout(10_000) });
+  if (!r.ok) throw new Error(`the connector registry answered ${r.status}`);
+  return r.json();
+}
+
+// paused: the sign-in is stored but the owner took Nexy's grant away
+async function paused(base: string, id: string): Promise<boolean> {
+  try {
+    const [entry, grants] = await Promise.all([registry(base, `/catalog/${encodeURIComponent(id)}`), registry(base, "/grants/nexy")]);
+    return !!entry?.auth?.credentialStored && Array.isArray(grants?.entries) && !grants.entries.includes(id);
+  } catch (e) {
+    console.warn(`[nexy] connector ${id}: could not tell paused from not connected: ${(e as Error).message}`);
+    return false;
+  }
+}
+
+export interface ConnectorTurn { id: string; outcome: "read" | "paused" | "not-connected" | "failed"; prompt: string }
 
 /** The connector step for one chat message, or null when it is not about a connected app or there is no hub. */
 export async function connectorTurn(said: string, hub: string | undefined): Promise<ConnectorTurn | null> {
@@ -44,6 +61,12 @@ export async function connectorTurn(said: string, hub: string | undefined): Prom
   try {
     const tools: { name: string }[] = (await mcp(hub, "tools/list", {}))?.tools ?? [];
     if (!tools.some((t) => t.name === ask.tool)) {
+      if (await paused(hub, ask.id)) {
+        return { id: ask.id, outcome: "paused", prompt: [
+          "", `The owner asked about their ${ask.label}, but they paused ${ask.label} for Nexy, so it was not read.`,
+          `Say in one line that ${ask.label} is paused and they can resume it in Settings > Connections. Do not guess what is in it.`,
+        ].join("\n") };
+      }
       return { id: ask.id, outcome: "not-connected", prompt: [
         "", `The owner asked about their ${ask.label}, but ${ask.label} is not connected to Nexy on this machine.`,
         `Say so in one line, and that they can say "Connect ${ask.label}" or use Settings > Connections. Do not guess what is in it.`,
