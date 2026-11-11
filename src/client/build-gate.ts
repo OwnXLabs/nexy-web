@@ -15,7 +15,7 @@ const PROBE = `<script>${STORAGE_SHIM}(function(){var E=[],B=[];function add(a,m
   `var w=Math.min(a.right,b.right)-Math.max(a.left,b.left),h=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top);` +
   `if(w>4&&h>4&&w*h>0.3*Math.min(a.width*a.height,b.width*b.height))k++}return k}` +
   `addEventListener("message",function(e){var q=e.data&&e.data.nexyGateAsk;if(!q)return;var b=document.body;` +
-  `parent.postMessage({nexyGate:q,errors:E,blocked:B,text:b?b.innerText.trim().length:0,drawn:document.querySelectorAll("canvas,svg").length,overlaps:overlaps()},"*")})})()</script>`;
+  `parent.postMessage({nexyGate:q,errors:E,blocked:B,text:b?b.innerText.trim().length:0,drawn:document.querySelectorAll("canvas,svg,img,input,button,textarea,select").length,overlaps:overlaps()},"*")})})()</script>`;
 
 export interface GateResult { ok: boolean; why: string; overlaps: number }
 
@@ -51,7 +51,8 @@ export function renderGate(html: string): Promise<GateResult> {
       const overlaps = Number(d.overlaps) || 0;
       if (d.blocked?.length) return finish({ ok: false, why: `it tried to load something from outside the page (${String(d.blocked[0]).slice(0, 80)})`, overlaps });
       if (d.errors?.length) return finish({ ok: false, why: `it throws an error when it runs: ${String(d.errors[0]).slice(0, 160)}`, overlaps });
-      if (d.text < 20 && !d.drawn) return finish({ ok: false, why: "it shows nothing when it runs", overlaps });
+      // a small app is a heading and a few controls; nothing at all is the failure
+      if (d.text < 3 && !d.drawn) return finish({ ok: false, why: "it shows nothing when it runs", overlaps });
       finish({ ok: true, why: "", overlaps });
     };
     addEventListener("message", onMsg);
