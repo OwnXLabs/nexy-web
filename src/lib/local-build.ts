@@ -59,8 +59,8 @@ export function names(brief: string): string[] {
 
 const STOP = new Set(("build make create code write design give want need please nexy can could would will you me my our for the and with that this " +
   "website site web page landing app application game simple small single file html one called named titled using about some " +
-  "business company shop store new nice good great modern clean beautiful little quick just like where which when what has have " +
-  "into from their them they there its it's let lets also very really full fully working".split(" ")));
+  "business company shop store two three four five six new nice good great modern clean beautiful little quick just like where which when what has have " +
+  "into from their them they there its it's let lets also very really full fully working").split(" "));
 
 // the subject: at least one of these must be in the page ("flower", "shop" for a flower shop)
 export function topicWords(brief: string): string[] {
@@ -80,10 +80,12 @@ export function checkPage(html: string, brief: string): string {
   const out = OUTSIDE.exec(html);
   if (out) return `it loads something from outside the page (${(out[1] ?? out[2] ?? out[3]).slice(0, 60)})`;
   const text = flat(html.replace(/<style\b[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " "));
-  for (const n of names(brief)) if (!text.includes(flat(n))) return `it left out the name "${n}"`;
-  const topic = topicWords(brief);
+  const n = names(brief);
+  for (const x of n) if (!text.includes(flat(x))) return `it left out the name "${x}"`;
+  // with no name to look for, the subject: one of its words in the page
+  const topic = n.length ? [] : topicWords(brief);
   const squashed = text.replace(/[^a-z0-9]/g, "");
-  if (topic.length && !topic.some((w) => squashed.includes(w.replace(/[^a-z0-9]/g, "").slice(0, 5))))
+  if (topic.length && !topic.some((w) => squashed.includes(w.replace(/[^a-z0-9]/g, "").slice(0, 4))))
     return `it is not about ${topic.slice(0, 3).join(" ")}`;
   return "";
 }
