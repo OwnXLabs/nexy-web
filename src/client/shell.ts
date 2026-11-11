@@ -158,7 +158,7 @@ export function saveChat(): void {
   const th = chatThread();
   if (!c || c.example !== undefined || !th || !th.querySelector('.msg.me:not([data-private="1"])') || (c.saved && !c.loaded)) return;
   const copy = document.createElement("div"); copy.append(th.cloneNode(true));
-  copy.querySelectorAll('[data-private="1"],#typing').forEach((n) => n.remove());
+  copy.querySelectorAll('[data-private="1"],#typing,#emptyState').forEach((n) => n.remove());
   c.saved = true;
   c.loaded = true;
   persist({ id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,
@@ -392,7 +392,8 @@ export function chatDrop(target: HTMLElement, to: string, done: (title: string) 
   });
 }
 
-const isTablet = () => window.innerWidth <= 1180;
+// the rail is a drawer below the width where it, a chat and the work pane fit side by side
+const isTablet = () => window.innerWidth <= 1000;
 function railDrawer(on: boolean): void {
   document.body.classList.toggle("rail-open", on);
 }
@@ -618,6 +619,7 @@ async function startV(): Promise<void> {
   if (!hasApp("voice")) { H.toast(notHereYet("Talking to Nexy")); return; }
   if (listening) return;
   if (!(await startRecording())) return;
+  window.dispatchEvent(new CustomEvent("nexy:did", { detail: "voice" }));
   $("#voice")?.classList.add("open");
   $("#micBtn")?.classList.add("on");
   const vt = $("#vtext"); if (vt) vt.textContent = "Listening…";
@@ -710,6 +712,7 @@ function vmDraw(): void {
 
 function vmOpen(): void {
   VM.on = true;
+  window.dispatchEvent(new CustomEvent("nexy:did", { detail: "voice" }));
   $("#vmode")?.classList.add("open");
   const n = $("#vmNexy"), y = $("#vmYou"); if (n) n.textContent = ""; if (y) y.textContent = "";
   vmState("idle", "");
@@ -838,8 +841,12 @@ export function initShell(hooks: ShellHooks): void {
 const EX_SHOWN = 5;
 let exAll = false;
 
+// what each kind of example needs; a computer without it doesn't offer the example
+const NEEDS: Record<string, string> = { html: "build", game: "build", image: "images", plan: "startup", audio: "beat" };
+const makeable = (c: Chat) => !c.example || !NEEDS[c.example.kind] || hasApp(NEEDS[c.example.kind]);
+
 export function exampleRows(): string {
-  const list = chats.get(EX) ?? [];
+  const list = (chats.get(EX) ?? []).filter(makeable);
   const open = exAll || list.findIndex((c) => c.id === cur?.cid) >= EX_SHOWN;
   const rows = (open ? list : list.slice(0, EX_SHOWN)).map((c) =>
     `<button class="chat${cur?.cid === c.id ? " active" : ""}" type="button" data-ex="${esc(c.id)}">${esc(c.title)}</button>`).join("");

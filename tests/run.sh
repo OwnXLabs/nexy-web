@@ -33,6 +33,7 @@ check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
 check "a computer without an Own1: no studio it lacks, no Own1 wording" node --test --test-timeout=180000 tests/local-mode.cjs
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
+check "chat home: greeting, Get started, model download, computer-only offers" node --test --test-timeout=180000 tests/landing.cjs
 # browser checks against a served build (empty screen dir, throwaway data and reports)
 tmp=$(mktemp -d)
 mkdir -p "$tmp/screen" "$tmp/reports" "$tmp/data"

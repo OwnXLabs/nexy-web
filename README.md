@@ -27,6 +27,7 @@ NEXY_DATA_DIR=./data node dist/server/entry.mjs
 | `NEXY_LLM_URL`, `NEXY_MODEL` | Model server and model, for `local` and direct calls |
 | `NEXY_SEARXNG_URL` | Search backend |
 | `NEXY_DATA_DIR` | Where chats, projects and settings are stored |
+| `NEXY_MODEL_STATUS` | Optional file the host app writes while it downloads the model (`{"model", "completed", "total"}`); the chat home shows the download and holds jobs until it is done |
 | `HOST`, `PORT` | Listen address (default `0.0.0.0:4321`; bind to loopback unless it sits behind an authenticating proxy) |
 
 **Security:** nexy-web has no sign-in of its own. Run it on loopback, or behind an authenticating proxy (Own1's xnode-auth, Nexy Cloud's gate, or the Nexy app's local gate).
