@@ -118,8 +118,11 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
     if (cmd.kind === "routineList") {
       const { routines } = await call("/api/v1/routines");
       if (!routines.length) { ui.push("ai", "No routines yet. Try “every weekday at 8am, summarise what my projects need”."); return; }
-      ui.block(blockEl("Routines", `${routines.length} on this machine`, routines.map((r: any) =>
+      const waiting = routines.filter((r: any) => r.pending), live = routines.filter((r: any) => !r.pending);
+      if (live.length) ui.block(blockEl("Routines", `${live.length} on this machine`, live.map((r: any) =>
         row(r.name, `${r.schedule}${r.lastRunAt ? ` · last ${new Date(r.lastRunAt).toLocaleString()}` : " · not run yet"}`, !r.enabled)).join("")));
+      for (const r of waiting) ui.block(pendingEl(r, ui));
+      if (waiting.length) ui.push("ai", `${waiting.length === 1 ? "One routine is" : `${waiting.length} routines are`} waiting for you. I set ${waiting.length === 1 ? "it" : "them"} up while reading something from outside, so ${waiting.length === 1 ? "it" : "they"} will not run until you confirm.`);
       const latest = routines.find((r: any) => r.lastResult);
       if (latest) ui.push("ai", `Latest from <b>${esc(latest.name)}</b>:<br>${esc(latest.lastResult).slice(0, 700).replace(/\n/g, "<br>")}`);
       return;
@@ -134,6 +137,41 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
   } catch (e) {
     ui.push("ai", `That did not work: <code>${esc((e as Error).message)}</code>`);
   }
+}
+
+// what put outside content in front of the agent, in plain words
+function originText(o: unknown): string {
+  if (!o) return "not known";
+  const plain: Record<string, string> = { read_page: "a web page", web_search: "a web search", run: "a command", list_files: "file names", read_file: "a file", recall: "saved notes" };
+  return String(o).split(", ").map((p) => {
+    if (p === "earlier in this chat") return p;
+    if (p === "content passed in with the message") return "an attached file, mail or page";
+    const [tool, ...rest] = p.split(" ");
+    return `${plain[tool] ?? "outside content"}${rest.length ? ` (${rest.join(" ")})` : ""}`;
+  }).join(", ");
+}
+
+/** A routine made while outside content was in context: the owner confirms or discards it. */
+function pendingEl(r: any, ui: MemUI): HTMLElement {
+  const el = blockEl(`Waiting for you: ${r.name}`, "not running yet",
+    row("What it will run", r.prompt, true) + row("When (UTC)", r.schedule, true) + row("Came from", originText(r.origin), true),
+    `<div class="ba"><button class="btn small" data-confirm>Confirm</button> <button class="btn small" data-discard>Discard</button></div>`);
+  const buttons = [...el.querySelectorAll<HTMLButtonElement>("[data-confirm], [data-discard]")];
+  for (const b of buttons) b.onclick = async () => {
+    const action = b.hasAttribute("data-confirm") ? "confirm" : "discard";
+    buttons.forEach((x) => { x.disabled = true; });
+    try {
+      const d = await call("/api/v1/routines", { method: "PATCH", body: JSON.stringify({ id: r.id, action }) });
+      el.querySelector(".ba")!.textContent = action === "confirm" ? "Confirmed" : "Discarded";
+      ui.push("ai", action === "confirm"
+        ? `Confirmed <b>${esc(r.name)}</b>. ${d?.routine?.nextRunAt ? `First run ${esc(new Date(d.routine.nextRunAt).toLocaleString())}.` : "It runs on its schedule."}`
+        : `Discarded <b>${esc(r.name)}</b>. It will not run.`);
+    } catch (e) {
+      buttons.forEach((x) => { x.disabled = false; });
+      ui.push("ai", `Nothing changed: <code>${esc((e as Error).message)}</code>`);
+    }
+  };
+  return el;
 }
 
 function wireForget(el: HTMLElement, n: number, ui: MemUI, direct = false): void {
