@@ -97,13 +97,14 @@ export function offline(html: string): string {
   return m ? html.slice(0, m.index + m[0].length) + CSP + html.slice(m.index + m[0].length) : CSP + html;
 }
 
-const GAME = /\b(?:game|pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
+// "a ping pong ball business" is a shop, not a game
+const GAME = /\b(?:game|(?<!ping[\s-])pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
 export function promptFor(brief: string, fix = ""): string {
   const n = names(brief);
   return [
     brief.trim().replace(/[.!?]*$/, "."),
     `Make it about exactly this${n.length ? `, with ${n.map((x) => `"${x}"`).join(" and ")} written as given` : ""}: real content for it, no placeholder companies, people, testimonials or lorem ipsum.`,
-    "Keep the layout simple and responsive so no text overlaps.",
+    "Give it what a real one has, filled in, and keep the layout simple and responsive so no text overlaps.",
     ...(GAME.test(brief) ? ["Draw the start screen right away and show which keys to press."] : []),
     ...(fix ? [`Your last version did not pass a check: ${fix}. Fix that this time.`] : []),
     "Save it as index.html.",

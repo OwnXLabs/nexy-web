@@ -894,7 +894,7 @@ function failedReply(bub: Element, sentence: string, detail: string, retry: () =
 // On a computer the engine's builder writes the page: the server checks it is what was asked,
 // the browser runs it unseen, and a failed check gets one more try, then a plain no.
 const LOCAL_BUILD_MS = 90_000;
-const GAME_BRIEF = /\b(?:game|pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
+const GAME_BRIEF = /\b(?:game|(?<!ping[\s-])pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
 type LocalEnd = { type: "done"; html: string; title: string; secs: number } | { type: "failed"; error: string; check: boolean; secs: number };
 
 function followBuild(id: string, onStep: (text: string) => void): Promise<LocalEnd> {
