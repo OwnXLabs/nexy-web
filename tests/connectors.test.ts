@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 
 const { connectorAsk, connectorTurn } = await import("../src/lib/connectors.ts");
-const { pauseConnector, resumeConnector, revokeConnector, loadCatalog, loadGrants } = await import("../src/client/perm.ts");
+const { pauseConnector, resumeConnector, revokeConnector, loadCatalog, loadGrants, storageRows } = await import("../src/client/perm.ts");
 
 test("lookups in Gmail and Drive are recognised, with the words to search for", () => {
   const cases: [string, string | null, string?][] = [
@@ -162,4 +162,15 @@ test("pause or resume the registry refuses is never reported as done", async () 
   const r = await resumeConnector(entry, ignore);
   assert.equal(r.ok, false);
   assert.match(r.note, /still paused/);
+});
+
+test("the Connect card says how this computer keeps the sign-in, and warns of the prompt only when unsigned", () => {
+  const base: [string, string][] = [["Sign-in", "OAuth in your browser; the token is stored here at 0600"], ["Scopes", "read"]];
+  assert.deepEqual(storageRows(base, null), base);
+  const sealed = storageRows(base, { sealed: true, keychainAsks: false });
+  assert.match(sealed[0][1], /encrypted, with its key in your Keychain/);
+  assert.equal(sealed.length, 2);
+  const asks = storageRows(base, { sealed: true, keychainAsks: true });
+  assert.match(asks.at(-1)![1], /asks for your password once/);
+  assert.equal(storageRows(base, { sealed: false, keychainAsks: false })[0][1], base[0][1]);
 });

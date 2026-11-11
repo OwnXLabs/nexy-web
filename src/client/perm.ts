@@ -328,6 +328,27 @@ export interface ConnectUI {
   say: (html: string) => void;
 }
 
+/** How a computer's hub keeps Google sign-ins (null on an Own1, whose hub has no such route). */
+export async function signInStorage(f: Fetch = fetch): Promise<{ sealed: boolean; keychainAsks: boolean } | null> {
+  try {
+    const r = await f(`${HUB.replace(/\/registry$/, "")}/connectors/google`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return { sealed: j?.sealed === true, keychainAsks: j?.keychainAsks === true };
+  } catch (e) {
+    console.warn("[nexy] sign-in storage unknown", e);
+    return null;
+  }
+}
+
+/** The consent rows, told how this computer keeps the sign-in. */
+export function storageRows(rows: [string, string][], s: { sealed: boolean; keychainAsks: boolean } | null): [string, string][] {
+  if (!s) return rows;
+  const out = rows.map(([k, v]): [string, string] => (k === "Sign-in" && s.sealed ? [k, "Google in your browser; the token is stored here encrypted, with its key in your Keychain"] : [k, v]));
+  if (s.keychainAsks) out.push(["After each Nexy update", "Your Mac asks for your password once, so Nexy can open your saved sign-ins. Choose Always Allow."]);
+  return out;
+}
+
 export async function playConnect(intent: ConnectIntent, ui: ConnectUI, f: Fetch = fetch): Promise<void> {
   let entries: CatalogEntry[];
   try {
@@ -371,7 +392,7 @@ export async function playConnect(intent: ConnectIntent, ui: ConnectUI, f: Fetch
           entry.external || entry.egress?.length
             ? "This connector reaches off this machine, so I ask first. Every row below is read from this machine's connector catalogue, not written for the occasion."
             : "This connector runs on this machine. The grant below is what lets Nexy use it, and nothing wider.",
-        rows: consentRows(entry),
+        rows: entry.auth.type === "oauth" ? storageRows(consentRows(entry), await signInStorage(f)) : consentRows(entry),
         ok: `Connect ${entry.label}`,
         deny: "Not now",
       }
