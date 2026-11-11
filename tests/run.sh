@@ -35,6 +35,7 @@ check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
 check "eval mode only on a server started for evals; a request alone cannot switch it on" ts tests/eval-gate.test.ts
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
+check "routine approval: pending routines wait for Confirm or Discard, clean context vouched for" node --test --test-timeout=180000 tests/routine-approval.cjs
 # browser checks against a served build (empty screen dir, throwaway data and reports)
 tmp=$(mktemp -d)
 mkdir -p "$tmp/screen" "$tmp/reports" "$tmp/data"
