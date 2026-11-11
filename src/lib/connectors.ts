@@ -73,7 +73,8 @@ export async function connectorTurn(said: string, hub: string | undefined): Prom
       ].join("\n") };
     }
     const r = await mcp(hub, "tools/call", { name: ask.tool, arguments: ask.args });
-    const text = (r?.content ?? []).map((c: { text?: string }) => c.text ?? "").join("\n").slice(0, 12_000);
+    // the mail is fenced as data; a "<<<" inside it could close the fence and pose as instructions
+    const text = (r?.content ?? []).map((c: { text?: string }) => c.text ?? "").join("\n").slice(0, 12_000).replace(/<<<|>>>/g, "‹‹");
     if (r?.isError) throw new Error(text || "the tool failed");
     return { id: ask.id, outcome: "read", prompt: [
       "", `The owner asked about their ${ask.label}. You just read it through the ${ask.label} connector they approved (read-only),`,
