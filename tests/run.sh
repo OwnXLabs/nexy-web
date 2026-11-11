@@ -32,6 +32,8 @@ check "network faults: latency, drops, silence" node --test --test-timeout=18000
 check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
 check "a computer without an Own1: no studio it lacks, no Own1 wording" node --test --test-timeout=180000 tests/local-mode.cjs
+check "speech on this computer: model fetch, transcripts, spoken replies" ts tests/voice.test.ts
+check "speech on this computer in the browser, missing speech still gated, Own1 unchanged" node --test --test-timeout=180000 tests/local-voice.cjs
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
 check "beta reports: preview is what is sent, secrets removed, private sends nothing, no badge off beta" node --test --test-timeout=180000 tests/beta-report.cjs
 # browser checks against a served build (empty screen dir, throwaway data and reports)

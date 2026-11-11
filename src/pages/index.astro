@@ -2,14 +2,16 @@
 import "../fonts.css";
 import "../styles.css";
 import { APPS } from "../lib/apps";
-// a computer without an Own1 runs chat only; the page hides what isn't here
+import { localVoice } from "../lib/voice";
+// a computer without an Own1 runs chat only, plus speech when it has it; the page hides what isn't here
 const local = process.env.NEXY_STUDIOS === "off";
-const apps = APPS.map((a) => a.id).join(" ");
+const voice = local && localVoice();
+const apps = [...APPS.map((a) => a.id), ...(voice ? ["voice"] : [])].join(" ");
 const projects = APPS.some((a) => a.id === "startup");
 const beta = process.env.NEXY_BETA === "1";
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined}>
+<html lang="en" data-place={local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -92,7 +94,7 @@ const beta = process.env.NEXY_BETA === "1";
             <button type="button" id="privBtn" aria-pressed="false" title="Ultra-private: nothing is saved, no web search, it stays on this device"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
             <button type="button" id="attachBtn" title="Attach files"><svg class="i" viewBox="0 0 24 24"><path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.3 3.3 0 0 1 4.7 4.7L9.4 17a1.7 1.7 0 0 1-2.4-2.4L15 6.6"/></svg></button>
             <button type="button" id="voiceMode" title="Voice mode: talk with Nexy" hidden><svg class="i" viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M22 12h-1"/></svg></button>
-            <button type="button" id="micBtn" hidden={!APPS.some((a) => a.id === "voice")} title="Dictate, or hold space"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+            <button type="button" id="micBtn" hidden={!apps.split(" ").includes("voice")} title="Dictate, or hold space"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
             <button type="button" id="sendBtn" disabled aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M20 5v6a3 3 0 0 1-3 3H5m0 0 4-4m-4 4 4 4"/></svg></button>
           </div>
         </div>
