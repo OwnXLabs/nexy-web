@@ -1,3 +1,5 @@
+import { connectorAsk } from "../lib/connector-ask.ts";
+
 export type SensitiveKind = "tax" | "medical" | "financial" | "legal" | "identity";
 
 const PERSONAL =
@@ -170,8 +172,14 @@ export function setPrivate(on: boolean, announce = true): boolean {
   return priv;
 }
 
+// An explicit ask to read the owner's own connected app ("find the latest invoice in my email") is
+// not switched to ultra-private: that would turn the app off and answer "I don't have access to
+// your email" (QA 2026-11-12). The app runs on this device through the owner's own sign-in.
+// Ultra-private the owner chose still keeps connected apps off.
+export const autoPrivate = (text: string): SensitiveHit | null => connectorAsk(text) ? null : detectSensitive(text);
+
 export function guard(text: string): { nowPrivate: boolean; hit: SensitiveHit | null } {
-  const hit = priv ? null : detectSensitive(text);
+  const hit = priv ? null : autoPrivate(text);
   const nowPrivate = priv || !!hit;
   if (hit) {
     setPrivate(true, false);

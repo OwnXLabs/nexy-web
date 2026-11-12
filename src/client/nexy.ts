@@ -37,6 +37,8 @@ import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
 import { timeoutSignal } from "./compat";
 import { inline, renderMd } from "./md";
+import { connectorAsk } from "../lib/connector-ask.ts";
+import { slugOf } from "./doc-title";
 
 // "on the right" is true only where the pane sits beside the chat. On a phone the pane covers the
 // chat, so there the words are a button that brings it back (QA 2026-11-12).
@@ -1092,7 +1094,7 @@ async function playChart(question: string, priv: boolean): Promise<void> {
       if (!bub.querySelector(".feednote")) bub.insertAdjacentHTML("beforeend", `<div class="feednote" style="margin-top:6px">The model is busy with another job on this machine; waiting for it.</div>`);
       await new Promise((ok) => setTimeout(ok, wait));
     }
-    if (c.error === "private") { bub.innerHTML = esc(c.note ?? "Web search is off in ultra-private mode."); return; }
+    if (c.error === "private" || c.error === "own-app") { bub.innerHTML = esc(c.note ?? "Web search is off in ultra-private mode."); return; }
     if (!res.ok || c.error) throw new Error(c.error || httpMsg(res.status));
     if (c.points.length < 1) {
       bub.innerHTML = `I searched for “${esc(c.query)}” but found ${c.points.length ? "only one figure" : "no figures"} I can trace to a source, so there is no chart rather than a made-up one.` +
@@ -1713,7 +1715,6 @@ const withCursor = (html: string) => {
 };
 const structured = (t: string) => t.length > 1500 && (/^#{1,6} /m.test(t) || (t.match(/^\s*(\d+\.|[-*]) /gm) ?? []).length >= 3 || (t.match(/^\s*\|.*\|\s*$/gm) ?? []).length >= 3);
 const firstPart = (t: string) => (t.split(/\n\s*\n/).map((p) => p.trim()).find((p) => p && !/^#{1,6} /.test(p)) ?? t).slice(0, 400);
-const slugOf = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 28) || "answer";
 
 function typeOut(el: HTMLElement, text: string): Promise<void> {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.innerHTML = bubbleText(text); return Promise.resolve(); }
@@ -1952,7 +1953,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     }
     if (grows || structured(answer)) {
       // a continuation with no document of its own to grow gets its own, named for the question
-      const title = continuing && !grows ? `${slugOf(asked).slice(0, 18)}-continued.md` : `${slugOf(asked)}.md`;
+      const title = continuing && !grows ? `${slugOf(asked, 18)}-continued.md` : `${slugOf(asked)}.md`;
       const md = grows ? `${prior!.md.trimEnd()}\n\n${answer.trimStart()}` : answer;
       answerDocs.set(`${chat ?? ""}\n${title}`, { md, last: answer });
       showArtifact(markdownArtifact({ title, meta: "Nexy · on device", md }));
@@ -2344,6 +2345,9 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     const intent = classify(text);
     if (conn) {
       await playConnect(conn, { block: pushBlock, say: (h) => void push("ai", h) });
+    } else if (connectorAsk(text)) {
+      // the owner's own mail or files: read through the connected app, never a chart search or a build
+      await playChat(text, nowPrivate);
     } else if (pickedFor(editablePage()?.id) && isOpen()) {
       // the person picked a part of the page: this message is about that part
       const part = pickedFor(editablePage()?.id);

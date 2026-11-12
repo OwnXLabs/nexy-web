@@ -3,27 +3,8 @@
 // app and granted it to Nexy; what comes back reaches the model as data for this one reply.
 // Gmail is one tool from either connector the owner set up: Google sign-in ("gmail") or an app
 // password over IMAP ("gmail-imap"). Both serve gmail_search with the same arguments.
-export interface ConnectorAsk { id: "gmail" | "drive"; ids: readonly string[]; label: string; tool: string; args: { query: string } }
-
-const APPS = [
-  { id: "gmail", ids: ["gmail", "gmail-imap"], label: "Gmail", tool: "gmail_search", re: /\b(?:in\s+|from\s+|on\s+)?(?:my\s+)?(?:g-?mail|inbox|e-?mails?|mail(?:box)?)\b/i, mine: /\b(?:my\s+(?:g-?mail|inbox|e-?mails?|mail(?:box)?)|g-?mail|(?:any|new|unread)\s+e-?mails?)\b/i },
-  { id: "drive", ids: ["drive"], label: "Google Drive", tool: "drive_search", re: /\b(?:in\s+|from\s+|on\s+)?(?:my\s+)?(?:google\s+)?drive\b/i, mine: /\b(?:my\s+(?:google\s+)?drive|google\s+drive)\b/i },
-] as const;
-// asking to write, send or (dis)connect is not reading; a lookup says so
-const LOOKUP = /\b(?:search|find|look|check|show|list|read|summari[sz]e|any|anything|latest|newest|recent|unread|what(?:'s|s| is| are)?\s+(?:in|new|on)|do i have|did i get|have i got)\b/i;
-const NOT_READING = /^\s*(?:please\s+)?(?:write|draft|compose|send|reply|forward|connect|disconnect|link|unlink|revoke|remove|delete)\b/i;
-// "when a new email arrives from Acme, summarise it" asks for a routine on that event, not a lookup now
-const ON_EVENT = /^\s*(?:please\s+)?(?:when|whenever|each time|every time)\b.*\b(?:arrives?|comes? in|lands?|(?:is|gets?) (?:added|saved|uploaded|dropped)|e-?mails? me|sends? me)\b/i;
-const FILLER = /\b(?:please|can|could|you|search|find|look|through|up|check|show|list|get|read|open|summari[sz]e|tell|what(?:'s|s)?|is|are|there|any|anything|do|i|have|got|me|the|a|an|my|all|latest|newest|recent|new|last|emails?|e-mails?|mails?|messages?|files?|docs?|documents?|for|about|mentioning|called|named|titled|regarding|in|on|from|to|with|of)\b/gi;
-
-export function connectorAsk(text: string): ConnectorAsk | null {
-  const s = text.trim();
-  if (!s || s.length > 300 || NOT_READING.test(s) || ON_EVENT.test(s) || !LOOKUP.test(s)) return null;
-  const app = APPS.find((a) => a.mine.test(s));
-  if (!app) return null;
-  const query = s.replace(app.re, " ").replace(/['’]s\b/gi, "").replace(/[?!.,;:"“”'’]/g, " ").replace(FILLER, " ").replace(/\s+/g, " ").trim().slice(0, 120);
-  return { id: app.id, ids: app.ids, label: app.label, tool: app.tool, args: { query } };
-}
+import { connectorAsk } from "./connector-ask.ts";
+export { connectorAsk, type ConnectorAsk } from "./connector-ask.ts";
 
 async function mcp(base: string, method: string, params: unknown): Promise<any> {
   const r = await fetch(`${base.replace(/\/$/, "")}/mcp`, {
@@ -57,7 +38,20 @@ async function paused(base: string, ids: readonly string[]): Promise<boolean> {
   }
 }
 
-export interface ConnectorTurn { id: string; outcome: "read" | "paused" | "not-connected" | "failed"; prompt: string }
+// Read: the prompt hands the model what came back, as data. Not read (paused, not connected,
+// failed): the reply is the whole answer, said as it is, with no model and no agent. Handed to the
+// agent, a paused Gmail became a public web search for site:mail.google.com "Acme Billing"
+// (QA 2026-11-12).
+export type ConnectorTurn =
+  | { id: string; outcome: "read"; prompt: string }
+  | { id: string; outcome: "paused" | "not-connected" | "failed"; reply: string };
+
+// a hub that is down or slow says "fetch failed" or "aborted"; the owner hears what that means
+function plainWhy(e: unknown): string {
+  const m = String((e as Error)?.message ?? e).slice(0, 160);
+  if ((e as Error)?.name === "TimeoutError" || /fetch failed|ECONNREFUSED|aborted|timed? ?out/i.test(m)) return "the connector service on this computer did not answer";
+  return m;
+}
 
 /** The connector step for one chat message, or null when it is not about a connected app or there is no hub. */
 export async function connectorTurn(said: string, hub: string | undefined): Promise<ConnectorTurn | null> {
@@ -67,16 +61,9 @@ export async function connectorTurn(said: string, hub: string | undefined): Prom
   try {
     const tools: { name: string }[] = (await mcp(hub, "tools/list", {}))?.tools ?? [];
     if (!tools.some((t) => t.name === ask.tool)) {
-      if (await paused(hub, ask.ids)) {
-        return { id: ask.id, outcome: "paused", prompt: [
-          "", `The owner asked about their ${ask.label}, but they paused ${ask.label} for Nexy, so it was not read.`,
-          `Say in one line that ${ask.label} is paused and they can resume it in Settings > Connections. Do not guess what is in it.`,
-        ].join("\n") };
-      }
-      return { id: ask.id, outcome: "not-connected", prompt: [
-        "", `The owner asked about their ${ask.label}, but ${ask.label} is not connected to Nexy on this machine.`,
-        `Say so in one line, and that they can say "Connect ${ask.label}" or use Settings > Connections. Do not guess what is in it.`,
-      ].join("\n") };
+      if (await paused(hub, ask.ids))
+        return { id: ask.id, outcome: "paused", reply: `${ask.label} is paused in Settings › Connections, so I didn't read it. Resume it there and ask again.` };
+      return { id: ask.id, outcome: "not-connected", reply: `${ask.label} isn't connected to Nexy on this computer. Say "Connect ${ask.label}" or open Settings › Connections.` };
     }
     const r = await mcp(hub, "tools/call", { name: ask.tool, arguments: ask.args });
     // the mail is fenced as data; a "<<<" inside it could close the fence and pose as instructions
@@ -90,11 +77,7 @@ export async function connectorTurn(said: string, hub: string | undefined): Prom
       `<<<${tag}>>>`, text, `<<<END ${tag}>>>`,
     ].join("\n") };
   } catch (e) {
-    const why = String((e as Error).message ?? e).slice(0, 160);
-    console.warn(`[nexy] connector ${ask.id}: ${why}`);
-    return { id: ask.id, outcome: "failed", prompt: [
-      "", `The owner asked about their ${ask.label}. Reading it just now failed: ${why}.`,
-      "Say that plainly in one line. Do not guess what is in it.",
-    ].join("\n") };
+    console.warn(`[nexy] connector ${ask.id}: ${String((e as Error)?.message ?? e).slice(0, 160)}`);
+    return { id: ask.id, outcome: "failed", reply: `I couldn't read your ${ask.label} just now: ${plainWhy(e)}. Try again in a moment, or check it in Settings › Connections.` };
   }
 }

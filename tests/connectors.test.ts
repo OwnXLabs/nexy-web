@@ -29,7 +29,14 @@ test("lookups in Gmail and Drive are recognised, with the words to search for", 
     ["whenever any email comes in from Acme, check it for an invoice", null],
     ["Each time a file lands in my Google Drive, read it", null],
     // still a lookup
-    ["when did I get any emails from Acme?", "gmail", "when did Acme"],
+    ["when did I get any emails from Acme?", "gmail", "Acme"],
+    // the words of the request are not searched for (QA 2026-11-12: "inbox", "and it says")
+    ["search my email inbox for Acme Billing", "gmail", "Acme Billing"],
+    ["check my inbox for the message from Sam and tell me what it says", "gmail", "Sam"],
+    ["can you look in my gmail and find the message where Dana sent the quote, and what it says", "gmail", "Dana quote"],
+    ["is there an email in my inbox about the lease renewal?", "gmail", "lease renewal"],
+    ["Find the latest invoice in my email", "gmail", "invoice"],
+    ["read my latest email", "gmail", ""],
   ];
   for (const [said, id, query] of cases) {
     const a = connectorAsk(said);
@@ -70,8 +77,7 @@ test("not granted: nothing runs, and the model is told to say how to connect it"
   try {
     const t = await connectorTurn("find the budget in my drive", h.base);
     assert.equal(t?.outcome, "not-connected");
-    assert.match(t!.prompt, /Google Drive is not connected/);
-    assert.match(t!.prompt, /Connect Google Drive/);
+    assert.equal(t?.outcome === "not-connected" ? t.reply : "", 'Google Drive isn\'t connected to Nexy on this computer. Say "Connect Google Drive" or open Settings › Connections.');
     assert.equal(h.got.filter((g) => g.method === "tools/call").length, 0);
   } finally { h.close(); }
 });
@@ -81,10 +87,11 @@ test("a failing tool or hub is said plainly; no hub or no lookup: nothing at all
   try {
     const t = await connectorTurn("check my inbox", h.base);
     assert.equal(t?.outcome, "failed");
-    assert.match(t!.prompt, /failed: Gmail: the sign-in has expired/);
+    assert.match(t?.outcome === "failed" ? t.reply : "", /^I couldn't read your Gmail just now: Gmail: the sign-in has expired/);
   } finally { h.close(); }
   const down = await connectorTurn("check my inbox", "http://127.0.0.1:9/x");
   assert.equal(down?.outcome, "failed");
+  assert.match(down?.outcome === "failed" ? down.reply : "", /the connector service on this computer did not answer/, "no \"fetch failed\"");
   assert.equal(await connectorTurn("check my inbox", undefined), null);
   assert.equal(await connectorTurn("what is the capital of France", "http://127.0.0.1:9/x"), null);
 });
@@ -139,8 +146,7 @@ test("pause keeps the sign-in but Nexy can't read it; resume reads again; discon
     const before = h.calls.length;
     const t = await connectorTurn("search my gmail for invoice", h.base);
     assert.equal(t?.outcome, "paused");
-    assert.match(t!.prompt, /Gmail is paused and they can resume it in Settings > Connections/);
-    assert.match(t!.prompt, /Do not guess/);
+    assert.equal(t?.outcome === "paused" ? t.reply : "", "Gmail is paused in Settings › Connections, so I didn't read it. Resume it there and ask again.");
     assert.equal(h.calls.length, before, "no tool call while paused");
     assert.equal((await connectorTurn("find the budget in my drive", h.base))?.outcome, "read", "other apps unaffected");
 
@@ -148,7 +154,7 @@ test("pause keeps the sign-in but Nexy can't read it; resume reads again; discon
     assert.equal(r.ok, true, r.note);
     const back = await connectorTurn("search my gmail for invoice", h.base);
     assert.equal(back?.outcome, "read");
-    assert.match(back!.prompt, /Invoice 4471/);
+    assert.match(back?.outcome === "read" ? back.prompt : "", /Invoice 4471/);
 
     const d = await revokeConnector(gmail, h.f);
     assert.equal(d.ok, true, d.note);
@@ -295,4 +301,23 @@ test("the app password goes straight to the hub, a refusal is shown as Gmail's p
     assert.equal(matchEntry(all, connectIntent("Disconnect Gmail (app password)")!.service)?.id, "gmail-imap");
     assert.equal(matchEntry(all, connectIntent("Disconnect Gmail")!.service)?.id, "gmail");
   } finally { h.close(); }
+});
+
+// QA 2026-11-12: the starter "Find the latest invoice in my email" switched the chat to
+// ultra-private (an invoice of mine), which turns connected apps off: "I don't have access to your email".
+test("an explicit ask of a connected app is not switched to ultra-private; one the owner chose stays private", async () => {
+  const { autoPrivate, detectSensitive, guard, setPrivate, isPrivate } = await import("../src/client/private.ts");
+  for (const said of ["Find the latest invoice in my email", "search my email for my bank statement", "check my gmail for the mortgage letter", "find my tax return in my Google Drive"]) {
+    assert.ok(detectSensitive(said), `still sensitive words: ${said}`);
+    assert.equal(autoPrivate(said), null, said);
+    assert.equal(guard(said).nowPrivate, false, said);
+    assert.equal(isPrivate(), false);
+  }
+  // the same words without asking a connected app still switch
+  assert.equal(autoPrivate("here is my invoice, check the totals")?.kind, "financial");
+  assert.equal(autoPrivate("write an email to my bank about my mortgage")?.kind, "financial");
+  // chosen by the owner: stays private, and the server keeps connected apps off (mail-privacy.cjs)
+  setPrivate(true, false);
+  assert.equal(guard("Find the latest invoice in my email").nowPrivate, true);
+  setPrivate(false, false);
 });

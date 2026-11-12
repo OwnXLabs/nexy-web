@@ -273,8 +273,9 @@ export const POST: APIRoute = async (ctx) => {
     (m: any) => m?.role === "user" || m?.role === "assistant",
   );
 
-  // a question about a connected app is answered from it, not from a web search
-  const research = !connectorAsk(String(said ?? "")) && wantsResearch(String(said ?? ""), history);
+  // a question about a connected app is answered from it, never from a web search
+  const asksApp = connectorAsk(String(said ?? ""));
+  const research = !asksApp && wantsResearch(String(said ?? ""), history);
   const startedAt = Date.now();
   // One line when a turn starts and one when it ends, each with its result, under one id: a turn
   // that stalls shows as a start with no end, and a question that never reached here shows as nothing.
@@ -295,8 +296,19 @@ export const POST: APIRoute = async (ctx) => {
     let browse = priv ? "" : browserTurn(String(said ?? ""));
     const page = !priv && eng !== localEngine ? pageToOpen(String(said ?? "")) : null;
     let onScreen = false, pageRead = false;
-    // an ultra-private chat reaches nothing off the machine, so no connected app either
+    // An ultra-private chat reaches nothing off the machine, so no connected app either. A question
+    // about the owner's own app that was not read is answered here, plainly: it never reaches a
+    // model or an agent that could search the web for it instead.
     const conn = priv ? null : await connectorTurn(String(said ?? ""), byId("hub")?.base);
+    const plain = conn && conn.outcome !== "read" ? conn.reply
+      : priv && asksApp ? `This chat is ultra-private, so connected apps like ${asksApp.label} are off. Ask in a regular chat and I'll search it.`
+      : null;
+    if (plain !== null) {
+      answered(plain);
+      log({ result: "answered", via: "connector", ms: Date.now() - startedAt, replyChars: plain.length, connector: asksApp?.id, connectorOutcome: conn?.outcome ?? "private" });
+      return { status: 200, body: { choices: [{ message: { role: "assistant", content: plain } }], via: "connector", grounded: false, private: priv || undefined } };
+    }
+    const connPrompt = conn?.outcome === "read" ? conn.prompt : "";
     if (page) {
       const opened = await openOnScreen(page);
       onScreen = "text" in opened;
@@ -310,7 +322,7 @@ export const POST: APIRoute = async (ctx) => {
       const r = await eng.chat(
         String(said ?? ""),
         history,
-        systemPrompt(body?.context, priv, body?.docs, isEval, eng !== localEngine) + browse + (conn?.prompt ?? ""),
+        systemPrompt(body?.context, priv, body?.docs, isEval, eng !== localEngine) + browse + connPrompt,
         // silent past its budget, the agent gives way to the model alone (below): a stuck agent
         // turn must not leave the person waiting minutes for nothing
         b.signal,
@@ -371,7 +383,7 @@ export const POST: APIRoute = async (ctx) => {
         const b2 = budget(FALLBACK_BUDGET_MS);
         try {
           restart?.();
-          const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + (conn?.prompt ?? "") + NO_TOOLS_THIS_TURN, b2.signal, undefined, (d) => { b2.heard(d); onText?.(d); });
+          const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + connPrompt + NO_TOOLS_THIS_TURN, b2.signal, undefined, (d) => { b2.heard(d); onText?.(d); });
           r.reply = guard(r.reply);
           // the model alone must not contradict what the agent just did on screen
           if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";
