@@ -1,6 +1,7 @@
 // The agent's screen, live in the work pane: watch its browser as it works, or take control of it.
 // Watching uses the view password, and the screen server drops input sent with it; taking control
 // asks Nexy for the control password, which also pauses the agent until the screen is handed back.
+import "./compat"; // Uint8Array.at, which noVNC needs, on older engines
 import RFB from "@novnc/novnc/lib/rfb";
 import type { Artifact } from "./canvas";
 import { isPrivate } from "./private";

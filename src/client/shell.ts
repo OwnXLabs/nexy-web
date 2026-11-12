@@ -7,6 +7,7 @@ import { isOpen, closeCanvas } from "./canvas";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { httpMsg, errText } from "./http";
 import { hasApp, isBeta, localVoice, notHereYet, voiceApi } from "./place";
+import { last } from "./compat";
 import { speechReady, tapPcm, toWav, type Pcm } from "./voice-local";
 import { partialScheduler, type Partials } from "./voice-partials";
 
@@ -168,7 +169,7 @@ export function saveChat(): void {
   const history = c.history.slice();
   const pending = copy.querySelectorAll<HTMLElement>(".msg[data-pending]");
   pending.forEach(interrupted);
-  if (pending.length && history.at(-1)?.role === "user") history.pop();
+  if (pending.length && last(history)?.role === "user") history.pop();
   c.saved = true;
   c.loaded = true;
   persist({ id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,

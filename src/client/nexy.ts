@@ -35,6 +35,7 @@ import { initSettings, notify, openSettings } from "./settings";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
+import { timeoutSignal } from "./compat";
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s);
 const $$ = (s: string, r: ParentNode = document) => Array.from(r.querySelectorAll<HTMLElement>(s));
@@ -312,7 +313,7 @@ async function showExample(o: ExampleOpen): Promise<void> {
     // not in the sidebar (an archived project still opens by id)
     // one quick try, not api()'s patient retries: on a box without the project the
     // snapshot below is the answer, and a missing Own Startup must not hold it up
-    const d = await fetch(`/api/apps/startup/api/pm/projects/${encodeURIComponent(o.href)}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(4000) })
+    const d = await fetch(`/api/apps/startup/api/pm/projects/${encodeURIComponent(o.href)}`, { headers: { accept: "application/json" }, signal: timeoutSignal(4000) })
       .then((r) => (r.ok ? (r.json() as Promise<{ project?: UpstreamProject } & UpstreamProject>) : null))
       .catch((e: Error) => { console.warn("[nexy] example plan did not load", e); return null; });
     const full = d?.project ?? (d?.id ? (d as UpstreamProject) : null);
@@ -906,7 +907,9 @@ function failedReply(bub: Element, sentence: string, detail: string, retry: () =
 // On a computer the engine's builder writes the page: the server checks it is what was asked,
 // the browser runs it unseen, and a failed check gets one more try, then a plain no.
 const LOCAL_BUILD_MS = 90_000;
-const GAME_BRIEF = /\b(?:game|(?<!ping[\s-])pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
+// "a ping pong ball business" is a shop, not a game; no lookbehind, which Safari before 16.4 cannot parse
+const GAME_WORD = /\b(?:game|pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
+const gameBrief = (t: string) => GAME_WORD.test(t.replace(/\bping[\s-]pong\b/gi, " "));
 type LocalEnd = { type: "done"; html: string; title: string; secs: number } | { type: "failed"; error: string; check: boolean; secs: number };
 
 function followBuild(id: string, onStep: (text: string) => void): Promise<LocalEnd> {
@@ -936,7 +939,7 @@ async function playLocalMake(brief: string): Promise<void> {
   const localTurn = turnState();
   const { push, generating, saveChat } = captureWork();
   localTurn.lastMake = { brief, deliverable: "web_app" };
-  const game = GAME_BRIEF.test(brief);
+  const game = gameBrief(brief);
   const holder = push("ai", "Building that on this computer, not in a datacentre. It will open on the right when it is ready.");
   const gen = generating(titleFor(brief), game ? "game" : "html", "Writing it on this computer", LOCAL_BUILD_MS);
   status(holder, "Starting…", LOCAL_BUILD_MS);
@@ -1775,11 +1778,14 @@ const PROBE_MS = 8_000;
 async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: (gone: boolean) => void): Promise<T> {
   let id = "";
   let abort = new AbortController(), idle = 0;
+  // why the first request was stopped: before Chrome 98 abort() drops its reason, and fetch
+  // rejects with a bare AbortError that is never retried
+  let gone: DOMException | null = null;
   const probe = window.setTimeout(() => {
     if (id) return;
-    fetch("/api/v1/health", { signal: AbortSignal.timeout(5_000), cache: "no-store" }).then(
+    fetch("/api/v1/health", { signal: timeoutSignal(5_000), cache: "no-store" }).then(
       (r) => { if (!r.ok) console.warn(`[nexy] health check: HTTP ${r.status}`); },
-      (e) => { console.warn("[nexy] the machine did not answer a health check", e); if (!id) abort.abort(new DOMException(GONE, "AbortError")); },
+      (e) => { console.warn("[nexy] the machine did not answer a health check", e); if (!id) { gone = new DOMException(GONE, "AbortError"); abort.abort(gone); } },
     );
   }, PROBE_MS);
   const alive = () => { clearTimeout(idle); const a = abort; idle = window.setTimeout(() => a.abort(new Error("the reply stream went silent")), STREAM_IDLE_MS); };
@@ -1810,7 +1816,8 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
     }
   };
   try {
-    let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body, signal: attempt() });
+    let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body, signal: attempt() })
+      .catch((e: unknown) => { throw gone ?? e; });
     if (!r.ok) {
       const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
       throw new HttpError(r.status, detail || r.statusText);

@@ -97,8 +97,8 @@ button{background:none;border:0;cursor:pointer}
 .btn:hover{background:var(--p2)}.btn.acc{background:var(--acc);color:#fff}.btn.acc:hover{background:#8f74ff}
 .btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .main{display:grid;grid-template-columns:1fr 300px;gap:10px;padding:10px 12px;flex:1;min-height:0;align-content:start}
-@container (max-width:760px){.main{grid-template-columns:1fr}.side{grid-template-columns:1fr 1fr}}
-@container (max-width:480px){.side{grid-template-columns:1fr}.tr .nm span{display:none}.tr,.bar{grid-template-columns:34px repeat(16,minmax(18px,1fr)) 30px}.gw{overflow-x:auto;padding-bottom:4px}}
+@media (max-width:760px){.main{grid-template-columns:1fr}.side{grid-template-columns:1fr 1fr}}
+@media (max-width:480px){.side{grid-template-columns:1fr}.tr .nm span{display:none}.tr,.bar{grid-template-columns:34px repeat(16,minmax(18px,1fr)) 30px}.gw{overflow-x:auto;padding-bottom:4px}}
 .seq{background:var(--p);border-radius:12px;padding:10px;min-width:0}
 .gw{min-width:0}
 .bar{display:grid;grid-template-columns:104px repeat(16,minmax(18px,1fr)) 30px;gap:3px;margin:0 0 6px;align-items:center}
