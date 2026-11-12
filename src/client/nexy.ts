@@ -1094,7 +1094,7 @@ async function playChart(question: string, priv: boolean): Promise<void> {
       if (!bub.querySelector(".feednote")) bub.insertAdjacentHTML("beforeend", `<div class="feednote" style="margin-top:6px">The model is busy with another job on this machine; waiting for it.</div>`);
       await new Promise((ok) => setTimeout(ok, wait));
     }
-    if (c.error === "private" || c.error === "own-app") { bub.innerHTML = esc(c.note ?? "Web search is off in ultra-private mode."); return; }
+    if (c.error === "private" || c.error === "own-app" || c.error === "no-search") { bub.innerHTML = esc(c.note ?? "Web search is off in ultra-private mode."); return; }
     if (!res.ok || c.error) throw new Error(c.error || httpMsg(res.status));
     if (c.points.length < 1) {
       bub.innerHTML = `I searched for “${esc(c.query)}” but found ${c.points.length ? "only one figure" : "no figures"} I can trace to a source, so there is no chart rather than a made-up one.` +

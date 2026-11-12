@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { researchChart } from "../../../lib/research";
+import { NO_SEARCH, researchChart, searchHere } from "../../../lib/research";
 import { connectorAsk } from "../../../lib/connector-ask";
 
 export const prerender = false;
@@ -10,6 +10,7 @@ export const POST: APIRoute = async ({ request }) => {
   let body: any;
   try { body = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
   if (body?.private === true) return json({ error: "private", note: "Web search is off in ultra-private mode: a search would leave this machine." }, 409);
+  if (!searchHere()) return json({ error: "no-search", note: `${NO_SEARCH} I can't look up figures for a chart here.` }, 409);
   const question = String(body?.question ?? "").trim();
   if (!question) return json({ error: "missing question" }, 400);
   // the owner's own mail or files are never looked for on the public web

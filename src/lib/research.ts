@@ -18,8 +18,12 @@ export function buildQuery(question: string): string {
     .slice(0, 160);
 }
 
+// a computer without a search service (Nexy on Windows) has none, and says so plainly
+export const NO_SEARCH = "Web search isn't on this computer yet.";
+export const searchHere = (): boolean => !!SEARXNG;
+
 export async function search(query: string, limit = 8): Promise<Snippet[]> {
-  if (!SEARXNG) throw new Error("web search is not configured");
+  if (!SEARXNG) throw new Error(NO_SEARCH);
   const res = await fetch(`${SEARXNG}/search?q=${encodeURIComponent(query)}&format=json&safesearch=1`, {
     headers: { accept: "application/json" }, signal: AbortSignal.timeout(30_000),
   });
