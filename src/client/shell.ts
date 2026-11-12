@@ -89,7 +89,8 @@ function revive(html: string): DocumentFragment {
   t.content.querySelectorAll<HTMLElement>("*").forEach((el) => {
     for (const a of [...el.attributes]) if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
   });
-  t.content.querySelectorAll<HTMLButtonElement>("button").forEach((b) => { b.disabled = true; b.title = "From an earlier visit"; });
+  // "Ask again" on an interrupted answer still works: it only sends the question again
+  t.content.querySelectorAll<HTMLButtonElement>("button:not([data-ask-again])").forEach((b) => { b.disabled = true; b.title = "From an earlier visit"; });
   return t.content;
 }
 
@@ -160,10 +161,33 @@ export function saveChat(): void {
   if (!c || c.example !== undefined || !th || !th.querySelector('.msg.me:not([data-private="1"])') || (c.saved && !c.loaded)) return;
   const copy = document.createElement("div"); copy.append(th.cloneNode(true));
   copy.querySelectorAll('[data-private="1"],#typing,#emptyState').forEach((n) => n.remove());
+  // A reply still being written is saved as interrupted: if Nexy quits or crashes now, the chat
+  // comes back with the question, what had arrived, and a way to ask again. The unanswered
+  // question stays out of the history, so asking again does not send it twice.
+  const history = c.history.slice();
+  const pending = copy.querySelectorAll<HTMLElement>(".msg[data-pending]");
+  pending.forEach(interrupted);
+  if (pending.length && history.at(-1)?.role === "user") history.pop();
   c.saved = true;
   c.loaded = true;
   persist({ id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,
-    history: c.history.slice(), projectId: c.projectId, ...savedOutputs() });
+    history, projectId: c.projectId, ...savedOutputs() });
+}
+
+function interrupted(m: HTMLElement): void {
+  m.querySelectorAll(".wait,.cur,.macts").forEach((n) => n.remove());
+  const note = document.createElement("div");
+  note.className = "feednote";
+  note.dataset.interrupted = "1";
+  note.textContent = "Nexy closed before this answer finished. ";
+  const again = document.createElement("button");
+  again.type = "button";
+  again.className = "btn small";
+  again.dataset.askAgain = m.dataset.q ?? "";
+  again.textContent = "Ask again";
+  note.append(again);
+  (m.querySelector(".bub") ?? m).append(note);
+  delete m.dataset.pending;
 }
 
 const writes = new Map<string, Promise<void>>();

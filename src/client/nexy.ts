@@ -1839,15 +1839,22 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
   }
 }
 
+// how often a reply being written is saved, so a quit or crash keeps what had arrived
+const PARTIAL_SAVE_MS = 3_000;
 async function playChat(text: string, priv = false): Promise<void> {
-  const { push, showArtifact, conversation, context, attachedDocs } = captureWork();
+  const { push, showArtifact, conversation, context, attachedDocs, saveChat } = captureWork();
   const holder = push("ai", "");
+  // until it settles, a saved copy of this reply is marked interrupted, with the question to ask again
+  holder.dataset.pending = "1";
+  holder.dataset.q = text;
   const chat = currentChatId();
   status(holder, "Thinking", typicalMs("chat"));
   const browsing = priv ? null : watchBrowsing(chat, () => showArtifact(screenArtifact()));
   const askedAt = Date.now();
   const thread = conversation(priv);
   thread.push({ role: "user", content: text });
+  saveChat();
+  let savedAt = Date.now();
   try {
     type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean };
     // tz: routines the agent makes run at this device's local time
@@ -1862,6 +1869,7 @@ async function playChat(text: string, priv = false): Promise<void> {
       }
       streamed = true;
       bub.innerHTML = `${bubbleText(shown)}<span class="cur"></span>`;
+      if (Date.now() - savedAt > PARTIAL_SAVE_MS) { savedAt = Date.now(); saveChat(); }
       const th = $("#thread"); if (th) th.scrollTop = th.scrollHeight;
     }, (gone) => {
       status(holder, gone ? away() : "The connection dropped. Reconnecting, and the reply keeps going meanwhile.");
@@ -1907,6 +1915,8 @@ async function playChat(text: string, priv = false): Promise<void> {
       : `The model on this machine did not answer: <code>${esc((e as Error).message)}</code>`;
   } finally {
     browsing?.stop();
+    delete holder.dataset.pending;
+    delete holder.dataset.q;
   }
 }
 
@@ -2242,7 +2252,8 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
   };
   // the message that tripped the switch was posted before it: it is private too
   if (nowPrivate) mine.dataset.private = "1";
-  else { noteUserMessage(text); did("ask"); }
+  // saved before any answer: a quit or crash mid-reply must not lose the question
+  else { noteUserMessage(text); did("ask"); saveChat(); }
   typingOn();
   try {
     // a job given while the model downloads waits for it, and says so
@@ -2387,6 +2398,14 @@ function wireComposer(): void {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(inp.value); }
   });
   btn?.addEventListener("click", () => void send(inp.value));
+  // "Ask again" under an answer that Nexy closed before it finished (saveChat in shell.ts)
+  document.addEventListener("click", (e) => {
+    const again = (e.target as Element | null)?.closest<HTMLButtonElement>("#thread [data-ask-again]");
+    if (!again) return;
+    const q = again.dataset.askAgain ?? "";
+    again.remove();
+    if (q) void send(q);
+  });
 
   const pick = $<HTMLInputElement>("#filePick");
   $("#attachBtn")?.addEventListener("click", () => pick?.click());
