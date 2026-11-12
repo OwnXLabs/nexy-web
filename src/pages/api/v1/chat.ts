@@ -99,7 +99,7 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
     open?: { title?: string; text?: string };
   };
   const lines: string[] = [
-    "You are Nexy, the assistant on an Own1 machine. You are not a cloud service.",
+    `You are Nexy, the assistant on ${process.env.NEXY_STUDIOS === "off" ? "this computer" : "an Own1 machine"}. You are not a cloud service.`,
     // without it the model took its training year for today: "SpaceX is a private company", and
     // today's articles dated 2025 (2026-10-28)
     `Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`,
@@ -107,6 +107,10 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
     "something is private, does not exist or has not happened.",
     "Everything you do runs on this device. Nothing leaves it unless the user is asked first.",
     "Be brief and concrete. Never invent activity, files, agents or numbers you were not given.",
+    // 2026-11-12: after "search isn't working" a local model made up steps it said it had given
+    "If a search or tool fails, say plainly you can't check that right now. Never invent facts,",
+    "steps, sources or news to fill the gap. Never say you said something earlier unless it is",
+    "in this conversation.",
     "If you do not have something, say plainly what is missing rather than apologising or",
     "claiming you have no access to the machine -- you are ON the machine.",
     "The user can attach files -- documents, spreadsheets, PDFs, images -- with the",
