@@ -57,7 +57,8 @@ test('a computer without an Own1: no engine name, no search it lacks, a panel th
 
   // with web search configured on the computer, the privacy line describes it
   const withSearch = await sections({ NEXY_STUDIOS: 'off', NEXY_SEARXNG_URL: DEAD }, ['security']);
-  assert.match(withSearch.security, /own search; the query is the only thing that leaves/);
+  assert.match(withSearch.security, /own search, never through OwnX\. The search engines it asks see your query and this computer's IP address, and so do pages Nexy opens/);
+  assert.doesNotMatch(withSearch.security, /only thing that leaves/, 'the IP address leaves too');
 });
 
 test('a real choice of engines is the one place their names show', { timeout: 60000 }, async () => {
