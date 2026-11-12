@@ -248,36 +248,48 @@ export function csvRows(text: string): Cell[][] {
   return text.trim().split(/\r?\n/).filter(Boolean).map((l) => csvLine(l).map(numify));
 }
 
-function pipeRows(text: string): Cell[][] | null {
-  const lines = text.trim().split(/\r?\n/).filter((l) => l.trim().startsWith("|"));
+// each markdown table in a reply, in order: a run of "|" lines with a separator under its header.
+// Two tables one after the other are two tables: read as one, the second's rows were added into
+// the first's total (0.2.8)
+function pipeTables(text: string): Cell[][][] {
   // a separator has dashes: a header of blank cells ("| | |") is a header, not a separator; taken
   // for one, the first data row became the header (2026-10-28)
   const sep = (l: string) => /^\s*\|[\s:|-]*-[\s:|-]*\|\s*$/.test(l);
-  if (lines.length < 2 || !sep(lines[1])) return null;
   const cells = (l: string) => l.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => numify(c.trim().replace(/\*\*(.*?)\*\*/g, "$1").replace(/^\*\*|\*\*$/g, "")));
-  return lines.filter((l) => !sep(l)).map(cells);
+  const runs: string[][] = [];
+  let run: string[] = [];
+  for (const l of text.split(/\r?\n/)) {
+    if (l.trim().startsWith("|")) run.push(l);
+    else if (run.length) { runs.push(run); run = []; }
+  }
+  if (run.length) runs.push(run);
+  return runs.filter((r) => r.length >= 2 && sep(r[1])).map((r) => r.filter((l) => !sep(l)).map(cells));
 }
 
+/**
+ * One table's total, checked against the column it sits in: only a single total row, last in the
+ * table, under a column of plain numbers. A total that matches a run of the rows just above it
+ * (costs under a selling price) or any shape less clear is left alone: no correction, no note.
+ */
 export function checkTotals(rows: Cell[][]): { rows: Cell[][]; fixes: string[] } {
   const fixes: string[] = [];
   const out = rows.map((r) => [...r]);
-  let start = 0;
-  out.forEach((r, i) => {
-    const label = r.filter((c) => typeof c === "string").join(" ");
-    const isHeader = r.every((c) => typeof c !== "number") && !/total/i.test(label);
-    if (isHeader) { start = i + 1; return; }
-    if (!/\btotal\b/i.test(label)) return;
-    r.forEach((c, col) => {
-      if (typeof c !== "number") return;
-      const above = out.slice(start, i).map((x) => x[col]).filter((x): x is number => typeof x === "number");
-      if (above.length < 2) return;
-      const sum = Math.round(above.reduce((a, b) => a + b, 0) * 100) / 100;
-      if (Math.abs(sum - c) > 0.005) {
-        fixes.push(`${label.replace(/\s+/g, " ").trim().slice(0, 40)}: the model wrote ${c.toLocaleString()}, the rows add to ${sum.toLocaleString()}`);
-        out[i][col] = sum;
-      }
-    });
-    start = i + 1;
+  const label = (r: Cell[]) => r.filter((c) => typeof c === "string").join(" ");
+  const totals = out.map((r, i) => (i > 0 && /\btotal\b/i.test(label(r)) ? i : -1)).filter((i) => i > 0);
+  const i = out.length - 1;
+  if (totals.length !== 1 || totals[0] !== i) return { rows: out, fixes };
+  const round = (n: number) => Math.round(n * 100) / 100;
+  out[i].forEach((c, col) => {
+    if (typeof c !== "number") return;
+    const above = out.slice(1, i).map((x) => x[col]);
+    if (above.length < 2 || !above.every((x): x is number => typeof x === "number")) return;
+    // the sums of every run that ends just above the total, longest last
+    const runs: number[] = [];
+    for (let k = above.length - 1, s = 0; k >= 0; k--) runs.push(round((s += above[k])));
+    const sum = runs[runs.length - 1];
+    if (runs.some((r) => Math.abs(r - c) <= 0.005)) return;
+    fixes.push(`${label(out[i]).replace(/\s+/g, " ").trim().slice(0, 40)}: the model wrote ${c.toLocaleString()}, the rows add to ${sum.toLocaleString()}`);
+    out[i][col] = sum;
   });
   return { rows: out, fixes };
 }
@@ -294,9 +306,10 @@ export function fromReply(reply: string, hint = ""): Lifted | null {
   const fence = /```([A-Za-z0-9_+-]*)\r?\n([\s\S]*?)```/.exec(reply);
 
   if (!fence) {
-    const piped = pipeRows(reply);
-    if (!piped || piped.length < 2) return null;
-    const { rows, fixes } = checkTotals(piped);
+    const tables = pipeTables(reply).map(checkTotals);
+    const rows = tables.flatMap((t) => t.rows);
+    if (rows.length < 2) return null;
+    const fixes = tables.flatMap((t) => t.fixes);
     return {
       artifact: sheetArtifact({ title: `${slug(hint)}.csv`, rows: rows.map((r) => r.map((v) => v ?? null)) }),
       prose: reply,
