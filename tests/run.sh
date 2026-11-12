@@ -40,7 +40,7 @@ check "search for charts: results come through, no search said plainly" ts tests
 check "building on this computer: engine builder, checks, one retry, plain no; Own1 still uses Own Build" node --test --test-timeout=180000 tests/local-build.cjs
 check "speech on this computer: model fetch, transcripts, spoken replies" ts tests/voice.test.ts
 check "hold to talk: live words one read at a time, skipped when busy, slow computers fall back" ts tests/voice-partials.test.ts
-check "connected apps in chat: lookups recognised, only the words to find searched, granted tool read as data, missing or failing said plainly, an ask of one not switched to ultra-private" ts tests/connectors.test.ts
+check "connected apps in chat: lookups and follow-ups recognised, only the words to find searched, granted tool read as data, missing or failing said plainly, an ask of one or a mail routine not switched to ultra-private" ts tests/connectors.test.ts
 check "document titles: cut on a word, without the request's own words" ts tests/doc-title.test.ts
 check "eval mode only on a server started for evals; a request alone cannot switch it on" ts tests/eval-gate.test.ts
 check "speech on this computer in the browser, missing speech still gated, Own1 unchanged" node --test --test-timeout=180000 tests/local-voice.cjs
@@ -68,7 +68,7 @@ check "answer documents: Continue grows the same one under the question's name, 
 check "an untouched New chat leaves the list when another chat is opened" node --test --test-timeout=180000 tests/empty-new-chat.cjs
 check "Nexy Cloud is coming soon: never offered as where something works today" ts tests/coming-soon.test.ts
 check "chat prompt: a failed search is said plainly, nothing invented, no made-up past" node --test --test-timeout=180000 tests/prompt-rules.cjs
-check "the owner's own mail never searched on the web: paused, missing or failing Gmail said plainly with no agent or model, the invoice starter reads it, ultra-private keeps it off" node --test --test-timeout=180000 tests/mail-privacy.cjs
+check "the owner's own mail never searched on the web: paused, missing or failing Gmail said plainly with no agent or model, the invoice starter and its follow-ups read it, ultra-private keeps it off" node --test --test-timeout=180000 tests/mail-privacy.cjs
 check "Gmail with an app password in WebKit: three steps, sent once to the hub, kept nowhere in the browser, pause, resume, disconnect says revoke at Google, a refusal stays on the card" node --test --test-timeout=180000 tests/gmail-app-password.cjs
 check "settings in WebKit: engine names only with a real choice, search only where there is one, panel hides the chat" node --test --test-timeout=180000 tests/settings-wording.cjs
 check "phone in the Android app: the last message ends above the floating Nexy button" node --test --test-timeout=180000 tests/phone-layout.cjs

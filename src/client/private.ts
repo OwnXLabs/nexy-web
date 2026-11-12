@@ -1,4 +1,4 @@
-import { connectorAsk } from "../lib/connector-ask.ts";
+import { connectorAsk, eventAsk } from "../lib/connector-ask.ts";
 
 export type SensitiveKind = "tax" | "medical" | "financial" | "legal" | "identity";
 
@@ -176,10 +176,14 @@ export function setPrivate(on: boolean, announce = true): boolean {
 // not switched to ultra-private: that would turn the app off and answer "I don't have access to
 // your email" (QA 2026-11-12). The app runs on this device through the owner's own sign-in.
 // Ultra-private the owner chose still keeps connected apps off.
-export const autoPrivate = (text: string): SensitiveHit | null => connectorAsk(text) ? null : detectSensitive(text);
+// Checked first: a follow-up about mail just read ("the Invoice 4471 email"), and a routine on an
+// event ("when an email arrives from X, tell me the invoice number"): "invoice" plus "me" read as
+// financial and the chat went ultra-private, with no app and no routine (QA 0.2.10).
+export const autoPrivate = (text: string, history: readonly Turn[] = []): SensitiveHit | null =>
+  eventAsk(text) || connectorAsk(text, history) ? null : detectSensitive(text);
 
-export function guard(text: string): { nowPrivate: boolean; hit: SensitiveHit | null } {
-  const hit = priv ? null : autoPrivate(text);
+export function guard(text: string, history: readonly Turn[] = hooks.history ?? []): { nowPrivate: boolean; hit: SensitiveHit | null } {
+  const hit = priv ? null : autoPrivate(text, history);
   const nowPrivate = priv || !!hit;
   if (hit) {
     setPrivate(true, false);

@@ -91,7 +91,8 @@ agent: the card that follows the agent's reply reads When / Does / Can (read onl
 until Turn on, and shows a hostile trigger, name and prompt as text; the Routines list holds
 scheduled and triggered routines with a chip each, the last run and how it went, the latest result
 under its row, Pause / Resume (the row says paused; a waiting routine cannot be resumed) and Delete; a saved chat's cards and list work again when it is reopened; and the
-agent is told how to make one. `SHOTS_DIR` saves the card and the list, wide and phone.
+agent is told how to make one; a routine whose task names an invoice and an amount still makes
+its card, not an ultra-private chat. `SHOTS_DIR` saves the card and the list, wide and phone.
 
 Connected apps and the owner's own mail
 =======================================
@@ -99,12 +100,18 @@ Connected apps and the owner's own mail
 `tests/connectors.test.ts` checks which messages ask to read Gmail or Drive, that only the words
 to find are searched for ("inbox", "and what it says" are not), what the model is handed when the
 app is read, the plain reply when it is paused, not connected or failing, and that an explicit ask
-of a connected app is not switched to ultra-private. `node --test tests/mail-privacy.cjs` (after
+of a connected app is not switched to ultra-private. A follow-up about mail this chat just read
+("the Invoice 4471 email", "the full text", "open it") is a mail read too: the best match is opened
+in full with gmail_read where the hub has it; the same words in a chat that read no mail are not.
+A follow-up and a routine on an email ("when an email arrives from X, tell me the invoice number")
+are checked before sensitive words switch the chat to ultra-private. `node --test tests/mail-privacy.cjs` (after
 `npm run build`) serves the build against a stand-in hub, agent and model: with Gmail paused,
 missing or failing, "search my email for Acme Billing" gets a plain reply and reaches neither the
 agent nor the model, so nothing can search the web for it; a chart search about the mail is
 refused; an ultra-private chat keeps connected apps off; and in WebKit the starter "Find the latest
-invoice in my email" reads the mail through the hub in a regular chat. `tests/doc-title.test.ts`
+invoice in my email" reads the mail through the hub in a regular chat, its follow-ups open the
+message in full there, answered by the model alone, and an email routine with money words reaches
+the agent. `tests/doc-title.test.ts`
 checks that the document an answer goes into is named on a word boundary, without the request's
 own words.
 

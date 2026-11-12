@@ -2299,7 +2299,8 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     feedback("rephrase", { prompt: localTurn.lastTurn.prompt, reply: (localTurn.lastTurn.el?.querySelector(".bub")?.textContent ?? "").slice(0, 2000), note: text });
   shown?.querySelector(".qd")?.remove();
   const mine = shown ?? push("me", esc(text));
-  const { nowPrivate } = guard(text);
+  // this chat's turns: a follow-up about mail it read stays a mail read
+  const { nowPrivate } = guard(text, conversation(false) ?? []);
   // An image, beat or build leaves no chat turn, so "what is her name?" next had nothing to
   // refer to. When the work succeeded and its chat is still the one on screen, the model
   // hears what was asked and what was made.
@@ -2345,7 +2346,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     const intent = classify(text);
     if (conn) {
       await playConnect(conn, { block: pushBlock, say: (h) => void push("ai", h) });
-    } else if (connectorAsk(text)) {
+    } else if (connectorAsk(text, conversation(nowPrivate) ?? [])) {
       // the owner's own mail or files: read through the connected app, never a chart search or a build
       await playChat(text, nowPrivate);
     } else if (pickedFor(editablePage()?.id) && isOpen()) {

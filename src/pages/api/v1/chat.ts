@@ -274,7 +274,7 @@ export const POST: APIRoute = async (ctx) => {
   );
 
   // a question about a connected app is answered from it, never from a web search
-  const asksApp = connectorAsk(String(said ?? ""));
+  const asksApp = connectorAsk(String(said ?? ""), history);
   const research = !asksApp && wantsResearch(String(said ?? ""), history);
   const startedAt = Date.now();
   // One line when a turn starts and one when it ends, each with its result, under one id: a turn
@@ -299,7 +299,7 @@ export const POST: APIRoute = async (ctx) => {
     // An ultra-private chat reaches nothing off the machine, so no connected app either. A question
     // about the owner's own app that was not read is answered here, plainly: it never reaches a
     // model or an agent that could search the web for it instead.
-    const conn = priv ? null : await connectorTurn(String(said ?? ""), byId("hub")?.base);
+    const conn = priv ? null : await connectorTurn(String(said ?? ""), byId("hub")?.base, history);
     const plain = conn && conn.outcome !== "read" ? conn.reply
       : priv && asksApp ? `This chat is ultra-private, so connected apps like ${asksApp.label} are off. Ask in a regular chat and I'll search it.`
       : null;

@@ -321,3 +321,80 @@ test("an explicit ask of a connected app is not switched to ultra-private; one t
   assert.equal(guard("Find the latest invoice in my email").nowPrivate, true);
   setPrivate(false, false);
 });
+
+// QA 0.2.10: after "search my email for Acme Billing", "read me the full text of that Acme account
+// notice email" got "I don't have access to your email inbox", and "show me the full text of the
+// Invoice 4471 email" went ultra-private (an invoice of mine). A follow-up about mail just read is a mail read.
+const MAIL = [{ role: "user", content: "search my email for Acme Billing" }, { role: "assistant", content: "Invoice 4471 for October, from Acme Billing." }];
+test("a follow-up about mail just read is a full read of it; without that mail it is not", () => {
+  const cases: [string, string | null][] = [
+    ["read me the full text of that Acme account notice email", "Acme account notice"],
+    ["show me the full text of the Invoice 4471 email", "Invoice 4471"],
+    ["open it", "Acme Billing"],
+    ["what does it say?", "Acme Billing"],
+    ["summarise that email", "Acme Billing"],
+    // not reading it
+    ["reply to that email", null],
+    ["forward the Invoice 4471 email to Sam", null],
+    ["what's the weather today?", null],
+  ];
+  for (const [said, query] of cases) {
+    const a = connectorAsk(said, MAIL);
+    assert.equal(a?.args.query ?? null, query, said);
+    if (a) assert.deepEqual([a.id, a.full], ["gmail", true], said);
+    assert.equal(connectorAsk(said), null, `no mail read in this chat: ${said}`);
+  }
+  // a chain of follow-ups still follows the mail; a turn about something else breaks it
+  const chain = [...MAIL, { role: "user", content: "open the Invoice 4471 email" }, { role: "assistant", content: "…" }];
+  assert.equal(connectorAsk("now the full text of that Acme email", chain)?.args.query, "Acme");
+  const away = [...MAIL, { role: "user", content: "make me a landing page for my bakery" }, { role: "assistant", content: "…" }];
+  assert.equal(connectorAsk("open it", away), null);
+  // Drive is not mail
+  assert.equal(connectorAsk("open it", [{ role: "user", content: "find the budget in my Google Drive" }]), null);
+  // a first ask that wants the whole message reads it in full too
+  assert.equal(connectorAsk("read me the full text of my latest email")?.full, true);
+  assert.equal(connectorAsk("search my email for Acme Billing")?.full, undefined);
+});
+
+test("a full read opens the best match with gmail_read, by the id the search gave; no gmail_read: the search alone", async () => {
+  const h = await hub(["gmail_search", "gmail_read"], (name, args) => ({ content: [{ type: "text", text: name === "gmail_search"
+    ? `1 message(s) for "${args.query}":\n- Invoice 4471 for October | from Acme Billing | Mon, 3 Nov 2026 | id 18f2a9c0d\n  Your invoice…`
+    : "Subject: Invoice 4471 for October\nFrom: Acme Billing\n\nAmount due: $1,200 by 30 Nov." }] }));
+  try {
+    const t = await connectorTurn("show me the full text of the Invoice 4471 email", h.base, MAIL);
+    assert.equal(t?.outcome, "read");
+    const calls = h.got.filter((g) => g.method === "tools/call").map((g) => [g.params.name, g.params.arguments]);
+    assert.deepEqual(calls, [["gmail_search", { query: "Invoice 4471" }], ["gmail_read", { id: "18f2a9c0d" }]]);
+    assert.match(t!.prompt, /opened the best match in full/);
+    assert.match(t!.prompt, /<<<GMAIL>>>\nSubject: Invoice 4471 for October\nFrom: Acme Billing\n\nAmount due: \$1,200 by 30 Nov\.\n<<<END GMAIL>>>/);
+  } finally { h.close(); }
+  const s = await hub(["gmail_search"], () => ({ content: [{ type: "text", text: "- Invoice 4471 | from Acme | id 18f2a9c0d" }] }));
+  try {
+    const t = await connectorTurn("open it", s.base, MAIL);
+    assert.equal(t?.outcome, "read");
+    assert.deepEqual(s.got.filter((g) => g.method === "tools/call").map((g) => g.params.name), ["gmail_search"]);
+    assert.doesNotMatch(t!.prompt, /in full/);
+  } finally { s.close(); }
+});
+
+test("a mail follow-up and a routine on an email are checked before sensitive words switch to ultra-private", async () => {
+  const { autoPrivate, detectSensitive, guard, isPrivate } = await import("../src/client/private.ts");
+  const follow = "show me the full text of the Invoice 4471 email";
+  assert.ok(detectSensitive(follow));
+  assert.equal(autoPrivate(follow, MAIL), null);
+  assert.equal(guard(follow, MAIL).nowPrivate, false);
+  assert.equal(autoPrivate(follow)?.kind, "financial", "no mail read in this chat: still switches");
+  // QA 0.2.10: "invoice" plus "me" read as financial, so no routine was made
+  for (const said of [
+    "when an email arrives from billing@acme.example, tell me the invoice number and the amount",
+    "Whenever an email comes in from my bank, tell me my account balance",
+    "each time a file lands in my Drive, read me the invoice total",
+  ]) {
+    assert.ok(detectSensitive(said), `still sensitive words: ${said}`);
+    assert.equal(autoPrivate(said), null, said);
+    assert.equal(guard(said).nowPrivate, false, said);
+  }
+  assert.equal(isPrivate(), false);
+  // not an event on mail or files: still switches
+  assert.equal(autoPrivate("when my salary arrives, tell me my account balance")?.kind, "financial");
+});
