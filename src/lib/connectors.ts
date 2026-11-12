@@ -12,11 +12,13 @@ const APPS = [
 // asking to write, send or (dis)connect is not reading; a lookup says so
 const LOOKUP = /\b(?:search|find|look|check|show|list|read|summari[sz]e|any|anything|latest|newest|recent|unread|what(?:'s|s| is| are)?\s+(?:in|new|on)|do i have|did i get|have i got)\b/i;
 const NOT_READING = /^\s*(?:please\s+)?(?:write|draft|compose|send|reply|forward|connect|disconnect|link|unlink|revoke|remove|delete)\b/i;
+// "when a new email arrives from Acme, summarise it" asks for a routine on that event, not a lookup now
+const ON_EVENT = /^\s*(?:please\s+)?(?:when|whenever|each time|every time)\b.*\b(?:arrives?|comes? in|lands?|(?:is|gets?) (?:added|saved|uploaded|dropped)|e-?mails? me|sends? me)\b/i;
 const FILLER = /\b(?:please|can|could|you|search|find|look|through|up|check|show|list|get|read|open|summari[sz]e|tell|what(?:'s|s)?|is|are|there|any|anything|do|i|have|got|me|the|a|an|my|all|latest|newest|recent|new|last|emails?|e-mails?|mails?|messages?|files?|docs?|documents?|for|about|mentioning|called|named|titled|regarding|in|on|from|to|with|of)\b/gi;
 
 export function connectorAsk(text: string): ConnectorAsk | null {
   const s = text.trim();
-  if (!s || s.length > 300 || NOT_READING.test(s) || !LOOKUP.test(s)) return null;
+  if (!s || s.length > 300 || NOT_READING.test(s) || ON_EVENT.test(s) || !LOOKUP.test(s)) return null;
   const app = APPS.find((a) => a.mine.test(s));
   if (!app) return null;
   const query = s.replace(app.re, " ").replace(/['’]s\b/gi, "").replace(/[?!.,;:"“”'’]/g, " ").replace(FILLER, " ").replace(/\s+/g, " ").trim().slice(0, 120);

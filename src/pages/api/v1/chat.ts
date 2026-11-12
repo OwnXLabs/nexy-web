@@ -95,7 +95,8 @@ function hasOutside(body: any): boolean {
   return docsBlock(body?.docs).length > 0 || String(body?.context?.open?.text ?? "").trim() !== "";
 }
 
-function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval = false): string {
+// agent: the turn goes to an agent with tools (routines among them), not the model alone
+function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval = false, agent = false): string {
   const c = (ctx ?? {}) as {
     projects?: { name: string; tasks: number; done: number }[];
     apps?: string[];
@@ -155,6 +156,17 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
       "now, do not fill in current facts from memory, and offer to open a site in your browser.",
     );
   }
+
+  // "when an invoice email arrives from Acme, summarise it" is a routine on an event, not a schedule
+  if (agent && !priv) lines.push(
+    "",
+    "When they want something done each time an email or a file arrives, and your routine tool",
+    "takes a trigger, create the routine with a trigger instead of a schedule: mail from=<address>",
+    "(or subject=<exact subject>), or file folder=\"<folder name>\". If they name only a company, ask",
+    "for the address it mails from. Tell them it waits for them to turn it on in Routines, and that",
+    "it can only read what arrives: it cannot reply, send, write or delete. If your routine tool has",
+    "no trigger, say routines here run on a schedule only.",
+  );
 
   if (c.projects?.length) {
     lines.push("", "Projects on this machine right now:");
@@ -282,7 +294,7 @@ export const POST: APIRoute = async (ctx) => {
       const r = await eng.chat(
         String(said ?? ""),
         history,
-        systemPrompt(body?.context, priv, body?.docs, isEval) + browse + (conn?.prompt ?? ""),
+        systemPrompt(body?.context, priv, body?.docs, isEval, eng !== localEngine) + browse + (conn?.prompt ?? ""),
         // silent past its budget, the agent gives way to the model alone (below): a stuck agent
         // turn must not leave the person waiting minutes for nothing
         b.signal,

@@ -24,6 +24,12 @@ test("lookups in Gmail and Drive are recognised, with the words to search for", 
     ["What's a good subject line for my email to a client?", null],
     ["how does email work", null],
     ["search the web for drive-in cinemas", null],
+    // a routine on an event, not a lookup now
+    ["When a new email arrives from billing@acme.example, summarise it", null],
+    ["whenever any email comes in from Acme, check it for an invoice", null],
+    ["Each time a file lands in my Google Drive, read it", null],
+    // still a lookup
+    ["when did I get any emails from Acme?", "gmail", "when did Acme"],
   ];
   for (const [said, id, query] of cases) {
     const a = connectorAsk(said);
