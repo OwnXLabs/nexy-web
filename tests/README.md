@@ -93,6 +93,21 @@ scheduled and triggered routines with a chip each, the last run and how it went,
 under its row, Pause / Resume (the row says paused; a waiting routine cannot be resumed) and Delete; a saved chat's cards and list work again when it is reopened; and the
 agent is told how to make one. `SHOTS_DIR` saves the card and the list, wide and phone.
 
+Connected apps and the owner's own mail
+=======================================
+
+`tests/connectors.test.ts` checks which messages ask to read Gmail or Drive, that only the words
+to find are searched for ("inbox", "and what it says" are not), what the model is handed when the
+app is read, the plain reply when it is paused, not connected or failing, and that an explicit ask
+of a connected app is not switched to ultra-private. `node --test tests/mail-privacy.cjs` (after
+`npm run build`) serves the build against a stand-in hub, agent and model: with Gmail paused,
+missing or failing, "search my email for Acme Billing" gets a plain reply and reaches neither the
+agent nor the model, so nothing can search the web for it; a chart search about the mail is
+refused; an ultra-private chat keeps connected apps off; and in WebKit the starter "Find the latest
+invoice in my email" reads the mail through the hub in a regular chat. `tests/doc-title.test.ts`
+checks that the document an answer goes into is named on a word boundary, without the request's
+own words.
+
 Old browsers and long answers
 =============================
 
