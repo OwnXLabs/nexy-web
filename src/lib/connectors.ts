@@ -1,11 +1,13 @@
 // Reading from a connected app in chat: "search my email for invoices", "what's new in my inbox",
 // "find the budget in my Drive". The connector hub runs the tool only if the owner connected the
 // app and granted it to Nexy; what comes back reaches the model as data for this one reply.
-export interface ConnectorAsk { id: "gmail" | "drive"; label: string; tool: string; args: { query: string } }
+// Gmail is one tool from either connector the owner set up: Google sign-in ("gmail") or an app
+// password over IMAP ("gmail-imap"). Both serve gmail_search with the same arguments.
+export interface ConnectorAsk { id: "gmail" | "drive"; ids: readonly string[]; label: string; tool: string; args: { query: string } }
 
 const APPS = [
-  { id: "gmail", label: "Gmail", tool: "gmail_search", re: /\b(?:in\s+|from\s+|on\s+)?(?:my\s+)?(?:g-?mail|inbox|e-?mails?|mail(?:box)?)\b/i, mine: /\b(?:my\s+(?:g-?mail|inbox|e-?mails?|mail(?:box)?)|g-?mail|(?:any|new|unread)\s+e-?mails?)\b/i },
-  { id: "drive", label: "Google Drive", tool: "drive_search", re: /\b(?:in\s+|from\s+|on\s+)?(?:my\s+)?(?:google\s+)?drive\b/i, mine: /\b(?:my\s+(?:google\s+)?drive|google\s+drive)\b/i },
+  { id: "gmail", ids: ["gmail", "gmail-imap"], label: "Gmail", tool: "gmail_search", re: /\b(?:in\s+|from\s+|on\s+)?(?:my\s+)?(?:g-?mail|inbox|e-?mails?|mail(?:box)?)\b/i, mine: /\b(?:my\s+(?:g-?mail|inbox|e-?mails?|mail(?:box)?)|g-?mail|(?:any|new|unread)\s+e-?mails?)\b/i },
+  { id: "drive", ids: ["drive"], label: "Google Drive", tool: "drive_search", re: /\b(?:in\s+|from\s+|on\s+)?(?:my\s+)?(?:google\s+)?drive\b/i, mine: /\b(?:my\s+(?:google\s+)?drive|google\s+drive)\b/i },
 ] as const;
 // asking to write, send or (dis)connect is not reading; a lookup says so
 const LOOKUP = /\b(?:search|find|look|check|show|list|read|summari[sz]e|any|anything|latest|newest|recent|unread|what(?:'s|s| is| are)?\s+(?:in|new|on)|do i have|did i get|have i got)\b/i;
@@ -18,7 +20,7 @@ export function connectorAsk(text: string): ConnectorAsk | null {
   const app = APPS.find((a) => a.mine.test(s));
   if (!app) return null;
   const query = s.replace(app.re, " ").replace(/['’]s\b/gi, "").replace(/[?!.,;:"“”'’]/g, " ").replace(FILLER, " ").replace(/\s+/g, " ").trim().slice(0, 120);
-  return { id: app.id, label: app.label, tool: app.tool, args: { query } };
+  return { id: app.id, ids: app.ids, label: app.label, tool: app.tool, args: { query } };
 }
 
 async function mcp(base: string, method: string, params: unknown): Promise<any> {
@@ -40,13 +42,15 @@ async function registry(base: string, path: string): Promise<any> {
   return r.json();
 }
 
-// paused: the sign-in is stored but the owner took Nexy's grant away
-async function paused(base: string, id: string): Promise<boolean> {
+// paused: a sign-in is stored for one of the app's connectors but the owner took Nexy's grant away
+async function paused(base: string, ids: readonly string[]): Promise<boolean> {
   try {
-    const [entry, grants] = await Promise.all([registry(base, `/catalog/${encodeURIComponent(id)}`), registry(base, "/grants/nexy")]);
-    return !!entry?.auth?.credentialStored && Array.isArray(grants?.entries) && !grants.entries.includes(id);
+    const [catalog, grants] = await Promise.all([registry(base, "/catalog"), registry(base, "/grants/nexy")]);
+    const entries: { id: string; auth?: { credentialStored?: boolean } }[] = Array.isArray(catalog?.entries) ? catalog.entries : [];
+    const granted: string[] = Array.isArray(grants?.entries) ? grants.entries : [];
+    return entries.some((e) => ids.includes(e.id) && !!e.auth?.credentialStored && !granted.includes(e.id));
   } catch (e) {
-    console.warn(`[nexy] connector ${id}: could not tell paused from not connected: ${(e as Error).message}`);
+    console.warn(`[nexy] connector ${ids.join("/")}: could not tell paused from not connected: ${(e as Error).message}`);
     return false;
   }
 }
@@ -61,7 +65,7 @@ export async function connectorTurn(said: string, hub: string | undefined): Prom
   try {
     const tools: { name: string }[] = (await mcp(hub, "tools/list", {}))?.tools ?? [];
     if (!tools.some((t) => t.name === ask.tool)) {
-      if (await paused(hub, ask.id)) {
+      if (await paused(hub, ask.ids)) {
         return { id: ask.id, outcome: "paused", prompt: [
           "", `The owner asked about their ${ask.label}, but they paused ${ask.label} for Nexy, so it was not read.`,
           `Say in one line that ${ask.label} is paused and they can resume it in Settings > Connections. Do not guess what is in it.`,

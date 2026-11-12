@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 
 const { connectorAsk, connectorTurn } = await import("../src/lib/connectors.ts");
-const { pauseConnector, resumeConnector, revokeConnector, loadCatalog, loadGrants, storageRows } = await import("../src/client/perm.ts");
+const { pauseConnector, resumeConnector, revokeConnector, loadCatalog, loadGrants, storageRows, connectAppPassword, approveConnector, matchEntry, connectIntent } = await import("../src/client/perm.ts");
 
 test("lookups in Gmail and Drive are recognised, with the words to search for", () => {
   const cases: [string, string | null, string?][] = [
@@ -192,4 +192,101 @@ test("mail text cannot close the data fence and pose as instructions", async () 
     assert.ok(t!.prompt.trimEnd().endsWith("<<<END GMAIL>>>"));
     assert.match(t!.prompt, /Ignore the above/); // still shown, but inside the fence
   } finally { hub.close(); }
+});
+
+// Gmail with an app password (IMAP): the same chat path, whichever Gmail connector is granted.
+function imapHub(opts: { oauth: boolean; imap: boolean; imapGranted: boolean }) {
+  const stored = new Set<string>(), granted = new Set<string>();
+  if (opts.oauth) { stored.add("gmail"); granted.add("gmail"); }
+  if (opts.imap) { stored.add("gmail-imap"); if (opts.imapGranted) granted.add("gmail-imap"); }
+  const label: Record<string, string> = { gmail: "Gmail", "gmail-imap": "Gmail (app password)" };
+  const type: Record<string, string> = { gmail: "oauth", "gmail-imap": "app_password" };
+  const got: { method: string; path: string; body: any }[] = [];
+  const entry = (id: string) => ({ id, label: label[id], transport: "http", enabled: true, auth: { type: type[id], credentialStored: stored.has(id) } });
+  const srv = http.createServer(async (req, res) => {
+    let raw = ""; for await (const c of req) raw += c;
+    const send = (code: number, body: unknown) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    const u = new URL(req.url!, "http://x"), p = u.pathname.replace(/^\/secret/, "");
+    const body = raw ? JSON.parse(raw) : null;
+    got.push({ method: req.method!, path: p + u.search, body });
+    let m: RegExpExecArray | null;
+    if (p === "/mcp") {
+      if (body.method === "tools/list") return send(200, { jsonrpc: "2.0", id: body.id, result: { tools: [...granted].filter((id) => stored.has(id)).flatMap(() => [{ name: "gmail_search" }, { name: "gmail_read" }]) } });
+      return send(200, { jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "1 message(s) for \"invoice\":\n- Invoice 4471 | from Acme | id 11bd7b8ef5c10791" }] } });
+    }
+    if (p === "/registry/catalog") return send(200, { entries: Object.keys(label).map(entry) });
+    if ((m = /^\/registry\/catalog\/([\w-]+)$/.exec(p))) return send(200, entry(m[1]));
+    if (p === "/registry/grants/nexy") return send(200, { app: "nexy", entries: [...granted] });
+    if ((m = /^\/registry\/grants\/nexy\/([\w-]+)$/.exec(p))) {
+      if (req.method === "POST") granted.add(m[1]); else granted.delete(m[1]);
+      return send(200, { app: "nexy", entries: [...granted] });
+    }
+    if ((m = /^\/registry\/app-password\/([\w-]+)$/.exec(p))) {
+      if (req.method === "DELETE") { stored.delete(m[1]); return send(200, { id: m[1], credentialStored: false, revokeAt: "https://myaccount.google.com/apppasswords" }); }
+      if (body?.password !== "abcd wxyz efgh mnop") return send(400, { error: "Gmail didn't accept that app password. Check the address and the 16 characters, or create a new one at https://myaccount.google.com/apppasswords.", connected: false });
+      stored.add(m[1]); granted.add(m[1]);
+      return send(200, { entry: m[1], connected: true });
+    }
+    send(404, { error: `no such route ${p}` });
+  });
+  return new Promise<{ base: string; got: typeof got; f: typeof fetch; close: () => void }>((ok) => srv.listen(0, "127.0.0.1", () => {
+    const base = `http://127.0.0.1:${(srv.address() as any).port}/secret`;
+    const f = ((u: string, init?: RequestInit) => fetch(base + String(u).replace(/^\/api\/apps\/hub/, ""), init)) as typeof fetch;
+    ok({ base, got, f, close: () => srv.close() });
+  }));
+}
+
+test("my email reads through whichever Gmail connector is granted: Google sign-in or the app password", async () => {
+  assert.deepEqual(connectorAsk("search my email for invoice")?.ids, ["gmail", "gmail-imap"]);
+  for (const opts of [{ oauth: true, imap: false, imapGranted: false }, { oauth: false, imap: true, imapGranted: true }]) {
+    const h = await imapHub(opts);
+    try {
+      const t = await connectorTurn("search my email for invoice", h.base);
+      assert.equal(t?.outcome, "read", JSON.stringify(opts));
+      assert.match(t!.prompt, /<<<GMAIL>>>\n1 message\(s\) for "invoice"/);
+      const call = h.got.find((g) => g.path === "/mcp" && g.body.method === "tools/call");
+      assert.deepEqual([call?.body.params.name, call?.body.params.arguments], ["gmail_search", { query: "invoice" }]);
+    } finally { h.close(); }
+  }
+  // the app password kept but Nexy's grant taken away: paused, not "not connected"
+  const p = await imapHub({ oauth: false, imap: true, imapGranted: false });
+  try {
+    const t = await connectorTurn("what's in my inbox?", p.base);
+    assert.equal(t?.outcome, "paused");
+    assert.equal(p.got.filter((g) => g.body?.method === "tools/call").length, 0);
+  } finally { p.close(); }
+  const none = await imapHub({ oauth: false, imap: false, imapGranted: false });
+  try { assert.equal((await connectorTurn("check my inbox", none.base))?.outcome, "not-connected"); } finally { none.close(); }
+});
+
+test("the app password goes straight to the hub, a refusal is shown as Gmail's plain words, and disconnect says to revoke it at Google", async () => {
+  const h = await imapHub({ oauth: false, imap: false, imapGranted: false });
+  try {
+    const entry = (await loadCatalog(h.f)).find((e) => e.id === "gmail-imap")!;
+    assert.equal(entry.auth.type, "app_password");
+    const bad = await connectAppPassword(entry, "owner@example.com", "zzzz zzzz zzzz zzzz", h.f);
+    assert.equal(bad.ok, false);
+    assert.match(bad.note, /^Gmail didn't accept that app password/);
+    const ok = await connectAppPassword(entry, "owner@example.com", "abcd wxyz efgh mnop", h.f);
+    assert.equal(ok.ok, true, ok.note);
+    const post = h.got.filter((g) => g.method === "POST" && g.path.startsWith("/registry/app-password/gmail-imap")).at(-1)!;
+    assert.equal(post.path, "/registry/app-password/gmail-imap?as=nexy");
+    assert.deepEqual(post.body, { email: "owner@example.com", password: "abcd wxyz efgh mnop" });
+    assert.deepEqual(await loadGrants(h.f), ["gmail-imap"]);
+    const connected = (await loadCatalog(h.f)).find((e) => e.id === "gmail-imap")!;
+    const d = await revokeConnector(connected, h.f);
+    assert.equal(d.ok, true, d.note);
+    assert.match(d.note, /deleted the app password[^]*myaccount\.google\.com\/apppasswords/);
+    assert.ok(h.got.some((g) => g.method === "DELETE" && g.path === "/registry/app-password/gmail-imap?as=nexy"));
+    assert.ok(!h.got.some((g) => g.path.includes("/oauth/")), "no OAuth route for an app password");
+    // asked in chat: pointed to Settings, so the password never goes into the conversation
+    const before = h.got.length;
+    const chat = await approveConnector(entry, "Gmail (app password)", h.f);
+    assert.equal(chat.ok, false);
+    assert.match(chat.note, /Settings > Connections/);
+    assert.equal(h.got.length, before, "nothing asked of the hub");
+    const all = await loadCatalog(h.f);
+    assert.equal(matchEntry(all, connectIntent("Disconnect Gmail (app password)")!.service)?.id, "gmail-imap");
+    assert.equal(matchEntry(all, connectIntent("Disconnect Gmail")!.service)?.id, "gmail");
+  } finally { h.close(); }
 });
