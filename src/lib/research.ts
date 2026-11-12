@@ -24,7 +24,9 @@ export async function search(query: string, limit = 8): Promise<Snippet[]> {
     headers: { accept: "application/json" }, signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) throw new Error(`search ${res.status}`);
-  const body = (await res.json()) as { results?: Array<Record<string, unknown>> };
+  const body = (await res.json()) as { results?: Array<Record<string, unknown>>; nexy_unavailable?: string };
+  // the app's search front door says why there is no search (installing, offline, engines refusing)
+  if (body.nexy_unavailable) throw new Error(`I can't search the web right now. ${body.nexy_unavailable}`);
   return (body.results ?? []).slice(0, limit)
     .map((r) => ({ title: String(r.title ?? ""), url: String(r.url ?? ""), text: String(r.content ?? "").slice(0, 700) }))
     .filter((s) => s.text.length > 20);
