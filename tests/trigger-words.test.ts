@@ -27,6 +27,38 @@ test("mail and file triggers read as plain words", () => {
   }
 });
 
+test("anyone at a domain and words in a subject read as plain words", () => {
+  const cases: [string, string, string][] = [
+    ["mail from=@acme.com", "an email arrives from anyone at acme.com", "Email from acme.com"],
+    ["mail from=@Acme.co.uk", "an email arrives from anyone at Acme.co.uk", "Email from Acme.co.uk"],
+    ["mail subject~invoice", "an email arrives with “invoice” in the subject", "Email with “invoice”"],
+    ["mail from=@acme.com subject~invoice", "an email arrives from anyone at acme.com with “invoice” in the subject", "Email from acme.com"],
+    ['mail subject~"due today"', "an email arrives with “due today” in the subject", "Email with “due today”"],
+    ["mail to=@acme.com", "an email arrives to anyone at acme.com", "Any email"],
+    ["mail from=billing@acme.example label~urgent", "an email arrives from billing@acme.example where label has “urgent” in it", "Email from Acme"],
+    ["file name~.pdf", "a file with “.pdf” in its name is added", "Any new file"],
+  ];
+  for (const [spec, text, chip] of cases) {
+    assert.equal(triggerText(spec), text, spec);
+    assert.equal(triggerChip(spec), chip, spec);
+  }
+  const t = parseTrigger("mail from=@acme.com subject~invoice")!;
+  assert.deepEqual(t.when, [["from", "acme.com", "domain"], ["subject", "invoice", "has"]]);
+  assert.deepEqual(parseTrigger("mail subject=invoice")!.when, [["subject", "invoice", "is"]], "= stays exact");
+});
+
+test("patterns the agent refuses are quoted as they are, never read as a domain or words", () => {
+  for (const spec of ["mail from=@", "mail from=@*", "mail from=*", "mail from=*@acme.com", "mail from=@*.acme.com", "mail from=@acme",
+    "mail from=@acme..com", "mail from=@-acme.com", "mail subject~", "mail subject~*", "mail subject~*invoice*", "mail subject~...",
+    "mail from~acme.com", "mail to~acme", `mail subject~${"a".repeat(101)}`]) {
+    assert.equal(parseTrigger(spec), null, spec);
+    assert.equal(triggerText(spec), `this event arrives: “${spec}”`, spec);
+  }
+  // a lookalike is shown as the domain it is, never as the one it imitates
+  assert.equal(triggerText("mail from=@acme.com.evil.io"), "an email arrives from anyone at acme.com.evil.io");
+  assert.equal(triggerChip("mail from=@evil-acme.com"), "Email from evil-acme.com");
+});
+
 test("what the agent would refuse is quoted as it is, never read as fields", () => {
   for (const spec of ['mail from="open', "Mail!! from=x", "mail from=", "mail =x", ""]) assert.equal(parseTrigger(spec), null, spec);
   assert.equal(triggerText('mail from="<b>x'), "this event arrives: “mail from=\"<b>x”");

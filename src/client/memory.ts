@@ -236,13 +236,15 @@ const statusText = (s: unknown): string => {
   return t === "ok" ? "done" : t === "running" ? "running now" : /^error\b/i.test(t) ? "did not finish" : t.slice(0, 40);
 };
 
-/** One routine in the list: its chip, when it last ran and how that went, its result and Delete. */
+/** One routine in the list: its chip, when it last ran and how that went, its result, Pause or Resume and Delete. */
 function listRow(r: any): string {
   const chip = r.trigger ? `⚡ ${triggerChip(r.trigger)}` : `🕖 ${scheduleChip(r.schedule)}`;
   const zone = r.trigger ? "" : r.tz == null ? "in UTC" : r.tz === deviceZone() ? "" : `in ${r.tz} time`;
   const last = r.lastRunAt ? `last ${localTime(r.lastRunAt)}${statusText(r.lastStatus) ? ` · ${statusText(r.lastStatus)}` : ""}` : "not run yet";
-  const text = [r.trigger ? "read only" : "", zone, !r.trigger && r.nextRunAt ? `next ${localTime(r.nextRunAt)}` : "", last].filter(Boolean).join(" · ");
-  const acts = `${r.lastResult ? `<button class="btn small" type="button" data-result>See result</button> ` : ""}<button class="btn small" type="button" data-delete>Delete</button>`;
+  const next = r.enabled && !r.trigger && r.nextRunAt ? `next ${localTime(r.nextRunAt)}` : "";
+  const text = [r.enabled ? "" : "paused", r.trigger ? "read only" : "", zone, next, last].filter(Boolean).join(" · ");
+  const acts = `${r.lastResult ? `<button class="btn small" type="button" data-result>See result</button> ` : ""}` +
+    `<button class="btn small" type="button" data-pause>${r.enabled ? "Pause" : "Resume"}</button> <button class="btn small" type="button" data-delete>Delete</button>`;
   return `<div class="row" data-rid="${esc(String(r.id))}"><span class="led${r.enabled ? " ok" : " off"}"></span><span>${esc(r.name)}</span>` +
     `<span class="v"><span class="chip">${esc(chip)}</span> ${esc(text)} <span class="rb">${acts}</span></span></div>`;
 }
@@ -253,12 +255,35 @@ function listEl(live: any[]): HTMLElement {
   return el;
 }
 
-/** See result opens the latest run's text under the row; Delete asks once more, then removes it. */
+/**
+ * See result opens the latest run's text under the row; Pause stops its runs until Resume, which
+ * counts the next run from now; Delete asks once more, then removes it.
+ */
 function wireRow(root: ParentNode, r: any): void {
   const rowEl = root.querySelector<HTMLElement>(`.row[data-rid="${CSS.escape(String(r.id))}"]`);
   if (!rowEl) return;
   const see = rowEl.querySelector<HTMLButtonElement>("[data-result]"), del = rowEl.querySelector<HTMLButtonElement>("[data-delete]");
-  live([see, del]);
+  const pause = rowEl.querySelector<HTMLButtonElement>("[data-pause]");
+  live([see, del, pause]);
+  // a saved copy shows the routine as it was (or predates Pause): redrawn as it stands now
+  if (!pause || (pause.textContent === "Pause") !== Boolean(r.enabled)) {
+    const open = rowEl.nextElementSibling;
+    rowEl.outerHTML = listRow(r);
+    if (open?.classList.contains("why") && !r.lastResult) open.remove();
+    return wireRow(root, r);
+  }
+  if (pause) pause.onclick = async () => {
+    pause.disabled = true;
+    try {
+      const d = await call("/api/v1/routines", { method: "PATCH", body: JSON.stringify({ id: r.id, action: r.enabled ? "pause" : "resume" }) });
+      const now = { ...r, enabled: d?.routine?.enabled ?? !r.enabled, nextRunAt: d?.routine?.nextRunAt ?? null };
+      rowEl.outerHTML = listRow(now);
+      wireRow(root, now);
+    } catch (e) {
+      pause.disabled = false;
+      rowEl.querySelector(".v")!.insertAdjacentHTML("beforeend", ` <span class="feednote bad">Nothing changed: ${esc(errText(e))}</span>`);
+    }
+  };
   // labels as the routine stands now, not as a saved copy left them
   if (del) del.textContent = "Delete";
   if (see) see.textContent = (rowEl.nextElementSibling as HTMLElement | null)?.dataset.result === String(r.id) ? "Hide result" : "See result";

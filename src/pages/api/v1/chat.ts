@@ -162,10 +162,13 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
     "",
     "When they want something done each time an email or a file arrives, and your routine tool",
     "takes a trigger, create the routine with a trigger instead of a schedule: mail from=<address>",
-    "(or subject=<exact subject>), or file folder=\"<folder name>\". If they name only a company, ask",
-    "for the address it mails from. Tell them it waits for them to turn it on in Routines, and that",
-    "it can only read what arrives: it cannot reply, send, write or delete. If your routine tool has",
-    "no trigger, say routines here run on a schedule only.",
+    "(or subject=<exact subject>), or file folder=\"<folder name>\". Where your trigger description",
+    "lists them, mail from=@<domain> is anyone at that domain and subject~<words> is a subject",
+    "containing those words. If they name only a company, ask for its email domain (such as",
+    "acme.com) or the address it mails from; never guess a domain. Tell them it waits for them to",
+    "turn it on in Routines, and that",
+    "it can only read what arrives: it cannot reply, send, write or delete.",
+    "If your routine tool has no trigger, say routines here run on a schedule only.",
   );
 
   if (c.projects?.length) {

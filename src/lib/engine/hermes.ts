@@ -149,6 +149,10 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
         return { nextRunAt: when(b?.job?.next_run_at), tz: typeof b?.job?.tz === "string" ? b.job.tz : null };
       },
       async discard(id) { await api(`/api/jobs/${encodeURIComponent(id)}/discard`, { method: "POST" }); },
+      async setPaused(id, paused) {
+        const b = await api(`/api/jobs/${encodeURIComponent(id)}/${paused ? "pause" : "resume"}`, { method: "POST" });
+        return { enabled: typeof b?.job?.enabled === "boolean" ? b.job.enabled : !paused, nextRunAt: when(b?.job?.next_run_at) };
+      },
     },
   };
 }

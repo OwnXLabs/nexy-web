@@ -52,5 +52,7 @@ export interface NexyEngine {
     // tz: the confirming owner's zone, which the routine then runs in
     confirm?(id: string, tz?: string): Promise<{ nextRunAt: string | null; tz?: string | null }>;
     discard?(id: string): Promise<void>;
+    // the owner's pause: no runs on the clock or on events; resume counts the next run from now
+    setPaused?(id: string, paused: boolean): Promise<{ enabled: boolean; nextRunAt: string | null }>;
   };
 }
