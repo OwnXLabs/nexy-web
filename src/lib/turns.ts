@@ -4,7 +4,9 @@ import { visible } from "./stream-guard";
 // A chat turn that keeps running when the person's connection drops. They reconnect with its id
 // and get what is written so far, then the rest.
 export type TurnEvent = { reset: string } | { done: { status: number; body: unknown } };
-type Turn = { who: string; raw: string; shown: string; done?: { status: number; body: unknown }; subs: Set<(e: TurnEvent) => void>; at: number; timer?: ReturnType<typeof setTimeout> };
+// key: the client's id for the question, so the same question sent again joins this turn
+// left: called when the last person following it goes before it is done
+type Turn = { who: string; key: string; raw: string; shown: string; done?: { status: number; body: unknown }; subs: Set<(e: TurnEvent) => void>; at: number; timer?: ReturnType<typeof setTimeout>; left?: () => void };
 
 const TURNS = new Map<string, Turn>();
 const KEEP_MS = 10 * 60_000;
@@ -25,9 +27,18 @@ export function canStart(who: string): boolean {
   return mine < RUNNING_EACH && TURNS.size < MAX;
 }
 
-export function startTurn(who: string, run: (onText: (d: string) => void, restart: () => void) => Promise<{ status: number; body: unknown }>): string {
-  const id = randomUUID();
-  const t: Turn = { who, raw: "", shown: "", subs: new Set(), at: Date.now() };
+// The turn this person's question `key` already started, unless that one failed: a question sent
+// again because its first request got no answer must not ask the model twice.
+export function rejoin(who: string, key: string): string | null {
+  if (!key) return null;
+  for (const [id, t] of TURNS) if (t.who === who && t.key === key && !(t.done && t.done.status >= 400)) return id;
+  return null;
+}
+
+export function startTurn(who: string, run: (onText: (d: string) => void, restart: () => void) => Promise<{ status: number; body: unknown }>,
+  opts: { id?: string; key?: string; left?: () => void } = {}): string {
+  const id = opts.id ?? randomUUID();
+  const t: Turn = { who, key: opts.key ?? "", raw: "", shown: "", subs: new Set(), at: Date.now(), left: opts.left };
   TURNS.set(id, t);
   const emit = (e: TurnEvent) => { for (const s of t.subs) s(e); };
   const flush = () => {
@@ -63,7 +74,8 @@ export function follow(id: string, who: string, on: (e: TurnEvent) => void): (()
 }
 
 export function sse(id: string, who: string): Response | null {
-  if (TURNS.get(id)?.who !== who) return null;
+  const t = TURNS.get(id);
+  if (t?.who !== who) return null;
   let stop: (() => void) | null = null, ping: ReturnType<typeof setInterval> | undefined;
   const enc = new TextEncoder();
   const body = new ReadableStream<Uint8Array>({
@@ -77,7 +89,10 @@ export function sse(id: string, who: string): Response | null {
         else { send(`event: done\ndata: ${JSON.stringify(e.done)}\n\n`); end(); }
       });
     },
-    cancel() { stop?.(); clearInterval(ping); },
+    cancel() {
+      stop?.(); clearInterval(ping);
+      if (!t.done && t.subs.size === 0) t.left?.();
+    },
   });
   return new Response(body, { headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" } });
 }
