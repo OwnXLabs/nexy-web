@@ -7,6 +7,8 @@ import { isOpen, closeCanvas } from "./canvas";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { httpMsg, errText } from "./http";
 import { hasApp, isBeta, localVoice, notHereYet, voiceApi } from "./place";
+import { last } from "./compat";
+import { refreshRoutineCards } from "./memory";
 import { speechReady, tapPcm, toWav, type Pcm } from "./voice-local";
 import { partialScheduler, type Partials } from "./voice-partials";
 
@@ -143,6 +145,7 @@ function load(pid: string, id: string): void {
       H.history.splice(0, H.history.length, ...c.history);
       selected();
       th.scrollTop = th.scrollHeight;
+      cardsNow(th);
     }).catch((e: Error) => {
       note.className = "feednote bad";
       note.textContent = `This chat could not be opened: ${errText(e)}`;
@@ -152,7 +155,11 @@ function load(pid: string, id: string): void {
   th.appendChild(c.nodes);
   H.history.splice(0, H.history.length, ...c.history);
   th.scrollTop = th.scrollHeight;
+  cardsNow(th);
 }
+
+// a routine card in a chat shown again says where that routine stands now
+const cardsNow = (th: HTMLElement) => refreshRoutineCards(th).catch((e: Error) => console.warn("[nexy] routine cards not brought up to date", e));
 
 // after each turn: the thread as shown, and the turns the model sees
 export function saveChat(): void {
@@ -168,7 +175,7 @@ export function saveChat(): void {
   const history = c.history.slice();
   const pending = copy.querySelectorAll<HTMLElement>(".msg[data-pending]");
   pending.forEach(interrupted);
-  if (pending.length && history.at(-1)?.role === "user") history.pop();
+  if (pending.length && last(history)?.role === "user") history.pop();
   c.saved = true;
   c.loaded = true;
   persist({ id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,
@@ -180,7 +187,7 @@ function interrupted(m: HTMLElement): void {
   const note = document.createElement("div");
   note.className = "feednote";
   note.dataset.interrupted = "1";
-  note.textContent = "Nexy closed before this answer finished. ";
+  note.textContent = "This answer stopped before it finished. ";
   const again = document.createElement("button");
   again.type = "button";
   again.className = "btn small";

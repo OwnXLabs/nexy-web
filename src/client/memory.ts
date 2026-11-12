@@ -184,22 +184,57 @@ function pendingEl(r: any, ui: MemUI): HTMLElement {
   const el = blockEl(`Waiting for you: ${r.name}`, "not running yet",
     row("What it will run", r.prompt, true) + row("When", scheduleText(r.schedule, r.tz == null ? null : deviceZone()), true) + row("Came from", originText(r.origin), true),
     `<div class="ba"><button class="btn small" data-confirm>Confirm</button> <button class="btn small" data-discard>Discard</button></div>`, "routine");
+  // every card for this routine, earlier in the chat or in a saved copy, is settled with it
+  el.dataset.routine = String(r.id);
+  wireCard(el, r, (html) => ui.push("ai", html));
+  return el;
+}
+
+/** Confirm and Discard on a card. `say` puts the outcome in the chat; without it, in the card. */
+function wireCard(el: HTMLElement, r: { id: unknown; name: string }, say?: (html: string) => void): void {
   const buttons = [...el.querySelectorAll<HTMLButtonElement>("[data-confirm], [data-discard]")];
+  const tell = (html: string) => { if (say) say(html); else el.querySelector(".ba")!.innerHTML = html; };
   for (const b of buttons) b.onclick = async () => {
     const action = b.hasAttribute("data-confirm") ? "confirm" : "discard";
     buttons.forEach((x) => { x.disabled = true; });
     try {
       const d = await call("/api/v1/routines", { method: "PATCH", body: JSON.stringify({ id: r.id, action, tz: deviceZone() }) });
-      el.querySelector(".ba")!.textContent = action === "confirm" ? "Confirmed" : "Discarded";
-      ui.push("ai", action === "confirm"
+      settleCards(String(r.id), action === "confirm" ? "Confirmed" : "Discarded");
+      tell(action === "confirm"
         ? `Confirmed <b>${esc(r.name)}</b>. ${d?.routine?.nextRunAt ? `First run ${esc(localTime(d.routine.nextRunAt))}.` : "It runs on its schedule."}`
         : `Discarded <b>${esc(r.name)}</b>. It will not run.`);
     } catch (e) {
       buttons.forEach((x) => { x.disabled = false; });
-      ui.push("ai", `Nothing changed: <code>${esc(errText(e))}</code>`);
+      if (say) say(`Nothing changed: <code>${esc(errText(e))}</code>`);
+      else cardNote(el, `Nothing changed: ${errText(e)}`);
     }
   };
-  return el;
+}
+
+const cardNote = (el: HTMLElement, text: string) => {
+  const n = document.createElement("div");
+  n.className = "feednote bad";
+  n.textContent = text;
+  el.querySelector(".ba")!.after(n);
+};
+
+function settleCards(id: string, text: string): void {
+  document.querySelectorAll<HTMLElement>(`[data-routine="${CSS.escape(id)}"] .ba`).forEach((b) => { b.textContent = text; });
+}
+
+/**
+ * Cards shown again, in a saved chat, are brought up to date: a routine confirmed or discarded
+ * since loses its buttons, and one still waiting gets working ones (a saved copy has none).
+ */
+export async function refreshRoutineCards(root: ParentNode): Promise<void> {
+  const cards = [...root.querySelectorAll<HTMLElement>("[data-routine]")].filter((c) => c.querySelector("[data-confirm]"));
+  if (!cards.length) return;
+  const { routines } = await call("/api/v1/routines");
+  for (const c of cards) {
+    const r = (routines as any[]).find((x) => String(x.id) === c.dataset.routine);
+    if (r?.pending) wireCard(c, r);
+    else c.querySelector(".ba")!.textContent = r ? "Confirmed" : "No longer waiting";
+  }
 }
 
 function wireForget(el: HTMLElement, n: number, ui: MemUI, direct = false): void {

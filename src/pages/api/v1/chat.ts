@@ -12,11 +12,15 @@ import { engineFor, localEngine } from "../../../lib/engine";
 import { agentSessionKey, deniesTools, dropInlineImages, wantsResearch } from "../../../lib/agent-turn";
 import { guardIdentity } from "../../../lib/engine/identity-guard";
 import { canStart, sse, startTurn } from "../../../lib/turns";
+import { budget, type Budget } from "../../../lib/budget";
 
+// The longest an engine may stay silent: before its first words and between any two. While it
+// writes it may go on, up to CAP_MS (budget.ts). Silent past this, the agent gives way to the model
+// alone; stopped mid-answer, what it wrote is kept.
 const AGENT_BUDGET_MS = Number(process.env.NEXY_AGENT_BUDGET_MS ?? 90_000);
-// research and browsing (see wantsResearch), kept, fallback included, under the 300 s proxy
-// timeout in front of Nexy
+// research and browsing (see wantsResearch): searches run quietly for longer
 const RESEARCH_BUDGET_MS = Number(process.env.NEXY_RESEARCH_BUDGET_MS ?? 200_000);
+const LOCAL_BUDGET_MS = 240_000, FALLBACK_BUDGET_MS = 150_000;
 // When the agent fails, the model answers alone, without tools. Before this note it said "I
 // cannot access the internet" right after the agent had searched in the same chat.
 const NO_TOOLS_THIS_TURN = [
@@ -248,6 +252,13 @@ export const POST: APIRoute = async (ctx) => {
   // a question about a connected app is answered from it, not from a web search
   const research = !connectorAsk(String(said ?? "")) && wantsResearch(String(said ?? ""), history);
   const startedAt = Date.now();
+  // stopped while still writing: what it wrote is kept, and the person is offered to continue
+  const stoppedTurn = (b: Budget, via: string) => {
+    const reply = guard(dropInlineImages(b.text, false));
+    answered(reply);
+    logTurn({ via, stopped: b.stopped, ms: Date.now() - startedAt, replyChars: reply.length, ...(isEval ? { eval: true } : {}) }, priv);
+    return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via, grounded: false, stopped: true, private: priv || undefined } };
+  };
   const run = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
     // asked to open a site: open it on the agent's screen first and hand the agent the page, so
     // the person watches it there even when the model would have searched instead
@@ -262,16 +273,19 @@ export const POST: APIRoute = async (ctx) => {
       if ("text" in opened && opened.text.trim()) { browse = openedPage(page, opened.text); pageRead = true; }
       else if ("error" in opened) console.warn(`[nexy] could not open ${new URL(page).hostname} on the agent's screen: ${opened.error}`);
     }
+    // always streamed from the engine, so its progress is seen even when this request is not
+    const b = budget(eng === localEngine ? LOCAL_BUDGET_MS : research ? RESEARCH_BUDGET_MS : AGENT_BUDGET_MS);
+    const heard = (d: string) => { b.heard(d); onText?.(d); };
     try {
       const r = await eng.chat(
         String(said ?? ""),
         history,
         systemPrompt(body?.context, priv, body?.docs, isEval) + browse + (conn?.prompt ?? ""),
-        // the agent gets a budget, then the model answers instead (below); a stuck agent
-        // turn must not leave the person waiting four minutes for nothing
-        AbortSignal.timeout(eng === localEngine ? 240_000 : research ? RESEARCH_BUDGET_MS : AGENT_BUDGET_MS),
+        // silent past its budget, the agent gives way to the model alone (below): a stuck agent
+        // turn must not leave the person waiting minutes for nothing
+        b.signal,
         agentSession,
-        onText,
+        heard,
         // attached files, mail, an open or fetched page: the agent then holds new routines for the owner
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
         { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}) },
@@ -306,9 +320,10 @@ export const POST: APIRoute = async (ctx) => {
       } };
     } catch (e: any) {
       logTurn({ via: eng.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
+      if (b.stopped && b.text.trim()) return stoppedTurn(b, eng.id);
       // The agent adds memory and tools; the model alone can still answer. A broken agent
       // must not mean a broken chat.
-      const timedOut = e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message ?? ""));
+      const timedOut = b.stopped !== null || e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message ?? ""));
       // A search that ran out of time: say so. The model alone would guess at current facts.
       if (eng !== localEngine && research && timedOut) {
         const secs = Math.round(RESEARCH_BUDGET_MS / 1000);
@@ -319,9 +334,10 @@ export const POST: APIRoute = async (ctx) => {
         return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via: eng.id, grounded: false, fallback: true } };
       }
       if (eng !== localEngine) {
+        const b2 = budget(FALLBACK_BUDGET_MS);
         try {
           restart?.();
-          const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + (conn?.prompt ?? "") + NO_TOOLS_THIS_TURN, AbortSignal.timeout(150_000), undefined, onText);
+          const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + (conn?.prompt ?? "") + NO_TOOLS_THIS_TURN, b2.signal, undefined, (d) => { b2.heard(d); onText?.(d); });
           r.reply = guard(r.reply);
           // the model alone must not contradict what the agent just did on screen
           if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";
@@ -330,11 +346,12 @@ export const POST: APIRoute = async (ctx) => {
           return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true, cut: r.cut || undefined } };
         } catch (e2: any) {
           logTurn({ via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ...(isEval ? { eval: true } : {}) }, priv);
-        }
+          if (b2.stopped && b2.text.trim()) return stoppedTurn(b2, localEngine.id);
+        } finally { b2.end(); }
       }
       // details stay in the log: an engine error can carry file paths and internal names
       return { status: 502, body: { error: "the model on this machine did not answer" } };
-    }
+    } finally { b.end(); }
   };
   if (body?.stream === true) {
     if (!canStart(picker)) return json({ error: "too many replies are running; wait for one to finish" }, 429);

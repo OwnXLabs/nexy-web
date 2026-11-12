@@ -72,7 +72,7 @@ test('killed mid-answer: the question and what arrived come back, and Ask again 
     const back = await ctx.newPage();
     back.on('pageerror', (e) => errors.push(e.message));
     await back.goto(s.base + '/');
-    await back.getByText('Nexy closed before this answer finished.').waitFor({ timeout: 20000 });
+    await back.getByText('This answer stopped before it finished.').waitFor({ timeout: 20000 });
     const thread = await back.locator('#thread').innerText();
     assert(thread.includes(QUESTION), 'the question is back');
     assert.match(thread, /step1\b/, 'what had arrived is back');

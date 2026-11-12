@@ -35,6 +35,8 @@ import { initSettings, notify, openSettings } from "./settings";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
+import { timeoutSignal } from "./compat";
+import { inline, renderMd } from "./md";
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s);
 const $$ = (s: string, r: ParentNode = document) => Array.from(r.querySelectorAll<HTMLElement>(s));
@@ -312,7 +314,7 @@ async function showExample(o: ExampleOpen): Promise<void> {
     // not in the sidebar (an archived project still opens by id)
     // one quick try, not api()'s patient retries: on a box without the project the
     // snapshot below is the answer, and a missing Own Startup must not hold it up
-    const d = await fetch(`/api/apps/startup/api/pm/projects/${encodeURIComponent(o.href)}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(4000) })
+    const d = await fetch(`/api/apps/startup/api/pm/projects/${encodeURIComponent(o.href)}`, { headers: { accept: "application/json" }, signal: timeoutSignal(4000) })
       .then((r) => (r.ok ? (r.json() as Promise<{ project?: UpstreamProject } & UpstreamProject>) : null))
       .catch((e: Error) => { console.warn("[nexy] example plan did not load", e); return null; });
     const full = d?.project ?? (d?.id ? (d as UpstreamProject) : null);
@@ -906,7 +908,9 @@ function failedReply(bub: Element, sentence: string, detail: string, retry: () =
 // On a computer the engine's builder writes the page: the server checks it is what was asked,
 // the browser runs it unseen, and a failed check gets one more try, then a plain no.
 const LOCAL_BUILD_MS = 90_000;
-const GAME_BRIEF = /\b(?:game|(?<!ping[\s-])pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
+// "a ping pong ball business" is a shop, not a game; no lookbehind, which Safari before 16.4 cannot parse
+const GAME_WORD = /\b(?:game|pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
+const gameBrief = (t: string) => GAME_WORD.test(t.replace(/\bping[\s-]pong\b/gi, " "));
 type LocalEnd = { type: "done"; html: string; title: string; secs: number } | { type: "failed"; error: string; check: boolean; secs: number };
 
 function followBuild(id: string, onStep: (text: string) => void): Promise<LocalEnd> {
@@ -936,7 +940,7 @@ async function playLocalMake(brief: string): Promise<void> {
   const localTurn = turnState();
   const { push, generating, saveChat } = captureWork();
   localTurn.lastMake = { brief, deliverable: "web_app" };
-  const game = GAME_BRIEF.test(brief);
+  const game = gameBrief(brief);
   const holder = push("ai", "Building that on this computer, not in a datacentre. It will open on the right when it is ready.");
   const gen = generating(titleFor(brief), game ? "game" : "html", "Writing it on this computer", LOCAL_BUILD_MS);
   status(holder, "Starting…", LOCAL_BUILD_MS);
@@ -1373,7 +1377,7 @@ async function addRole(asked: string): Promise<void> {
 function resultHtml(title: string, out: string, show: typeof showArtifact): string {
   if (out && structured(out)) {
     show(markdownArtifact({ title: `${slugOf(title)}.md`, meta: `Own Startup · ${title.slice(0, 40)} · on device`, md: out }));
-    return `<b>${esc(title)}</b> is done. ${bubbleText(firstPart(out).slice(0, 220))}<br><span class="faint">The full result is on the right.</span>`;
+    return `<b>${esc(title)}</b> is done. ${inline(firstPart(out).slice(0, 220))}<br><span class="faint">The full result is on the right.</span>`;
   }
   return out
     ? `<b>${esc(title)}</b><div style="margin-top:6px">${bubbleText(out.slice(0, 1200))}</div>`
@@ -1696,7 +1700,13 @@ async function playBoardEdit(i: { kind: string; title: string; role?: string; st
   }
 }
 
-const bubbleText = (t: string) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+// what the model wrote, as safe markdown: no raw HTML, links only http(s) and opened outside
+const bubbleText = (t: string) => renderMd(t);
+// the typing cursor goes at the end of the last line written, not under it
+const withCursor = (html: string) => {
+  const end = /<\/(?:p|li|h3|h4)>(?:<\/(?:ul|ol|blockquote)>)*$/.exec(html);
+  return end ? `${html.slice(0, end.index)}<span class="cur"></span>${end[0]}` : `${html}<span class="cur"></span>`;
+};
 const structured = (t: string) => t.length > 1500 && (/^#{1,6} /m.test(t) || (t.match(/^\s*(\d+\.|[-*]) /gm) ?? []).length >= 3 || (t.match(/^\s*\|.*\|\s*$/gm) ?? []).length >= 3);
 const firstPart = (t: string) => (t.split(/\n\s*\n/).map((p) => p.trim()).find((p) => p && !/^#{1,6} /.test(p)) ?? t).slice(0, 400);
 const slugOf = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 28) || "answer";
@@ -1710,7 +1720,7 @@ function typeOut(el: HTMLElement, text: string): Promise<void> {
     const tick = () => {
       i += step;
       if (i >= text.length) { el.innerHTML = bubbleText(text); done(); return; }
-      el.innerHTML = `${bubbleText(text.slice(0, i))}<span class="cur"></span>`;
+      el.innerHTML = withCursor(bubbleText(text.slice(0, i)));
       if (th) th.scrollTop = th.scrollHeight;
       setTimeout(tick, 9);
     };
@@ -1775,11 +1785,14 @@ const PROBE_MS = 8_000;
 async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: (gone: boolean) => void): Promise<T> {
   let id = "";
   let abort = new AbortController(), idle = 0;
+  // why the first request was stopped: before Chrome 98 abort() drops its reason, and fetch
+  // rejects with a bare AbortError that is never retried
+  let gone: DOMException | null = null;
   const probe = window.setTimeout(() => {
     if (id) return;
-    fetch("/api/v1/health", { signal: AbortSignal.timeout(5_000), cache: "no-store" }).then(
+    fetch("/api/v1/health", { signal: timeoutSignal(5_000), cache: "no-store" }).then(
       (r) => { if (!r.ok) console.warn(`[nexy] health check: HTTP ${r.status}`); },
-      (e) => { console.warn("[nexy] the machine did not answer a health check", e); if (!id) abort.abort(new DOMException(GONE, "AbortError")); },
+      (e) => { console.warn("[nexy] the machine did not answer a health check", e); if (!id) { gone = new DOMException(GONE, "AbortError"); abort.abort(gone); } },
     );
   }, PROBE_MS);
   const alive = () => { clearTimeout(idle); const a = abort; idle = window.setTimeout(() => a.abort(new Error("the reply stream went silent")), STREAM_IDLE_MS); };
@@ -1810,7 +1823,8 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
     }
   };
   try {
-    let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body, signal: attempt() });
+    let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body, signal: attempt() })
+      .catch((e: unknown) => { throw gone ?? e; });
     if (!r.ok) {
       const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
       throw new HttpError(r.status, detail || r.statusText);
@@ -1859,7 +1873,7 @@ async function playChat(text: string, priv = false): Promise<void> {
   saveChat();
   let savedAt = Date.now();
   try {
-    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean };
+    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean };
     // tz: routines the agent makes run at this device's local time
     const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
@@ -1871,7 +1885,7 @@ async function playChat(text: string, priv = false): Promise<void> {
         return;
       }
       streamed = true;
-      bub.innerHTML = `${bubbleText(shown)}<span class="cur"></span>`;
+      bub.innerHTML = withCursor(bubbleText(shown));
       if (Date.now() - savedAt > PARTIAL_SAVE_MS) { savedAt = Date.now(); saveChat(); }
       const th = $("#thread"); if (th) th.scrollTop = th.scrollHeight;
     }, (gone) => {
@@ -1890,6 +1904,8 @@ async function playChat(text: string, priv = false): Promise<void> {
       if (ask && !priv) offerTakeover(holder, ask);
       // the model hit its length limit: say so rather than stop mid-sentence
       if (d.cut) holder.querySelector(".bub")!.insertAdjacentHTML("beforeend", `<div class="feednote" data-cut>Answer cut short. <button type="button" class="btn small" data-continue>Continue?</button></div>`);
+      // the engine went quiet mid-answer, or ran past the cap: what it wrote stays
+      else if (d.stopped) holder.querySelector(".bub")!.insertAdjacentHTML("beforeend", `<div class="feednote" data-cut>That answer was taking too long, so I stopped it. <button type="button" class="btn small" data-continue>Continue?</button></div>`);
     };
     if (answer) noteMs("chat", Date.now() - askedAt);
 
@@ -1903,13 +1919,13 @@ async function playChat(text: string, priv = false): Promise<void> {
       // first paragraph alone lost the price and the paragraph after it (2026-10-28)
       const prose = lifted.prose.split("\n").filter((l) => !l.trim().startsWith("|")).join("\n").replace(/\n{3,}/g, "\n\n").trim();
       holder.querySelector(".bub")!.innerHTML =
-        (prose ? `${bubbleText(prose.length > 2000 ? `${prose.slice(0, 2000)}…` : prose)}<br><br>` : "") + `<span class="faint">${esc(lifted.note)}</span>`;
+        (prose ? `${bubbleText(prose.length > 2000 ? `${prose.slice(0, 2000)}…` : prose)}<br>` : "") + `<span class="faint">${esc(lifted.note)}</span>`;
       offer();
       return;
     }
     if (structured(answer)) {
       showArtifact(markdownArtifact({ title: `${slugOf(text)}.md`, meta: "Nexy · on device", md: answer }));
-      holder.querySelector(".bub")!.innerHTML = `${bubbleText(firstPart(answer))}<br><br><span class="faint">The full answer is on the right.</span>`;
+      holder.querySelector(".bub")!.innerHTML = `${bubbleText(firstPart(answer))}<br><span class="faint">The full answer is on the right.</span>`;
       offer();
       return;
     }
@@ -2405,7 +2421,7 @@ function wireComposer(): void {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(inp.value); }
   });
   btn?.addEventListener("click", () => void send(inp.value));
-  // "Continue?" under an answer cut at the length limit; "Ask again" under one Nexy closed
+  // "Continue?" under an answer cut at the length limit or stopped as too slow; "Ask again" under one cut off
   // before it finished (saveChat in shell.ts)
   document.addEventListener("click", (e) => {
     const more = (e.target as Element | null)?.closest<HTMLButtonElement>("#thread [data-continue]");

@@ -1,4 +1,5 @@
 import { siteHost } from "./place";
+import { renderMd } from "./md";
 import { PICK } from "./pick";
 import type { Artifact, ArtifactKind } from "./canvas";
 import { sheetArtifact } from "./sheet-view";
@@ -148,60 +149,8 @@ export function codeArtifact(m: Made & { code: string; lang?: string }): Artifac
   };
 }
 
-const inl = (t: string) =>
-  esc(t)
-    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
-    .replace(/(^|[^*])\*([^*]+?)\*/g, "$1<i>$2</i>")
-    .replace(/`(.+?)`/g, "<code>$1</code>");
-
-function body(ls: string[]): string {
-  const bullet = /^\s*(\d+\. |[-*] )/;
-  let out = "", para: string[] = [], items: string[] = [];
-  const flush = () => {
-    if (para.length) out += `<p>${para.map(inl).join("<br>")}</p>`;
-    if (items.length) out += `<ul>${items.map((l) => `<li>${inl(l.trim().replace(bullet, ""))}</li>`).join("")}</ul>`;
-    para = []; items = [];
-  };
-  for (const l of ls) {
-    if (bullet.test(l)) { if (para.length) flush(); items.push(l); }
-    else { if (items.length) flush(); para.push(l); }
-  }
-  flush();
-  return out;
-}
-
-function blocks(text: string): string {
-  return text
-    .split(/\n\n+/)
-    .map((raw) => {
-      const b = raw.trim();
-      if (!b) return "";
-      if (/^# /.test(b)) {
-        const ls = b.split("\n");
-        return `<h1>${inl(ls[0].slice(2))}</h1>` + body(ls.slice(1));
-      }
-      if (/^#{2,6} /.test(b)) {
-        const ls = b.split("\n");
-        return `<h2>${inl(ls[0].replace(/^#+ /, ""))}</h2>` + body(ls.slice(1));
-      }
-      if (/^---+$/.test(b)) return "<hr>";
-      return body(b.split("\n"));
-    })
-    .join("");
-}
-
-export function mdHtml(md: string): string {
-  return md
-    .split("```")
-    .map((part, i) => {
-      if (i % 2 === 0) return blocks(part);
-      const nl = part.indexOf("\n");
-      const info = nl < 0 ? "" : part.slice(0, nl).trim();
-      const body = nl >= 0 && !/\s/.test(info) ? part.slice(nl + 1) : part;
-      return `<pre class="code">${esc(body.replace(/\n+$/, ""))}</pre>`;
-    })
-    .join("");
-}
+// one renderer for documents and chat bubbles (md.ts)
+export const mdHtml = (md: string): string => renderMd(md, "doc");
 
 export function markdownArtifact(m: Made & { md: string }): Artifact {
   return {
@@ -248,36 +197,48 @@ export function csvRows(text: string): Cell[][] {
   return text.trim().split(/\r?\n/).filter(Boolean).map((l) => csvLine(l).map(numify));
 }
 
-function pipeRows(text: string): Cell[][] | null {
-  const lines = text.trim().split(/\r?\n/).filter((l) => l.trim().startsWith("|"));
+// each markdown table in a reply, in order: a run of "|" lines with a separator under its header.
+// Two tables one after the other are two tables: read as one, the second's rows were added into
+// the first's total (0.2.8)
+function pipeTables(text: string): Cell[][][] {
   // a separator has dashes: a header of blank cells ("| | |") is a header, not a separator; taken
   // for one, the first data row became the header (2026-10-28)
   const sep = (l: string) => /^\s*\|[\s:|-]*-[\s:|-]*\|\s*$/.test(l);
-  if (lines.length < 2 || !sep(lines[1])) return null;
   const cells = (l: string) => l.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => numify(c.trim().replace(/\*\*(.*?)\*\*/g, "$1").replace(/^\*\*|\*\*$/g, "")));
-  return lines.filter((l) => !sep(l)).map(cells);
+  const runs: string[][] = [];
+  let run: string[] = [];
+  for (const l of text.split(/\r?\n/)) {
+    if (l.trim().startsWith("|")) run.push(l);
+    else if (run.length) { runs.push(run); run = []; }
+  }
+  if (run.length) runs.push(run);
+  return runs.filter((r) => r.length >= 2 && sep(r[1])).map((r) => r.filter((l) => !sep(l)).map(cells));
 }
 
+/**
+ * One table's total, checked against the column it sits in: only a single total row, last in the
+ * table, under a column of plain numbers. A total that matches a run of the rows just above it
+ * (costs under a selling price) or any shape less clear is left alone: no correction, no note.
+ */
 export function checkTotals(rows: Cell[][]): { rows: Cell[][]; fixes: string[] } {
   const fixes: string[] = [];
   const out = rows.map((r) => [...r]);
-  let start = 0;
-  out.forEach((r, i) => {
-    const label = r.filter((c) => typeof c === "string").join(" ");
-    const isHeader = r.every((c) => typeof c !== "number") && !/total/i.test(label);
-    if (isHeader) { start = i + 1; return; }
-    if (!/\btotal\b/i.test(label)) return;
-    r.forEach((c, col) => {
-      if (typeof c !== "number") return;
-      const above = out.slice(start, i).map((x) => x[col]).filter((x): x is number => typeof x === "number");
-      if (above.length < 2) return;
-      const sum = Math.round(above.reduce((a, b) => a + b, 0) * 100) / 100;
-      if (Math.abs(sum - c) > 0.005) {
-        fixes.push(`${label.replace(/\s+/g, " ").trim().slice(0, 40)}: the model wrote ${c.toLocaleString()}, the rows add to ${sum.toLocaleString()}`);
-        out[i][col] = sum;
-      }
-    });
-    start = i + 1;
+  const label = (r: Cell[]) => r.filter((c) => typeof c === "string").join(" ");
+  const totals = out.map((r, i) => (i > 0 && /\btotal\b/i.test(label(r)) ? i : -1)).filter((i) => i > 0);
+  const i = out.length - 1;
+  if (totals.length !== 1 || totals[0] !== i) return { rows: out, fixes };
+  const round = (n: number) => Math.round(n * 100) / 100;
+  out[i].forEach((c, col) => {
+    if (typeof c !== "number") return;
+    const above = out.slice(1, i).map((x) => x[col]);
+    if (above.length < 2 || !above.every((x): x is number => typeof x === "number")) return;
+    // the sums of every run that ends just above the total, longest last
+    const runs: number[] = [];
+    for (let k = above.length - 1, s = 0; k >= 0; k--) runs.push(round((s += above[k])));
+    const sum = runs[runs.length - 1];
+    if (runs.some((r) => Math.abs(r - c) <= 0.005)) return;
+    fixes.push(`${label(out[i]).replace(/\s+/g, " ").trim().slice(0, 40)}: the model wrote ${c.toLocaleString()}, the rows add to ${sum.toLocaleString()}`);
+    out[i][col] = sum;
   });
   return { rows: out, fixes };
 }
@@ -294,9 +255,10 @@ export function fromReply(reply: string, hint = ""): Lifted | null {
   const fence = /```([A-Za-z0-9_+-]*)\r?\n([\s\S]*?)```/.exec(reply);
 
   if (!fence) {
-    const piped = pipeRows(reply);
-    if (!piped || piped.length < 2) return null;
-    const { rows, fixes } = checkTotals(piped);
+    const tables = pipeTables(reply).map(checkTotals);
+    const rows = tables.flatMap((t) => t.rows);
+    if (rows.length < 2) return null;
+    const fixes = tables.flatMap((t) => t.fixes);
     return {
       artifact: sheetArtifact({ title: `${slug(hint)}.csv`, rows: rows.map((r) => r.map((v) => v ?? null)) }),
       prose: reply,

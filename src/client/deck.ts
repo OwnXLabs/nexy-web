@@ -23,7 +23,7 @@ function tracedTo(sentence: string, sources: DocSource[], cited: number[]): DocS
 
 export function slidesFrom(answer: string, sources: DocSource[], month: string | null, tasks: string[], subject: string | null = null): { slides: Slide[]; traced: number; dropped: number } {
   const when = month ?? subject ?? "Latest";
-  const sentences = answer.replace(/\s+/g, " ").split(/(?<=[.!?])\s+(?=[A-Z0-9])/).map((s) => s.trim()).filter((s) => s.length > 3);
+  const sentences = answer.replace(/\s+/g, " ").replace(/([.!?]) (?=[A-Z0-9])/g, "$1\n").split("\n").map((s) => s.trim()).filter((s) => s.length > 3);
   const figures: Slide["bullets"] = [];
   const context: Slide["bullets"] = [];
   let dropped = 0;

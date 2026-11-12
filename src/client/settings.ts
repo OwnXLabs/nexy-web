@@ -111,7 +111,8 @@ async function section(sec: string): Promise<string> {
     row("Where your data lives", not(onOwn1 ? "On this Own1" : "On this computer"), "Chats, files, builds and memory stay on this machine") +
     row("Telemetry", not("Off"), "Nothing is sent to OwnX Labs") +
     row("Ultra-private chats", not("In memory only"), "Nothing written to disk, nothing reaches the agent that keeps memory; gone when you leave") +
-    (searchHere ? row("Web search", not("Only when you ask"), "Through this machine's own search; the query is the only thing that leaves")
+    (searchHere ? row("Web search", not("Only when you ask"), // the search runs here but asks the search engines directly (privacy engineering doc, §3.5)
+      `Through this machine's own search, never through OwnX. The search engines it asks see your query and ${onOwn1 ? "this Own1's" : "this computer's"} IP address, and so do pages Nexy opens`)
       : row("Web search", not("Not set up"), `There is no web search on ${here} yet, so nothing is searched`)) +
     `<div class="sbtns"><button class="btn small" type="button" data-act="feedback">Show my feedback</button><button class="btn small" type="button" data-act="clearfb">Clear my feedback</button><button class="btn small" type="button" data-act="forget">Forget what Nexy remembers</button></div>`;
   if (sec === "appearance") return `<h3>Appearance</h3><h4>Theme</h4><div class="themes">` +

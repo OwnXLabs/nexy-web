@@ -50,6 +50,12 @@ check "beta reports: preview is what is sent, secrets removed, private sends not
 check "a computer that stops answering: plain words, no countdown, never the browser's wording" node --test --test-timeout=180000 tests/computer-away.cjs
 check "killed mid-answer: question and partial answer kept, marked interrupted, asked again once" node --test --test-timeout=180000 tests/interrupted-chat.cjs
 check "long answers: room for 4096 tokens, a cut reply says so and continues" node --test --test-timeout=180000 tests/long-answers.cjs
+check "old browsers: nothing in the built client that Android WebView 91 or Safari 15 lacks" ts tests/old-browsers.test.ts
+check "old browsers: chat on a phone web view without the newer APIs reaches the model" node --test --test-timeout=180000 tests/old-engine.cjs
+check "answer budget: a reply still being written runs past 90 s, silence is stopped with its words kept and Continue" node --test --test-timeout=240000 tests/answer-budget.cjs
+check "table totals: checked within one table only, unclear shapes left alone" ts tests/table-totals.test.ts
+check "markdown in replies: rendered, no HTML, links only http(s)" ts tests/markdown.test.ts
+check "Nexy Cloud is coming soon: never offered as where something works today" ts tests/coming-soon.test.ts
 check "chat prompt: a failed search is said plainly, nothing invented, no made-up past" node --test --test-timeout=180000 tests/prompt-rules.cjs
 check "Gmail with an app password in WebKit: three steps, sent once to the hub, kept nowhere in the browser, pause, resume, disconnect says revoke at Google" node --test --test-timeout=180000 tests/gmail-app-password.cjs
 check "settings in WebKit: engine names only with a real choice, search only where there is one, panel hides the chat" node --test --test-timeout=180000 tests/settings-wording.cjs
