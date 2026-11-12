@@ -26,7 +26,7 @@ import { takeoverAsk } from "./takeover";
 import { pickedFor, clearPick, renderedFor, type Picked } from "./pick";
 import { initPrivate, guard, conversation as privateConversation, isPrivate, privateConversationId, noteEphemeralDoc, setPrivate } from "./private";
 import { matchSocial, playSocial } from "./social";
-import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost } from "./place";
+import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff } from "./place";
 import { renderGate } from "./build-gate";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
@@ -2340,7 +2340,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
       const r = handleEdit(text);
       push("ai", esc(r ? r.say : "That edit did not reach the page."));
     } else if (intent.kind === "generate" && !hasApp(intent.medium === "image" ? "images" : "beat")) {
-      push("ai", esc(notHereYet(intent.medium === "image" ? "Making images" : "Making music")));
+      push("ai", esc(intent.medium === "image" ? imagesOff() : notHereYet("Making music")));
     } else if (intent.kind === "make" && !(intent.deliverable === "diagram" ? hasStudio("build") : hasApp("build"))) {
       push("ai", esc(notHereYet(intent.deliverable === "diagram" ? "Drawing diagrams" : "Building websites and apps")));
     } else if (intent.kind === "build" && !hasApp("startup")) {
