@@ -13,9 +13,11 @@ const ids = APPS.map((a) => a.id);
 const apps = [...ids, ...(voice ? ["voice"] : []), ...(builder ? ["builder"] : [])].join(" ");
 const projects = APPS.some((a) => a.id === "startup");
 const beta = process.env.NEXY_BETA === "1";
+// web search: an Own1 has its own; a computer only when one is configured
+const search = !local || !!process.env.NEXY_SEARXNG_URL;
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined}>
+<html lang="en" data-place={local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

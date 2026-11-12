@@ -43,6 +43,8 @@ export function applyPrefs(): void {
 }
 
 const speech = localVoice ? "Speech" : "Own Voice";
+// this machine has its own web search (an Own1's, or one configured on this computer)
+const searchHere = typeof document !== "undefined" && document.documentElement.dataset.search === "1";
 let voices: { id: string; name: string }[] = [];
 async function loadVoices(): Promise<void> {
   if (voices.length || !hasApp("voice")) return;
@@ -109,7 +111,8 @@ async function section(sec: string): Promise<string> {
     row("Where your data lives", not(onOwn1 ? "On this Own1" : "On this computer"), "Chats, files, builds and memory stay on this machine") +
     row("Telemetry", not("Off"), "Nothing is sent to OwnX Labs") +
     row("Ultra-private chats", not("In memory only"), "Nothing written to disk, nothing reaches the agent that keeps memory; gone when you leave") +
-    row("Web search", not("Only when you ask"), "Through this machine's own search; the query is the only thing that leaves") +
+    (searchHere ? row("Web search", not("Only when you ask"), "Through this machine's own search; the query is the only thing that leaves")
+      : row("Web search", not("Not set up"), `There is no web search on ${here} yet, so nothing is searched`)) +
     `<div class="sbtns"><button class="btn small" type="button" data-act="feedback">Show my feedback</button><button class="btn small" type="button" data-act="clearfb">Clear my feedback</button><button class="btn small" type="button" data-act="forget">Forget what Nexy remembers</button></div>`;
   if (sec === "appearance") return `<h3>Appearance</h3><h4>Theme</h4><div class="themes">` +
     ([["default", "Default", "the aurora, glass"], ["standard", "Standard", "black, no glass, like the chat apps"], ["cyberpunk", "Cyberpunk", "neon on black"],
@@ -141,8 +144,8 @@ function connRow(c: CatalogEntry, granted: string[] | null): string {
 type EngineList = { engines: { id: string; label: string; note: string }[]; selected: string | null };
 async function engineRow(): Promise<string> {
   const r = await fetch("/api/v1/engines").then(async (x) => (x.ok ? ((await x.json()) as EngineList) : null)).catch((e) => { console.warn("[nexy] engines unavailable", e); return null; });
-  if (!r || !r.engines.length) return row("Agent engine", not("One engine on this machine"));
-  if (r.engines.length === 1) return row("Agent engine", not(r.engines[0].label), r.engines[0].note);
+  // engine names show only where there is a real choice between them
+  if (!r || r.engines.length < 2) return "";
   const cur = r.engines.find((e) => e.id === r.selected) ?? r.engines[0];
   return row("Agent engine", `<select data-engine>${r.engines.map((e) => `<option value="${esc(e.id)}"${e.id === cur.id ? " selected" : ""}>${esc(e.label)}</option>`).join("")}</select>`,
     `${esc(cur.note)}. New chats use it; each chat keeps the history it already has.`);

@@ -223,6 +223,9 @@ body.panel-open .main{padding-right:344px}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:none;align-items:flex-start;justify-content:center;padding-top:14vh;backdrop-filter:blur(6px)}
 .ov.open{display:flex}
 .modal{width:560px;max-width:92vw;border-radius:20px;background:var(--glass2);backdrop-filter:blur(30px);border:1px solid var(--line2);box-shadow:0 40px 100px rgba(0,0,0,.6);overflow:hidden}
+/* WebKit (Safari, the Mac app's view) can draw these without their backdrop blur, and the chat
+   then read through Settings. There, the glass is near-opaque instead. */
+@supports (font: -apple-system-body){.ov{background:rgba(0,0,0,.62)}.modal{background:rgba(16,14,20,.97)}}
 .modal .mh{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);font-weight:500}
 .modal .mh .x{margin-left:auto;color:var(--fg3);width:28px;height:28px;border-radius:50%;display:grid;place-items:center}
 .modal .mh .x:hover{background:rgba(255,255,255,.1);color:#fff}
