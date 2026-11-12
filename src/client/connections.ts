@@ -1,3 +1,4 @@
+import { here } from "./place";
 import type { Artifact } from "./canvas";
 import { errText } from "./http";
 import { loadCatalog } from "./perm";
@@ -55,7 +56,7 @@ async function fill(host: HTMLElement, connect: (name: string) => void): Promise
     `<h4>Outside apps</h4>` + outside +
     `<h4>APIs and models</h4>` +
     row(" off", "Hosted frontier APIs", "none configured") +
-    row(" off", "Cloud GPU boost", "available on this box; Nexy does not use it") +
+    row(" off", "Cloud GPU boost", `available on ${here}; Nexy does not use it`) +
     row(" off", "Nexy Cloud", "not connected") +
     row("", "Local models", "resident on this machine");
   cm.querySelectorAll<HTMLElement>("[data-conn]").forEach((b) => b.addEventListener("click", () => connect(b.dataset.conn!)));

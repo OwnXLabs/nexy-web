@@ -22,7 +22,7 @@ function model() {
       const b = JSON.parse(body || '{}');
       if (!b.stream) { res.setHeader('content-type', 'application/json'); return res.end(JSON.stringify({ choices: [{ message: { content: 'Shop plan' }, finish_reason: 'stop' }] })); }
       const q = [...b.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
-      const tag = (q.match(/\b(ONE|TWO|THREE)\b/) ?? ['NONE'])[0];
+      const tag = (q.match(/\b(ONE|TWO|THREE|FOUR)\b/) ?? ['NONE'])[0];
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: `Answer ${tag} done.` }, finish_reason: null }] })}\n\n`);
       res.end(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
@@ -81,10 +81,17 @@ test('a phone on an older copy never saves over the Mac\'s newer turns', { timeo
     await sleep(1500);
     assert.match(JSON.stringify(saved(data).history), /Answer TWO/, 'the Mac\'s turn is still there after New chat on the phone');
 
+    // the Mac adds another turn; the phone reopens the chat from its list and sees it
+    const first = saved(data).id;
+    await ask(mac, 'Plan FOUR for the shop', 'FOUR');
+    await until(() => /Answer FOUR/.test(JSON.stringify(saved(data)?.history ?? [])), 'the fourth turn is saved');
+    await phone.locator(`[data-chat="${first}"]`).first().click();
+    await phone.getByText('Answer FOUR done.').waitFor({ timeout: 15000 });
+
     // the phone, still on its old copy, asks something: refused, and it offers the newer copy
     const old = await ctx.newPage(); old.on('pageerror', (e) => errors.push(e.message));
     await old.goto(s.base + '/');
-    await old.getByText('Answer TWO done.').waitFor({ timeout: 20000 });
+    await old.getByText('Answer FOUR done.').waitFor({ timeout: 20000 });
     await ask(mac, 'Plan THREE for the shop', 'THREE');
     await until(() => /Answer THREE/.test(JSON.stringify(saved(data)?.history ?? [])), 'the third turn is saved');
     await old.locator('#input').fill('Plan ONE again');

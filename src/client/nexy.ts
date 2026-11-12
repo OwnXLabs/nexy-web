@@ -1856,6 +1856,9 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
   }
 }
 
+// an odd "**" left by a cut: the last one goes
+const closeBold = (t: string): string => ((t.match(/\*\*/g)?.length ?? 0) % 2 ? t.replace(/\*\*(?![\s\S]*\*\*)/, "") : t);
+
 // how often a reply being written is saved, so a quit or crash keeps what had arrived
 const PARTIAL_SAVE_MS = 3_000;
 async function playChat(text: string, priv = false): Promise<void> {
@@ -1902,7 +1905,10 @@ async function playChat(text: string, priv = false): Promise<void> {
     browsing?.stop(d.browsed);
     const m = d.choices?.[0]?.message;
     // the agent asks for the person (a password, a code, a CAPTCHA) with a marker it ends the reply on
-    const { answer, ask } = takeoverAsk([m?.content, m?.reasoning_content].filter(Boolean).join("\n\n").trim());
+    const told = takeoverAsk([m?.content, m?.reasoning_content].filter(Boolean).join("\n\n").trim());
+    const ask = told.ask;
+    // an answer cut mid-bold showed a stray "**" (QA 2026-11-12)
+    const answer = d.cut || d.stopped ? closeBold(told.answer) : told.answer;
     const offer = () => {
       if (ask && !priv) offerTakeover(holder, ask);
       // the model hit its length limit: say so rather than stop mid-sentence
@@ -1943,7 +1949,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     console.warn("[nexy] the answer failed", e);
     // Ollama killed mid-answer lost the words already shown and ended on a raw error (QA 2026-11-12)
     holder.querySelector(".bub")!.innerHTML = unreachable(e) ? esc(away())
-      : `${kept ? bubbleText(kept) : ""}<div class="feednote bad" data-interrupted="1">${kept ? "This answer stopped before it finished." : "The model on this machine did not answer."} <span class="faint">(${esc((e as Error).message)})</span> <button type="button" class="btn small" data-ask-again="${esc(text)}">Ask again</button></div>`;
+      : `${kept ? bubbleText(closeBold(kept)) : ""}<div class="feednote bad" data-interrupted="1">${kept ? "This answer stopped before it finished." : "The model on this machine did not answer."} <span class="faint">(${esc((e as Error).message)})</span> <button type="button" class="btn small" data-ask-again="${esc(text)}">Ask again</button></div>`;
   } finally {
     browsing?.stop();
     delete holder.dataset.pending;

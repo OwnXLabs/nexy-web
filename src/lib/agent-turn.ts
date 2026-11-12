@@ -20,6 +20,9 @@ const BROWSING = /\b(open|pull (?:it |that |them )?up|browser|screen|web ?page|w
 export function wantsResearch(said: string, history: { role: string; content: string }[]): boolean {
   if (RESEARCH.test(said) || BROWSING.test(said)) return true;
   if (said.trim().length > 40) return false;
+  // "Continue" carries on the last answer; it is not a yes to a search that answer offered
+  // (QA 2026-11-12: Continue after a cut guide waited 200 s, then said a search had run long)
+  if (/^\s*continue\b/i.test(said)) return false;
   const offer = [...history].reverse().find((t) => t.role === "assistant")?.content ?? "";
   return RESEARCH.test(offer) || BROWSING.test(offer);
 }

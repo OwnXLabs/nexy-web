@@ -135,6 +135,7 @@ function load(pid: string, id: string): void {
   if (!c || !th) return;
   cur = { pid, cid: id };
   selected();
+  if (c.saved && c.loaded) freshen(pid, c);
   if (c.saved && !c.loaded) {
     const note = document.createElement("div");
     note.className = "feednote";
@@ -158,6 +159,24 @@ function load(pid: string, id: string): void {
   H.history.splice(0, H.history.length, ...c.history);
   th.scrollTop = th.scrollHeight;
   cardsNow(th);
+}
+
+// A chat reopened from memory: if another device saved it since, show that copy instead
+// (QA 2026-11-12: the phone reopened its old copy without the Mac's turn). Not while this copy
+// has a save on its way or a reply still arriving.
+function freshen(pid: string, c: Chat): void {
+  const seen = c.ts;
+  if (seen === undefined) return;
+  fetch("/api/v1/chats").then(async (r) => {
+    const d = await r.json() as { chats?: { id: string; ts: number }[]; error?: string };
+    if (!r.ok) throw new Error(d.error ?? httpMsg(r.status));
+    const m = d.chats?.find((x) => x.id === c.id);
+    const th = $("#thread");
+    if (!m || m.ts <= seen || c.ts !== seen || cur?.cid !== c.id || !th || writes.has(c.id) || th.querySelector(".msg[data-pending]")) return;
+    c.loaded = false; c.ts = undefined; c.sig = undefined;
+    th.replaceChildren(); c.nodes = document.createDocumentFragment();
+    load(pid, c.id);
+  }).catch((e: Error) => console.warn("[nexy] could not check for a newer copy of this chat", e));
 }
 
 // a routine card in a chat shown again says where that routine stands now

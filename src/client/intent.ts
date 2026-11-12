@@ -92,6 +92,7 @@ const WORK_REPORT = (s: string) => /\b(worked on|compute|usage|gpu|last 30 days|
 const DIAGRAM =
   /\b(flow ?chart|flow ?diagram|diagram|org ?chart|mind ?map|sequence diagram|state machine|swimlane)\b/i;
 
+const TEXT_ANSWER = /\b(tables?|csv|list|summary|email|letter|outline|paragraphs?|poem|checklist|budget|breakdown)\b/i;
 const NOT_A_DELIVERABLE = /\b(app ?store|install|uninstall|what apps|which apps|my apps)\b/i;
 
 // Only these make a request a project (plan, agents, tasks). Anything else short that
@@ -205,6 +206,10 @@ export function classify(text: string): Intent {
   if (words <= 8 && namesDeliverable(s) && !QUESTION.test(s) && !ABOUT_EXISTING.test(s) && !NOT_A_DELIVERABLE.test(s) && !PROJECT.test(s)) {
     return { kind: "make", brief: s, deliverable: "web_app" };
   }
+
+  // Tables, a list, an email: an answer in the chat, however long the ask. "make two small
+  // tables… table 1 = …" ran past 30 words and was taken for a team project (QA 2026-11-12).
+  if (ASKS_TO_MAKE.test(s) && TEXT_ANSWER.test(s) && !namesDeliverable(s) && !PROJECT.test(s)) return { kind: "chat" };
 
   if (ASKS_TO_MAKE.test(s)) {
     // A project only when it reads like one; a short single ask is built directly.

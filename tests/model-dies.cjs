@@ -25,7 +25,7 @@ function model() {
       const first = ++n === 1;
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.on('error', () => {});
-      const words = first ? Array.from({ length: 30 }, (_, i) => `word${i} `) : ['The whole answer, second time.'];
+      const words = first ? [...Array.from({ length: 30 }, (_, i) => `word${i} `), '**Cut mid-bold '] : ['The whole answer, second time.'];
       for (const w of words) { res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: w }, finish_reason: null }] })}\n\n`); await sleep(30); }
       if (first) return res.destroy();
       res.end(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
@@ -61,6 +61,7 @@ test('the model dies mid-answer: what arrived stays, with Continue', { timeout: 
     const bubble = await page.locator('#thread .msg.ai .bub').last().innerText();
     assert.match(bubble, /word20\b/, 'the words already shown are still there');
     assert.match(bubble, /stopped before it finished/);
+    assert.doesNotMatch(bubble, /\*\*/, 'no stray bold marker at the cut');
     assert.doesNotMatch(bubble, /Thinking/);
     await again.click();
     await page.getByText('The whole answer, second time.').waitFor({ timeout: 20000 });

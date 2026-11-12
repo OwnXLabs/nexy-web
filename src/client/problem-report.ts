@@ -1,3 +1,4 @@
+import { here } from "./place";
 // "Report a problem": what went wrong, an optional screenshot, and what the page was doing
 // (recent errors, failed requests, the app's own state). Saved on this box. A beta build can
 // also send it to the Nexy team, only when ticked, after showing exactly what goes.
@@ -106,7 +107,7 @@ export function openReporter(): void {
   scrim.className = "prp-scrim";
   scrim.innerHTML = `<div class="prp" role="dialog" aria-modal="true" aria-labelledby="prpT">
     <h2 id="prpT">Report a problem</h2>
-    <p>${o.team ? "Saved on this computer. Tick “Send to the Nexy team” to send it to the team too; you see exactly what goes first." : "Saved on this box for its owner. It is never sent anywhere else."}</p>
+    <p>${o.team ? "Saved on this computer. Tick “Send to the Nexy team” to send it to the team too; you see exactly what goes first." : `Saved on ${here} for its owner. It is never sent anywhere else.`}</p>
     ${blocked ? `<p>${blocked}</p><div class="row"><button data-x>Close</button></div>` : `
     <textarea id="prpText" placeholder="What happened, and what did you expect?"></textarea>
     <div class="kinds" role="group" aria-label="Kind"><button data-k="bug" aria-pressed="true">Something broke</button><button data-k="looks" aria-pressed="false">Looks wrong</button><button data-k="idea" aria-pressed="false">Idea</button></div>
@@ -251,7 +252,7 @@ export function openReporter(): void {
       send.disabled = false;
       return;
     }
-    if (!toTeam) return done("Thanks, saved", `Report ${savedId} is on this box for its owner. It was not sent anywhere else.`);
+    if (!toTeam) return done("Thanks, saved", `Report ${savedId} is on ${here} for its owner. It was not sent anywhere else.`);
     msg.textContent = "Sending…";
     try {
       const r = await fetch(o.team!, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(shown) });
