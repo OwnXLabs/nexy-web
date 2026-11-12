@@ -73,6 +73,11 @@ as pending with its prompt, schedule and source; Confirm and Discard in the Rout
 the routines API reach the agent; and chat vouches for a clean context only when no file,
 mail or page is in the system message. `SHOTS_DIR` saves a screenshot of the pending routine.
 
+`node --test tests/one-routine.cjs` (after `npm run build`): "Every weekday at 7:30 am, remind
+me to …" said in chat makes one routine, weekdays at 7:30 in the device's zone. Its first run,
+and "run it now" after, tell the agent the routine is already set, so a stand-in agent that
+makes a routine of its own when told nothing makes none, and the chat names no other time.
+
 Routines on events
 ==================
 

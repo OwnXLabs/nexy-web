@@ -14,7 +14,16 @@ export interface MemUI {
 }
 
 // the routine set in this page, so "run it now" right after means that routine
-let lastRoutine: { name: string; prompt: string } | null = null;
+let lastRoutine: { name: string; prompt: string; human: string } | null = null;
+
+/**
+ * One run, now, of a routine that is already set. Told nothing, the agent read "remind me to …"
+ * as a new routine and made a second one at a time of its own (QA 0.2.8).
+ */
+export function runOnce(r: { name: string; prompt: string; human: string }): string {
+  return `${r.prompt}\n\n(This is one run, now, of the routine "${r.name}", which is already set for ${r.human}. ` +
+    "It exists: do not create, change or delete any routine. If you mention it, say it runs " + `${r.human}.)`;
+}
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -97,7 +106,7 @@ export function matchMemory(text: string): MemCmd | null {
 /** Leaving an example that set a routine: "run it now" next means that routine, not "run what?" */
 export function noteExampleRoutine(firstMessage: string): void {
   const s = parseSchedule(firstMessage.trim());
-  if (s) lastRoutine = { name: s.prompt.slice(0, 60), prompt: s.prompt };
+  if (s) lastRoutine = { name: s.prompt.slice(0, 60), prompt: s.prompt, human: s.human };
 }
 
 const EVAL = typeof location !== "undefined" && new URLSearchParams(location.search).get("eval") === "1";
@@ -146,15 +155,15 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
       const { routine } = await call("/api/v1/routines", { method: "POST", body: JSON.stringify({ name: cmd.name, schedule: cmd.local, utcSchedule: cmd.cron, tz: deviceZone(), prompt: cmd.prompt }) });
       ui.block(blockEl(`Routine: ${cmd.name}`, cmd.human, row("What it does", cmd.prompt) + row("When", cmd.human) +
         row("Next run", routine.nextRunAt ? localTime(routine.nextRunAt) : "set by the scheduler"), "", "routine"));
-      lastRoutine = { name: cmd.name, prompt: cmd.prompt };
+      lastRoutine = { name: cmd.name, prompt: cmd.prompt, human: cmd.human };
       ui.push("ai", `Set. I will do this ${esc(cmd.human)}, on this machine, and keep the result. Say <b>show my routines</b> to see the latest one.${ui.runNow ? " Here is the first one now, so you can see what it looks like." : ""}`);
       // a first run straight away: what the owner will get, without waiting for the schedule
-      if (ui.runNow) await ui.runNow(cmd.prompt);
+      if (ui.runNow) await ui.runNow(runOnce(lastRoutine));
       return;
     }
     if (cmd.kind === "routineRunLast") {
       if (!lastRoutine || !ui.runNow) { ui.push("ai", "There is no routine from this chat to run. Say <b>show my routines</b> to see them."); return; }
-      await ui.runNow(lastRoutine.prompt);
+      await ui.runNow(runOnce(lastRoutine));
       return;
     }
     if (cmd.kind === "routineList") {

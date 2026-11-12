@@ -14,9 +14,10 @@ await p.fill('#input','Every weekday at 7am, give me a morning brief of coffee n
 let a=await ai();console.log('after setting:',JSON.stringify(a));
 assert(a.some(t=>/Here is the first one now/.test(t)),'says it runs the first one');
 assert(a.some(t=>/BRIEF: three coffee stories/.test(t)),'first run result is in the chat');
-assert(asked.at(-1).endsWith('give me a morning brief of coffee news'),'the routine task ran as a turn');
+assert(asked.at(-1).includes('give me a morning brief of coffee news'),'the routine task ran as a turn');
+assert.match(asked.at(-1),/already set for every weekday at 07:00\. It exists: do not create/,'the turn is told the routine is already set');
 const n=asked.length;
 await p.fill('#input','Run it now');await p.press('#input','Enter');await p.waitForTimeout(3000);
-a=await ai();assert.equal(asked.length,n+1,'run it now ran the routine');assert(asked.at(-1).endsWith('give me a morning brief of coffee news'));
+a=await ai();assert.equal(asked.length,n+1,'run it now ran the routine');assert(asked.at(-1).includes('give me a morning brief of coffee news'));assert.match(asked.at(-1),/do not create/);
 assert(!a.some(t=>/attach/i.test(t)),'no request for a file');
 console.log('PASS first run on setup; "run it now" reruns it; errors:',errs);await b.close();})().catch(e=>{console.log('FAIL',e.message);process.exit(1);});
