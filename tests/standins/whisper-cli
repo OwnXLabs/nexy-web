@@ -1,8 +1,17 @@
 #!/bin/sh
 # Stand-in speech recogniser for tests: needs the model and a WAV, logs what it was given.
+# STANDIN_GROW=1: about 2.5 words per second of audio, as a real recogniser gives for a growing recording.
+# STANDIN_SLEEP: seconds to take.
 while [ $# -gt 0 ]; do case $1 in -m) m=$2; shift;; -f) f=$2; shift;; esac; shift; done
 [ -s "$m" ] || { echo "no model at $m" >&2; exit 1; }
 [ "$(head -c 4 "$f")" = RIFF ] || { echo "not a wav" >&2; exit 1; }
-echo "stt $(wc -c < "$f" | tr -d ' ')" >> "${STANDIN_LOG:-/dev/null}"
+bytes=$(wc -c < "$f" | tr -d ' ')
+echo "stt $bytes" >> "${STANDIN_LOG:-/dev/null}"
+[ -n "$STANDIN_SLEEP" ] && sleep "$STANDIN_SLEEP"
+text=${STANDIN_TEXT:-What is the weather like today?}
+if [ -n "$STANDIN_GROW" ]; then
+  n=$(( (bytes - 44) * 5 / 64000 + 1 ))
+  text=$(echo "$text" | tr ' ' '\n' | head -n "$n" | tr '\n' ' ' | sed 's/ $//')
+fi
 echo " [BLANK_AUDIO]"
-echo " ${STANDIN_TEXT:-What is the weather like today?}"
+echo " $text"

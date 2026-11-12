@@ -114,7 +114,7 @@ function items(): Item[] {
   const loop = /^(localhost|127\.|\[::1\])/.test(location.hostname);
   const out: Item[] = [{ k: "ask", t: "Ask your first thing", tip: `<b>Ask for outcomes</b>Describe what you want done. ${hasApp("startup") ? "Nexy plans it and puts agents on it." : "Nexy works on it with you."}` }];
   if (hasApp("voice")) out.push({ k: "voice", t: "Talk instead of typing", act: "Try it now", run: () => H.talk(),
-    tip: `<b>Just talk</b>${isPhone() ? "Hold the mic button and speak." : 'Hold <span class="gs-key">Space</span> anywhere and speak. Let go to send.'}` });
+    tip: `<b>Just talk</b>${isPhone() ? "Hold the mic button and speak. Let go, check the words, then Send." : 'Hold <span class="gs-key">Space</span> anywhere and speak. Let go, check the words, then press Enter.'}` });
   // a computer's Nexy reaches a phone through the app's "Add your phone…" (a QR code over the mesh)
   if (!onOwn1) out.push({ k: "phone", t: "Get Nexy on your phone", act: "Got it", run: () => did("phone"),
     tip: "<b>Approve from anywhere</b>In the <b>Nexy</b> menu at the top of the screen, choose <b>Add your phone…</b>, then scan the code with Nexy on your phone. It is this same Nexy, with your chats." });

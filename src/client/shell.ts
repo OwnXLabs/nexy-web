@@ -7,7 +7,8 @@ import { isOpen, closeCanvas } from "./canvas";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { httpMsg, errText } from "./http";
 import { hasApp, isBeta, localVoice, notHereYet, voiceApi } from "./place";
-import { speechReady, toWav } from "./voice-local";
+import { speechReady, tapPcm, toWav, type Pcm } from "./voice-local";
+import { partialScheduler, type Partials } from "./voice-partials";
 
 export interface ShellHooks {
   send(text: string): Promise<void>;
@@ -573,6 +574,8 @@ function drawMini(): void {
 }
 
 let rec: MediaRecorder | null = null, chunks: Blob[] = [], stream: MediaStream | null = null, analyser: AnalyserNode | null = null, ac: AudioContext | null = null, spaceHeld = false;
+// speech on this computer: raw samples too, so the words so far can be read while the user talks
+let pcm: Pcm | null = null;
 
 function drawV(): void {
   const c = $<HTMLCanvasElement>("#vwave"), x = c?.getContext("2d");
@@ -604,18 +607,23 @@ function drawV(): void {
   frame();
 }
 
-async function startRecording(): Promise<boolean> {
+/** `pre`: an audio context made inside the user's key press or touch, so Safari lets it run. */
+async function startRecording(pre?: AudioContext): Promise<boolean> {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
+    void pre?.close();
     H.toast(`The microphone is not available: ${errText(e)}`);
     return false;
   }
   chunks = [];
-  ac = new AudioContext();
+  ac = pre ?? new AudioContext();
   analyser = ac.createAnalyser();
   analyser.fftSize = 256;
-  ac.createMediaStreamSource(stream).connect(analyser);
+  const src = ac.createMediaStreamSource(stream);
+  src.connect(analyser);
+  if (localVoice) pcm = tapPcm(ac, src);
+  ac.resume().catch((e) => console.warn("[nexy] audio context did not start", e));
   rec = new MediaRecorder(stream);
   rec.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
   rec.start();
@@ -632,45 +640,133 @@ async function stopAndTranscribe(): Promise<string> {
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
   analyser = null;
+  const p = pcm;
+  pcm = null;
+  p?.stop();
   void ac?.close();
   ac = null;
   let blob = new Blob(chunks, { type: r.mimeType || "audio/webm" });
-  if (!blob.size) return "";
-  if (localVoice) blob = await toWav(blob);
+  if (p && p.seconds() > 0) blob = p.wav();
+  else if (!blob.size) return "";
+  else if (localVoice) blob = await toWav(blob);
   const res = await fetch(voiceApi("stt"), { method: "POST", headers: { "content-type": blob.type }, body: blob });
-  const d = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+  const d = (await res.json().catch((e) => { console.warn("[nexy] speech reply unreadable", e); return {}; })) as { text?: string; error?: string };
   if (!res.ok) throw new Error(d.error ?? httpMsg(res.status));
   return (d.text ?? "").trim();
 }
 
-async function startV(): Promise<void> {
-  if (!hasApp("voice")) { H.toast(notHereYet("Talking to Nexy")); return; }
-  if (listening) return;
+/** Stop the microphone and drop what it heard. */
+function discardRecording(): void {
+  listening = false;
+  rec?.stop(); rec = null;
+  stream?.getTracks().forEach((t) => t.stop()); stream = null;
+  pcm?.stop(); pcm = null;
+  analyser = null;
+  void ac?.close(); ac = null;
+}
+
+// Hold to talk: the words appear in the message box while the user speaks; on letting go they stay
+// there to check and edit, and nothing is sent until Send (Enter). Redo (Esc) discards and listens again.
+let vphase: "idle" | "listen" | "finish" | "review" = "idle", vbase = "", live: Partials | null = null, pressAt = 0, vabort = false;
+const QUICK_MS = 400, LIVE_EVERY = 1000, LIVE_WINDOW_S = 28;
+const vin = () => $<HTMLTextAreaElement>("#input");
+function setComposer(t: string): void {
+  const i = vin(); if (!i) return;
+  i.value = t;
+  i.dispatchEvent(new Event("input"));
+  const sb = $<HTMLButtonElement>("#sendBtn");
+  if (sb && (vphase === "listen" || vphase === "finish")) sb.disabled = true; // nothing goes until the user lets go
+}
+const withBase = (t: string) => (vbase && t ? `${vbase} ${t}` : vbase || t);
+const vsay = (t: string) => { const vt = $("#vtext"); if (vt) vt.textContent = t; };
+
+async function liveWords(): Promise<string | null> {
+  const p = pcm;
+  if (!p || p.seconds() < 0.6) return null;
+  const cut = p.seconds() > LIVE_WINDOW_S;
+  const res = await fetch(`${voiceApi("stt")}?live=1`, { method: "POST", headers: { "content-type": "audio/wav" }, body: p.wav(LIVE_WINDOW_S) });
+  if (res.status === 409) return null; // a speech job is running; next turn
+  const d = (await res.json()) as { text?: string; error?: string };
+  if (!res.ok) throw new Error(d.error ?? httpMsg(res.status));
+  const t = (d.text ?? "").trim();
+  return cut && t ? `… ${t}` : t;
+}
+
+function closeV(): void {
+  $("#voice")?.classList.remove("open");
+  $("#micBtn")?.classList.remove("on");
+  const i = vin(); if (i) i.readOnly = false;
+  vphase = "idle";
+}
+function endReview(): void {
+  const r = $("#vreview"); if (r) r.hidden = true;
+  if (vphase === "review") vphase = "idle";
+}
+
+async function startV(): Promise<boolean> {
+  if (!hasApp("voice")) { H.toast(notHereYet("Talking to Nexy")); return false; }
+  if (listening || vphase === "finish") return false;
+  endReview();
+  vabort = false; // Esc while the microphone starts cancels it
+  const pre = new AudioContext(); // before any wait, while the key press or touch still counts
+  pre.resume().catch((e) => console.warn("[nexy] audio context waits for the microphone", e));
   if (localVoice) {
     try { await speechReady((m) => H.toast(m)); }
-    catch (e) { H.toast(`Speech is not ready: ${errText(e)}`); return; }
+    catch (e) { void pre.close(); H.toast(`Speech is not ready: ${errText(e)}`); return false; }
   }
-  if (!(await startRecording())) return;
+  if (!(await startRecording(pre))) return false;
   window.dispatchEvent(new CustomEvent("nexy:did", { detail: "voice" }));
+  vphase = "listen";
+  const i = vin();
+  vbase = i?.value.trim() ?? "";
+  if (i) i.readOnly = true;
+  setComposer(vbase); // keeps Send off while listening
   $("#voice")?.classList.add("open");
   $("#micBtn")?.classList.add("on");
-  const vt = $("#vtext"); if (vt) vt.textContent = "Listening…";
+  vsay("Listening…");
+  // live words only from this computer's own speech; on an Own1 the words come when the user lets go
+  if (localVoice) live = partialScheduler({
+    every: LIVE_EVERY, job: liveWords,
+    onText: (t) => { if (vphase === "listen") setComposer(withBase(t)); },
+    onSlow: () => { if (vphase === "listen") vsay("Listening… the words will show when you let go"); },
+  });
   drawV();
+  if (vabort) { cancelV(); return false; }
+  return true;
 }
+/** Let go: the final words go in the message box to check; nothing is sent. */
 async function stopV(): Promise<void> {
-  if (!listening) return;
-  const vt = $("#vtext"); if (vt) vt.textContent = "Transcribing on this machine…";
-  try {
-    const t = await stopAndTranscribe();
-    if (t) void H.send(t);
-    else H.toast("I heard nothing, so nothing was sent.");
-  } catch (e) {
-    H.toast(`Could not transcribe: ${errText(e)}`);
-  } finally {
-    $("#voice")?.classList.remove("open");
-    $("#micBtn")?.classList.remove("on");
-  }
+  if (!listening || vphase !== "listen") return;
+  vphase = "finish";
+  live?.stop(); live = null;
+  vsay("Transcribing on this machine…");
+  let t: string;
+  try { t = await stopAndTranscribe(); }
+  catch (e) { closeV(); setComposer(vbase); H.toast(`Could not transcribe: ${errText(e)}`); return; }
+  closeV();
+  if (!t) { setComposer(vbase); H.toast("Didn't catch that. Hold to try again."); return; }
+  setComposer(withBase(t));
+  vphase = "review";
+  const r = $("#vreview"); if (r) r.hidden = false;
+  const i = vin();
+  if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
 }
+/** Stop listening and put the message box back as it was. */
+function cancelV(): void {
+  if (vphase !== "listen") return;
+  live?.stop(); live = null;
+  discardRecording();
+  closeV();
+  setComposer(vbase);
+}
+/** Discard the words and listen again (Done, Space or the mic ends it). */
+function redoV(): void {
+  endReview();
+  setComposer(vbase);
+  vin()?.blur();
+  void startV();
+}
+const releaseV = () => (performance.now() - pressAt < QUICK_MS ? cancelV() : void stopV());
 
 const VM = { on: false, state: "idle" as "idle" | "listen" | "think" | "speak", audio: null as HTMLAudioElement | null };
 function vmState(st: typeof VM.state, label: string): void {
@@ -754,7 +850,7 @@ function vmOpen(): void {
 function vmClose(): void {
   VM.on = false;
   $("#vmode")?.classList.remove("open");
-  if (listening) { rec?.stop(); stream?.getTracks().forEach((t) => t.stop()); listening = false; rec = null; }
+  if (listening) discardRecording();
   VM.audio?.pause();
   vmState("idle", "");
 }
@@ -839,14 +935,18 @@ export function initShell(hooks: ShellHooks): void {
     if (e.key === "Escape") {
       document.querySelectorAll(".ov.open").forEach((o) => o.classList.remove("open"));
       if (VM.on) vmClose();
-      if (listening) void stopV();
+      if (vphase === "review") { e.preventDefault(); redoV(); }
+      else if (vphase === "listen") cancelV();
+      else vabort = true;
       return;
     }
     if (typing) return;
-    if (e.code === "Space" && !e.repeat && prefs().wakeKey && !listening) {
+    if (e.code === "Space" && !e.repeat && prefs().wakeKey && !VM.on) {
       e.preventDefault();
+      if (listening) { if (!spaceHeld) void stopV(); return; } // started by a tap or Redo: Space ends it
       spaceHeld = true;
-      void startV().then(() => { if (!spaceHeld && listening) void stopV(); });
+      pressAt = performance.now();
+      void startV().then((ok) => { if (ok && !spaceHeld) releaseV(); });
       return;
     }
     if (e.key === "[") { e.preventDefault(); toggleRail(); }
@@ -855,10 +955,43 @@ export function initShell(hooks: ShellHooks): void {
   addEventListener("keyup", (e) => {
     if (e.code !== "Space" || !spaceHeld) return;
     spaceHeld = false;
-    if (listening) { e.preventDefault(); void stopV(); }
+    e.preventDefault();
+    if (listening) releaseV();
   });
-  $("#micBtn")?.addEventListener("click", () => void (listening ? stopV() : startV()));
+  // the mic: hold to talk and let go, or tap to start and tap again (or Done) to stop
+  const mic = $("#micBtn");
+  let micHeld = false, micPointer = false;
+  mic?.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    micPointer = true;
+    if (listening) { void stopV(); return; }
+    mic.setPointerCapture(e.pointerId);
+    micHeld = true;
+    pressAt = performance.now();
+    void startV().then((ok) => { if (ok && !micHeld && performance.now() - pressAt >= QUICK_MS) void stopV(); });
+  });
+  const micUp = () => {
+    if (!micHeld) return;
+    micHeld = false;
+    if (listening && performance.now() - pressAt >= QUICK_MS) void stopV(); // a quick tap keeps listening
+  };
+  mic?.addEventListener("pointerup", micUp);
+  mic?.addEventListener("pointercancel", micUp);
+  mic?.addEventListener("click", () => {
+    if (micPointer) { micPointer = false; return; } // handled by the pointer events
+    void (listening ? stopV() : startV()); // the keyboard
+  });
   $("#vstop")?.addEventListener("click", () => void stopV());
+  $("#vsend")?.addEventListener("click", () => { endReview(); $<HTMLButtonElement>("#sendBtn")?.click(); });
+  $("#vredo")?.addEventListener("click", redoV);
+  // the message box sends the words as any typed message; the review ends with it
+  $("#input")?.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) endReview(); });
+  // while listening the box shows words the user has not checked yet: Enter does not send them
+  addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || (vphase !== "listen" && vphase !== "finish") || (e.target as Element | null)?.id !== "input") return;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
+  $("#sendBtn")?.addEventListener("click", endReview);
   // speech runs in Own Voice or on this computer; without either, Nexy says so instead of failing
   const talk = () => hasApp("voice") ? vmOpen() : H.toast(notHereYet("Talking to Nexy"));
   $("#waveBtn")?.addEventListener("click", talk);

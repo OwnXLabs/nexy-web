@@ -38,9 +38,11 @@ check "building on this computer: names, subject, no outside files" ts tests/loc
 check "search for charts: results come through, no search said plainly" ts tests/research-search.test.ts
 check "building on this computer: engine builder, checks, one retry, plain no; Own1 still uses Own Build" node --test --test-timeout=180000 tests/local-build.cjs
 check "speech on this computer: model fetch, transcripts, spoken replies" ts tests/voice.test.ts
+check "hold to talk: live words one read at a time, skipped when busy, slow computers fall back" ts tests/voice-partials.test.ts
 check "connected apps in chat: lookups recognised, granted tool read as data, missing or failing said plainly" ts tests/connectors.test.ts
 check "eval mode only on a server started for evals; a request alone cannot switch it on" ts tests/eval-gate.test.ts
 check "speech on this computer in the browser, missing speech still gated, Own1 unchanged" node --test --test-timeout=180000 tests/local-voice.cjs
+check "hold to talk in Chromium and WebKit: words while held, checked before Send, Redo, Esc, quick tap, phone" node --test --test-timeout=180000 tests/voice-review.cjs
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
 check "routine approval: pending routines wait for Confirm or Discard, clean context vouched for" node --test --test-timeout=180000 tests/routine-approval.cjs
 check "routine times: the device's zone reaches the agent, UTC fallback, local times in the view" node --test --test-timeout=180000 tests/routine-tz.cjs

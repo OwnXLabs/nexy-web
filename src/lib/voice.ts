@@ -79,8 +79,15 @@ function run(bin: string, args: string[], ms: number): Promise<string> {
 }
 
 // one speech job at a time: whisper uses the GPU, two at once only slows both
-let queue: Promise<unknown> = Promise.resolve();
-const one = <T>(job: () => Promise<T>): Promise<T> => { const r = queue.then(job, job); queue = r.catch(() => {}); return r; };
+let queue: Promise<unknown> = Promise.resolve(), jobs = 0;
+const one = <T>(job: () => Promise<T>): Promise<T> => {
+  jobs++;
+  const r = queue.then(job, job).finally(() => { jobs--; });
+  queue = r.catch((e) => { console.warn("[voice] speech job failed", e?.message ?? e); });
+  return r;
+};
+/** True while a speech job runs or waits; live words skip a turn rather than queue behind it. */
+export const speechBusy = () => jobs > 0;
 
 const tmp = (ext: string) => { fs.mkdirSync(path.join(DIR, "tmp"), { recursive: true }); return path.join(DIR, "tmp", `${randomUUID()}.${ext}`); };
 
@@ -91,7 +98,9 @@ export function cleanTranscript(s: string): string {
   return s.replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
 }
 
-export function transcribe(wav: Uint8Array): Promise<string> {
+/** Words from a WAV. `live`: the recording so far, while the user still talks; null if speech is busy. */
+export function transcribe(wav: Uint8Array, live = false): Promise<string | null> {
+  if (live && speechBusy()) return Promise.resolve(null);
   return one(async () => {
     const f = tmp("wav");
     fs.writeFileSync(f, wav);

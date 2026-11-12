@@ -81,3 +81,16 @@ test("the model is fetched once, then speech to text and spoken replies run", as
   assert.deepEqual(fs.readFileSync(log, "utf8").trim().split("\n"), ["stt 32044", "tts Samantha: Sunny, 24 degrees.", "tts default: Default voice."]);
   assert.deepEqual(fs.readdirSync(path.join(dir, "tmp")), [], "no recordings or replies left on disk");
 });
+
+test("live words skip a turn while a speech job runs, instead of queueing behind it", async () => {
+  const wav = new Uint8Array(await encodeWav(new Float32Array(16000), 16000).arrayBuffer());
+  process.env.STANDIN_SLEEP = "0.4";
+  try {
+    const final = V.transcribe(wav);
+    assert.equal(V.speechBusy(), true);
+    assert.equal(await V.transcribe(wav, true), null, "skipped, not queued");
+    assert.equal(await final, "What is the weather like today?");
+  } finally { delete process.env.STANDIN_SLEEP; }
+  assert.equal(V.speechBusy(), false);
+  assert.equal(await V.transcribe(wav, true), "What is the weather like today?", "idle: live words run");
+});

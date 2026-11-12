@@ -3,7 +3,7 @@ import { boxAllowed, boxRefused } from "../../../../lib/box";
 import { isWav, localVoice, prepare, speak, status, transcribe, voices } from "../../../../lib/voice";
 
 // Speech on this computer, for the same calls the page makes to Own Voice on an Own1:
-//   GET status | voices    POST prepare | stt (a WAV) | tts ({ text, voice_id })
+//   GET status | voices    POST prepare | stt (a WAV; ?live=1 while still talking) | tts ({ text, voice_id })
 export const prerender = false;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 const MAX_WAV = 25 * 1024 * 1024; // about 13 minutes at 16 kHz
@@ -29,7 +29,12 @@ export const POST: APIRoute = async ({ params, request }) => {
     const body = new Uint8Array(await request.arrayBuffer());
     if (body.length > MAX_WAV) return json({ error: "That recording is too long." }, 413);
     if (!isWav(body)) return json({ error: "Send the recording as a WAV." }, 415);
-    try { return json({ text: await transcribe(body) }); }
+    // ?live=1: the words so far while the user still holds to talk; skipped (409) rather than queued
+    const live = new URL(request.url).searchParams.get("live") === "1";
+    try {
+      const text = await transcribe(body, live);
+      return text === null ? json({ busy: true }, 409) : json({ text });
+    }
     catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 500); }
   }
   if (params.op === "tts") {
