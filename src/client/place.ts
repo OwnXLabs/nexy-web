@@ -12,11 +12,12 @@ export const hasApp = (id: string): boolean => apps.has(id) || (id === "build" &
 // speech on this computer (the desktop app) or Own Voice on an Own1: same calls, different home
 export const localVoice = root?.dataset.voice === "local";
 export const voiceApi = (op: "stt" | "tts" | "voices"): string => (localVoice ? `/api/v1/voice/${op}` : `/api/apps/voice/api/${op}`);
+// Nexy Cloud is "Coming soon" (setup and Home): never offered as a place to do something today
 export const notHereYet = (what: string): string =>
-  `${what} isn't in Nexy on this computer yet; it's coming in an update. It works today on an Own1 or Nexy Cloud.`;
+  `${what} isn't in Nexy on this computer yet; it's coming in an update. It works today on an Own1.`;
 // Images on a computer are switched on in Nexy Home, where its hardware can run them. The page
 // can't tell whether it can, so the wording covers both.
 export const imagesOff = (): string => onOwn1 ? notHereYet("Making images")
-  : `Making images is off. Turn on "Make images on this ${/Windows/.test(navigator.userAgent) ? "PC" : "Mac"}" in Nexy Home first. If Home doesn't offer it, this computer can't make images, but an Own1 or Nexy Cloud can.`;
+  : `Making images is off. Turn on "Make images on this ${/Windows/.test(navigator.userAgent) ? "PC" : "Mac"}" in Nexy Home first. If Home doesn't offer it, this computer can't make images, but an Own1 can.`;
 // the address shown on built pages
 export const siteHost = onOwn1 ? "own1.local" : "this-computer.local";
