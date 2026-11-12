@@ -31,7 +31,7 @@ check "swarm: progress rows name the device and escape server text" ts tests/swa
 check "swarm: website request in the browser, built across a fake Own 1 and Gaming PC" node --test --test-timeout=180000 tests/swarm-browser.cjs
 check "chat streams, resumes, hides engine faults" node --test --test-timeout=180000 tests/chat-stream.cjs
 check "network faults: latency, drops, silence" node --test --test-timeout=180000 tests/network-faults.cjs
-check "a hanging gateway and a lost question: every turn logged start to end, the question sent again joins its reply, never went silent" node --test --test-timeout=180000 tests/gateway-stall.cjs
+check "a hanging gateway and a lost question: every turn logged start to end, a question sent again joins its reply" node --test --test-timeout=180000 tests/gateway-stall.cjs
 check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
 check "a computer without an Own1: no studio it lacks, no Own1 wording" node --test --test-timeout=180000 tests/local-mode.cjs

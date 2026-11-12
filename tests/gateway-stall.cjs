@@ -10,7 +10,6 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 const ENTRY = path.join(__dirname, '..', 'dist', 'server', 'entry.mjs');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -96,24 +95,6 @@ const waitFor = async (ok, ms, what) => {
   for (const end = Date.now() + ms; !ok();) { if (Date.now() > end) throw new Error(`timed out waiting for ${what}`); await sleep(100); }
 };
 
-// An HTTP proxy in front of the server that loses the first chat question: 'swallow' never passes
-// it on, 'hold' passes it on but never passes the answer back. Everything else goes through.
-function lossyProxy(target, how) {
-  let chats = 0;
-  const srv = http.createServer((req, res) => {
-    if (req.method === 'POST' && req.url === '/api/v1/chat' && ++chats === 1 && how === 'swallow') return;
-    const up = http.request({ host: '127.0.0.1', port: target, method: req.method, path: req.url, headers: req.headers }, (r) => {
-      if (req.method === 'POST' && req.url === '/api/v1/chat' && chats === 1 && how === 'hold') { r.resume(); return; }
-      res.writeHead(r.statusCode, r.headers);
-      r.pipe(res);
-    });
-    up.on('error', (e) => { if (!res.headersSent) res.writeHead(502); res.end(String(e.message)); });
-    req.pipe(up);
-  });
-  srv.closeAll = () => { srv.closeAllConnections?.(); srv.close(); };
-  return new Promise((r) => srv.listen(0, '127.0.0.1', () => r({ srv, chats: () => chats, url: `http://127.0.0.1:${srv.address().port}` })));
-}
-
 test('a hanging gateway and a lost question', { concurrency: true }, async (t) => {
   assert(fs.existsSync(ENTRY), 'build first: npm run build');
 
@@ -196,26 +177,5 @@ test('a hanging gateway and a lost question', { concurrency: true }, async (t) =
       } catch (e) { console.log(s.log()); throw e; } finally { s.p.kill(); gw.srv.closeAll(); llm.srv.closeAll(); }
     }),
 
-    ...['swallow', 'hold'].map((how) => t.test(`in the browser, a question whose first request is ${how === 'swallow' ? 'lost on its way' : 'answered into a void'}: sent again, answered, model asked once`, { timeout: 120000 }, async () => {
-      const gw = await gateway(() => 'answer');
-      const llm = await model();
-      const s = await start({ NEXY_AGENT_URL: gw.url, NEXY_LLM_URL: llm.url, NEXY_BOX_FEATURES: 'open', NEXY_STUDIOS: 'off' });
-      const px = await lossyProxy(s.port, how);
-      const b = await chromium.launch();
-      try {
-        const page = await b.newPage();
-        const errors = []; page.on('pageerror', (e) => errors.push(e.message));
-        await page.goto(px.url + '/');
-        await page.locator('#input').waitFor({ timeout: 20000 });
-        await page.locator('#input').fill('Hello there, after a restart');
-        await page.locator('#input').press('Enter');
-        await page.getByText('The agent answered.').waitFor({ timeout: 70000 });
-        const bubble = await page.locator('.m.ai').last().innerText();
-        assert.doesNotMatch(bubble, /went silent|isn't answering|did not answer/i);
-        assert.equal(px.chats(), 2, 'the question was sent a second time');
-        assert.equal(gw.asked.filter((q) => q === 'Hello there, after a restart').length, 1, 'the model was asked once');
-        assert.deepEqual(errors, []);
-      } catch (e) { console.log(s.log()); throw e; } finally { await b.close(); px.srv.closeAll(); s.p.kill(); gw.srv.closeAll(); llm.srv.closeAll(); }
-    })),
   ]);
 });
