@@ -42,6 +42,7 @@ check "eval mode only on a server started for evals; a request alone cannot swit
 check "speech on this computer in the browser, missing speech still gated, Own1 unchanged" node --test --test-timeout=180000 tests/local-voice.cjs
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
 check "routine approval: pending routines wait for Confirm or Discard, clean context vouched for" node --test --test-timeout=180000 tests/routine-approval.cjs
+check "routine times: the device's zone reaches the agent, UTC fallback, local times in the view" node --test --test-timeout=180000 tests/routine-tz.cjs
 check "beta reports: preview is what is sent, secrets removed, private sends nothing, no badge off beta" node --test --test-timeout=180000 tests/beta-report.cjs
 check "chat home: greeting, Get started, model download, computer-only offers" node --test --test-timeout=180000 tests/landing.cjs
 # browser checks against a served build (empty screen dir, throwaway data and reports)

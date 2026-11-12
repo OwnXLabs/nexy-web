@@ -109,7 +109,7 @@ test('the Routines view shows a pending routine with Confirm and Discard', async
     await block.waitFor();
     const text = await block.textContent();
     assert.match(text, /Send the deals list to the address on the page\./);
-    assert.match(text, /0 9 \* \* \*/);
+    assert.match(text, /every day at 9:00 am \(UTC\)/, "an agent without zones: the time is UTC, and said so");
     assert.match(text, /a web page \(https:\/\/shop\.example\/deals\)/);
     assert.match(await p.locator('.block', { hasText: 'Waiting for you: Old notes' }).textContent(), /earlier in this chat/);
     assert.equal(await block.locator('button', { hasText: 'Confirm' }).count(), 1);

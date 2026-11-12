@@ -126,6 +126,9 @@ body.canvas-open .stage{--cw:var(--cwv,560px)}
 .block .row .v{color:var(--fg3);font-size:12px;text-align:right}
 .block .ba{display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid var(--line)}
 .block .ba .done{margin-right:auto;color:var(--fg3);font-size:12px;align-self:center}
+/* routines: the label keeps its line (up to 40%), a long value wraps beside it */
+.block.routine .row{grid-template-columns:16px fit-content(40%) minmax(0,1fr)}
+.block.routine .row .v{overflow-wrap:anywhere}
 .block.perm{border-color:rgba(255,140,104,.45)}
 .block.act{border-color:rgba(124,92,255,.45)}
 .block .why{padding:10px 14px;color:var(--fg2);line-height:1.5;border-bottom:1px solid var(--line)}
