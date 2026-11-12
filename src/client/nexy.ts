@@ -30,7 +30,7 @@ import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imag
 import { renderGate } from "./build-gate";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
-import { matchMemory, playMemory, noteExampleRoutine, deviceZone } from "./memory";
+import { matchMemory, playMemory, noteExampleRoutine, deviceZone, showWaitingRoutines } from "./memory";
 import { initSettings, notify, openSettings } from "./settings";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
@@ -1859,7 +1859,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
 // how often a reply being written is saved, so a quit or crash keeps what had arrived
 const PARTIAL_SAVE_MS = 3_000;
 async function playChat(text: string, priv = false): Promise<void> {
-  const { push, showArtifact, conversation, context, attachedDocs, saveChat } = captureWork();
+  const { push, pushBlock, showArtifact, conversation, context, attachedDocs, saveChat } = captureWork();
   const holder = push("ai", "");
   // until it settles, a saved copy of this reply is marked interrupted, with the question to ask again
   holder.dataset.pending = "1";
@@ -1914,6 +1914,9 @@ async function playChat(text: string, priv = false): Promise<void> {
 
     if (!answer) throw new Error(d.error ?? "the model returned an empty message");
     thread.push({ role: "assistant", content: answer });
+    // the agent says a routine it made waits in Routines: its card follows, to answer here
+    if (!priv && /\bRoutines\b/.test(answer)) showWaitingRoutines({ push: (_w, html) => push("ai", html), block: pushBlock }, bindChat(chatThread))
+      .catch((e: Error) => console.warn("[nexy] waiting routines not shown", e));
 
     const lifted = fromReply(answer, text);
     if (lifted) {

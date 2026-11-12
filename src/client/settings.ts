@@ -67,13 +67,13 @@ async function section(sec: string): Promise<string> {
     if (!hasApp("voice")) return `<h3>Nexy</h3>` + await engineRow() +
       row("Voice", not("Coming in an update"), "Talking to Nexy on this computer arrives in an update") +
       row("Memory", `<button class="btn small" type="button" data-act="mem">What Nexy remembers</button>`, "List, export or forget the conversations the agent keeps") +
-      row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule, on this machine");
+      row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule or when an email or file arrives, on this machine");
     return `<h3>Nexy</h3>` + await engineRow() +
       row("Voice", voices.length ? sel("voice", voices.map((v) => [v.id, v.name]), pickedVoice()) : not(`${speech} is not answering`), localVoice ? "Spoken by this computer's own voices; nothing leaves it" : "Spoken by Own Voice on this machine") +
       row("Speak replies aloud", sw(P.speakAlways, "speakAlways"), "Off: only in voice mode") +
       row("Hold space to talk", sw(P.wakeKey, "wakeKey")) +
       row("Memory", `<button class="btn small" type="button" data-act="mem">What Nexy remembers</button>`, "List, export or forget the conversations the agent keeps") +
-      row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule, on this machine") +
+      row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule or when an email or file arrives, on this machine") +
       `<div class="sbtns"><button class="btn small" type="button" data-act="testVoice">Test the voice</button></div>`;
   }
   if (sec === "team" && !hasApp("startup")) return `<h3>Team</h3><p class="sp">A team of agents working through a plan runs on an Own1 or Nexy Cloud. On this computer, Nexy is one assistant.</p>`;

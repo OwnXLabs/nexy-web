@@ -19,6 +19,9 @@ export interface Routine {
   pending?: boolean; origin?: string | null;
   // the zone its clock times are read in (IANA name); absent when the agent reads them in UTC
   tz?: string | null;
+  // runs when this event arrives instead of on a schedule ("mail from=a@example.com"); each run
+  // holds the event as outside content, so it can read but not write or send
+  trigger?: string | null;
 }
 
 // a new routine: schedule in the owner's zone (tz); utcSchedule is the same in UTC, for agents without zones

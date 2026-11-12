@@ -1,4 +1,5 @@
 import { httpMsg, errText } from "./http";
+import { triggerChip, triggerText } from "./triggers";
 export type MemCmd =
   | { kind: "memShow" } | { kind: "memForget" }
   | { kind: "routineMake"; cron: string; local: string; human: string; prompt: string; name: string }
@@ -40,6 +41,20 @@ export function scheduleText(schedule: string, tz: string | null): string {
     : cron ? `${cron[3] === "*" ? "every day" : "every weekday"} at ${clock(+cron[2], +cron[1])}`
     : schedule;
   return tz == null ? `${text} (UTC)` : tz === deviceZone() ? text : `${text} (${tz} time)`;
+}
+
+/** A schedule as a short chip label: "Weekdays 7:30 am", "Daily 8:00 am", "Every 2 hours". */
+export function scheduleChip(schedule: string): string {
+  const s = schedule.trim().toLowerCase();
+  const every = /^every (\d+)([mhd])$/.exec(s);
+  if (every) {
+    const unit = { m: "minute", h: "hour", d: "day" }[every[2] as "m" | "h" | "d"];
+    return every[1] === "1" ? `Every ${unit}` : `Every ${every[1]} ${unit}s`;
+  }
+  const daily = /^daily (\d{1,2}):(\d{2})$/.exec(s), cron = /^(\d{1,2}) (\d{1,2}) \* \* (\*|1-5|mon-fri)$/.exec(s);
+  if (daily) return `Daily ${clock(+daily[1], +daily[2])}`;
+  if (cron) return `${cron[3] === "*" ? "Daily" : "Weekdays"} ${clock(+cron[2], +cron[1])}`;
+  return schedule;
 }
 
 export function parseSchedule(text: string, now = new Date()): { cron: string; local: string; human: string; prompt: string } | null {
@@ -146,10 +161,9 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
       const { routines } = await call("/api/v1/routines");
       if (!routines.length) { ui.push("ai", "No routines yet. Try “every weekday at 8am, summarise what my projects need”."); return; }
       const waiting = routines.filter((r: any) => r.pending), live = routines.filter((r: any) => !r.pending);
-      if (live.length) ui.block(blockEl("Routines", `${live.length} on this machine`, live.map((r: any) =>
-        row(r.name, `${scheduleText(r.schedule, r.tz ?? null)}${r.nextRunAt ? ` · next ${localTime(r.nextRunAt)}` : ""}${r.lastRunAt ? ` · last ${localTime(r.lastRunAt)}` : " · not run yet"}`, !r.enabled)).join(""), "", "routine"));
-      for (const r of waiting) ui.block(pendingEl(r, ui));
-      if (waiting.length) ui.push("ai", `${waiting.length === 1 ? "One routine is" : `${waiting.length} routines are`} waiting for you. I set ${waiting.length === 1 ? "it" : "them"} up while reading something from outside, so ${waiting.length === 1 ? "it" : "they"} will not run until you confirm.`);
+      if (live.length) ui.block(listEl(live));
+      for (const r of waiting) ui.block(pendingEl(r, (html) => ui.push("ai", html)));
+      if (waiting.length) ui.push("ai", waitingText(waiting));
       const latest = routines.find((r: any) => r.lastResult);
       if (latest) ui.push("ai", `Latest from <b>${esc(latest.name)}</b>:<br>${esc(latest.lastResult).slice(0, 700).replace(/\n/g, "<br>")}`);
       return;
@@ -178,30 +192,126 @@ function originText(o: unknown): string {
   }).join(", ");
 }
 
-/** A routine made while outside content was in context: the owner confirms or discards it. */
-function pendingEl(r: any, ui: MemUI): HTMLElement {
+// an event run holds someone else's words, so the agent runs it read-only, at most this often
+const READ_ONLY = "read only: it can't reply, send or delete anything";
+const EVENT_GAP = "at most once every 5 minutes";
+const settled = (r: { trigger?: string | null }) => (r.trigger ? "Turned on" : "Confirmed");
+
+function waitingText(waiting: any[]): string {
+  const one = waiting.length === 1, head = `${one ? "One routine is" : `${waiting.length} routines are`} waiting for you.`;
+  if (!waiting.some((r) => r.trigger)) return `${head} I set ${one ? "it" : "them"} up while reading something from outside, so ${one ? "it" : "they"} will not run until you confirm.`;
+  return `${head} A routine that starts when an email or a file arrives always waits for you to turn it on, and even then it can only read.`;
+}
+
+/** A routine waiting for the owner: made from outside content, or started by events. */
+function pendingEl(r: any, say: (html: string) => void): HTMLElement {
+  const buttons = r.trigger
+    ? `<div class="ba"><button class="btn small" data-discard>Discard</button> <button class="btn small" data-confirm>Turn on</button></div>`
+    : `<div class="ba"><button class="btn small" data-confirm>Confirm</button> <button class="btn small" data-discard>Discard</button></div>`;
+  // a trigger made in chat waits by design; only outside content it was made from is worth naming
+  const from = String(r.origin ?? "").split(", ").filter((p) => p && p !== "an event trigger made in chat").join(", ");
   // confirming sends this device's zone, so an agent with zones runs it on this clock
-  const el = blockEl(`Waiting for you: ${r.name}`, "not running yet",
-    row("What it will run", r.prompt, true) + row("When", scheduleText(r.schedule, r.tz == null ? null : deviceZone()), true) + row("Came from", originText(r.origin), true),
-    `<div class="ba"><button class="btn small" data-confirm>Confirm</button> <button class="btn small" data-discard>Discard</button></div>`, "routine");
+  const rows = r.trigger
+    ? row("When", triggerText(r.trigger), true) + row("Does", r.prompt, true) + row("Can", READ_ONLY, true) + row("Limit", EVENT_GAP, true) + (from ? row("Came from", originText(from), true) : "")
+    : row("What it will run", r.prompt, true) + row("When", scheduleText(r.schedule, r.tz == null ? null : deviceZone()), true) + row("Came from", originText(r.origin), true);
+  const el = blockEl(`Waiting for you: ${r.name}`, r.trigger ? "off until you turn it on" : "not running yet", rows, buttons, "routine");
   // every card for this routine, earlier in the chat or in a saved copy, is settled with it
   el.dataset.routine = String(r.id);
-  wireCard(el, r, (html) => ui.push("ai", html));
+  wireCard(el, r, say);
   return el;
 }
 
+const statusText = (s: unknown): string => {
+  if (s == null || s === "") return "";
+  const t = String(s);
+  return t === "ok" ? "done" : t === "running" ? "running now" : /^error\b/i.test(t) ? "did not finish" : t.slice(0, 40);
+};
+
+/** One routine in the list: its chip, when it last ran and how that went, its result and Delete. */
+function listRow(r: any): string {
+  const chip = r.trigger ? `⚡ ${triggerChip(r.trigger)}` : `🕖 ${scheduleChip(r.schedule)}`;
+  const zone = r.trigger ? "" : r.tz == null ? "in UTC" : r.tz === deviceZone() ? "" : `in ${r.tz} time`;
+  const last = r.lastRunAt ? `last ${localTime(r.lastRunAt)}${statusText(r.lastStatus) ? ` · ${statusText(r.lastStatus)}` : ""}` : "not run yet";
+  const text = [r.trigger ? "read only" : "", zone, !r.trigger && r.nextRunAt ? `next ${localTime(r.nextRunAt)}` : "", last].filter(Boolean).join(" · ");
+  const acts = `${r.lastResult ? `<button class="btn small" type="button" data-result>See result</button> ` : ""}<button class="btn small" type="button" data-delete>Delete</button>`;
+  return `<div class="row" data-rid="${esc(String(r.id))}"><span class="led${r.enabled ? " ok" : " off"}"></span><span>${esc(r.name)}</span>` +
+    `<span class="v"><span class="chip">${esc(chip)}</span> ${esc(text)} <span class="rb">${acts}</span></span></div>`;
+}
+
+function listEl(live: any[]): HTMLElement {
+  const el = blockEl("Routines", `${live.length} on this machine`, live.map(listRow).join(""), "", "routine");
+  for (const r of live) wireRow(el, r);
+  return el;
+}
+
+/** See result opens the latest run's text under the row; Delete asks once more, then removes it. */
+function wireRow(root: ParentNode, r: any): void {
+  const rowEl = root.querySelector<HTMLElement>(`.row[data-rid="${CSS.escape(String(r.id))}"]`);
+  if (!rowEl) return;
+  const see = rowEl.querySelector<HTMLButtonElement>("[data-result]"), del = rowEl.querySelector<HTMLButtonElement>("[data-delete]");
+  live([see, del]);
+  // labels as the routine stands now, not as a saved copy left them
+  if (del) del.textContent = "Delete";
+  if (see) see.textContent = (rowEl.nextElementSibling as HTMLElement | null)?.dataset.result === String(r.id) ? "Hide result" : "See result";
+  if (see && !r.lastResult) see.remove();
+  else if (see) see.onclick = () => {
+    const open = rowEl.nextElementSibling;
+    if (open?.classList.contains("why") && (open as HTMLElement).dataset.result === String(r.id)) { open.remove(); see.textContent = "See result"; return; }
+    const d = document.createElement("div");
+    d.className = "why";
+    d.dataset.result = String(r.id);
+    d.innerHTML = `<b>${r.lastRunAt ? esc(localTime(r.lastRunAt)) : "Latest run"}</b><br>${esc(String(r.lastResult)).replace(/\n/g, "<br>")}`;
+    rowEl.after(d);
+    see.textContent = "Hide result";
+  };
+  if (!del) return;
+  let armed = false;
+  del.onclick = async () => {
+    if (!armed) { armed = true; del.textContent = "Yes, delete"; return; }
+    del.disabled = true;
+    try {
+      await call(`/api/v1/routines?id=${encodeURIComponent(String(r.id))}`, { method: "DELETE" });
+      rowEl.querySelector(".led")!.className = "led off";
+      rowEl.querySelector(".v")!.textContent = "Deleted. It will not run again.";
+      const open = rowEl.nextElementSibling;
+      if (open?.classList.contains("why")) open.remove();
+    } catch (e) {
+      del.disabled = false;
+      rowEl.querySelector(".v")!.insertAdjacentHTML("beforeend", ` <span class="feednote bad">Not deleted: ${esc(errText(e))}</span>`);
+    }
+  };
+}
+
+/**
+ * After a reply that says a routine is waiting in Routines: its card, so the owner can answer
+ * here. Only routines not already on a card in this chat.
+ */
+export async function showWaitingRoutines(ui: { block(el: HTMLElement): void; push(who: "ai", html: string): HTMLElement }, root: () => ParentNode): Promise<void> {
+  const { routines } = await call("/api/v1/routines");
+  for (const r of (routines as any[]).filter((x) => x.pending)) {
+    if (root().querySelector(`[data-routine="${CSS.escape(String(r.id))}"]`)) continue;
+    ui.block(pendingEl(r, (html) => ui.push("ai", html)));
+  }
+}
+
+// a saved chat comes back with its buttons disabled (shell.ts revive); these work again once wired
+const live = (bs: (HTMLButtonElement | null)[]) => bs.forEach((b) => { if (b) { b.disabled = false; b.removeAttribute("title"); } });
+
 /** Confirm and Discard on a card. `say` puts the outcome in the chat; without it, in the card. */
-function wireCard(el: HTMLElement, r: { id: unknown; name: string }, say?: (html: string) => void): void {
+function wireCard(el: HTMLElement, r: { id: unknown; name: string; trigger?: string | null }, say?: (html: string) => void): void {
   const buttons = [...el.querySelectorAll<HTMLButtonElement>("[data-confirm], [data-discard]")];
+  live(buttons);
   const tell = (html: string) => { if (say) say(html); else el.querySelector(".ba")!.innerHTML = html; };
   for (const b of buttons) b.onclick = async () => {
     const action = b.hasAttribute("data-confirm") ? "confirm" : "discard";
     buttons.forEach((x) => { x.disabled = true; });
     try {
       const d = await call("/api/v1/routines", { method: "PATCH", body: JSON.stringify({ id: r.id, action, tz: deviceZone() }) });
-      settleCards(String(r.id), action === "confirm" ? "Confirmed" : "Discarded");
+      settleCards(String(r.id), action === "confirm" ? settled(r) : "Discarded");
       tell(action === "confirm"
-        ? `Confirmed <b>${esc(r.name)}</b>. ${d?.routine?.nextRunAt ? `First run ${esc(localTime(d.routine.nextRunAt))}.` : "It runs on its schedule."}`
+        ? r.trigger
+          ? `Turned on <b>${esc(r.name)}</b>. It runs when ${esc(triggerText(r.trigger))}, ${esc(EVENT_GAP)}, and can only read.`
+          : `Confirmed <b>${esc(r.name)}</b>. ${d?.routine?.nextRunAt ? `First run ${esc(localTime(d.routine.nextRunAt))}.` : "It runs on its schedule."}`
         : `Discarded <b>${esc(r.name)}</b>. It will not run.`);
     } catch (e) {
       buttons.forEach((x) => { x.disabled = false; });
@@ -228,12 +338,20 @@ function settleCards(id: string, text: string): void {
  */
 export async function refreshRoutineCards(root: ParentNode): Promise<void> {
   const cards = [...root.querySelectorAll<HTMLElement>("[data-routine]")].filter((c) => c.querySelector("[data-confirm]"));
-  if (!cards.length) return;
+  const rows = [...root.querySelectorAll<HTMLElement>(".row[data-rid]")].filter((c) => c.querySelector("[data-delete]"));
+  if (!cards.length && !rows.length) return;
   const { routines } = await call("/api/v1/routines");
+  const byId = (id: string | undefined) => (routines as any[]).find((x) => String(x.id) === id);
   for (const c of cards) {
-    const r = (routines as any[]).find((x) => String(x.id) === c.dataset.routine);
+    const r = byId(c.dataset.routine);
     if (r?.pending) wireCard(c, r);
-    else c.querySelector(".ba")!.textContent = r ? "Confirmed" : "No longer waiting";
+    else c.querySelector(".ba")!.textContent = r ? settled(r) : "No longer waiting";
+  }
+  // a list shown again: its buttons work on the routine as it is now, or it says it is gone
+  for (const c of rows) {
+    const r = byId(c.dataset.rid);
+    if (r && !r.pending) wireRow(c.parentElement ?? root, r);
+    else { c.querySelector(".rb")?.remove(); c.querySelector(".led")!.className = "led off"; }
   }
 }
 

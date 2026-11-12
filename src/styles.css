@@ -142,6 +142,9 @@ body.canvas-open .stage{--cw:var(--cwv,560px)}
 /* routines: the label keeps its line (up to 40%), a long value wraps beside it */
 .block.routine .row{grid-template-columns:16px fit-content(40%) minmax(0,1fr)}
 .block.routine .row .v{overflow-wrap:anywhere}
+/* a routine's chip keeps one line; its buttons stay together */
+.block.routine .row .v .chip{display:inline-block;height:22px;line-height:20px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;margin:2px 0}
+.block.routine .row .v .rb{display:inline-flex;gap:6px;white-space:nowrap;vertical-align:middle}
 .block.perm{border-color:rgba(255,140,104,.45)}
 .block.act{border-color:rgba(124,92,255,.45)}
 .block .why{padding:10px 14px;color:var(--fg2);line-height:1.5;border-bottom:1px solid var(--line)}

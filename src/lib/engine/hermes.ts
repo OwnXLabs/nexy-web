@@ -17,6 +17,8 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
     if (!res.ok) throw new Error(`agent gateway ${res.status}: ${String(body?.error ?? "").slice(0, 120)}`);
     return body;
   };
+  // a numeric job id, as the agent names its run sessions after it; "" for any other
+  const runId = (v: unknown): string => (/^\d+$/.test(String(v ?? "")) ? String(v) : "");
   const when = (v: unknown): string | null => (v == null || v === "" ? null : typeof v === "number" ? new Date(v * (v < 1e12 ? 1000 : 1)).toISOString() : String(v));
   const sessions = async (): Promise<any[]> => (await api("/api/sessions?limit=200"))?.data ?? [];
   const toItem = (x: any): MemoryItem => ({ id: String(x.id), title: String(x.title ?? "Untitled"), source: String(x.source ?? ""), startedAt: typeof x.started_at === "number" ? x.started_at * 1000 : null, messages: Number(x.message_count ?? 0) });
@@ -111,8 +113,12 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
         const all = await sessions().catch(() => [] as any[]);
         const out: Routine[] = [];
         for (const j of jobs) {
-          const run = all.filter((x) => /cron/i.test(String(x.source ?? "")) && String(x.title ?? "").includes(String(j.name ?? "\u0000")))
-            .sort((a, b) => (b.started_at ?? 0) - (a.started_at ?? 0))[0];
+          // a run's session: "cron-<id>-…" or "event-<id>-…" where the agent names it so, else a
+          // scheduled session titled with the routine's name
+          const sid = runId(j.id);
+          const mine = (x: any) => (sid !== "" && [`cron-${sid}-`, `event-${sid}-`].some((p) => String(x.id ?? "").startsWith(p)))
+            || (/cron|^event$/i.test(String(x.source ?? "")) && String(x.title ?? "").includes(String(j.name ?? "\u0000")));
+          const run = all.filter(mine).sort((a, b) => (b.started_at ?? 0) - (a.started_at ?? 0))[0];
           out.push({
             id: String(j.id), name: String(j.name ?? ""), prompt: String(j.prompt ?? ""), enabled: j.enabled !== false,
             schedule: typeof j.schedule === "string" ? j.schedule : String(j.schedule?.expr ?? j.schedule?.display ?? j.schedule_display ?? JSON.stringify(j.schedule ?? "")),
@@ -120,6 +126,8 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
             lastResult: run ? (await lastReply(String(run.id)).catch(() => undefined))?.slice(0, 1500) : undefined,
             pending: j.status === "pending", origin: j.origin == null ? null : String(j.origin),
             tz: typeof j.tz === "string" ? j.tz : null,
+            // runs when this event arrives instead of on a schedule: "mail from=a@example.com"
+            trigger: typeof j.trigger === "string" && j.trigger.trim() ? j.trigger : null,
           });
         }
         return out;
