@@ -1,6 +1,6 @@
 import { hasApp, here, localVoice, onOwn1, voiceApi } from "./place";
 import { HUB, loadCatalog, loadGrants, pauseConnector, resumeConnector, type CatalogEntry } from "./perm";
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 
 export interface SettingsHooks {
   send(text: string): Promise<void>;
@@ -94,7 +94,7 @@ async function section(sec: string): Promise<string> {
       return `<h3>Connections</h3>` + tg + `<p class="sp">Outside apps come from this machine's catalogue. Nexy asks before the first use of each one.</p>` + google +
         (cat.length ? cat.map((c) => connRow(c, granted)).join("") : row("Catalogue", not("Empty")));
     } catch (e) {
-      return `<h3>Connections</h3>` + tg + row("Catalogue", not(`Not answering: ${(e as Error).message}`));
+      return `<h3>Connections</h3>` + tg + row("Catalogue", not(`Not answering: ${errText(e)}`));
     }
   }
   if (sec === "data") return dataSection();
@@ -195,7 +195,7 @@ async function telegramRow(): Promise<string> {
     t = await r.json();
     if (!r.ok) return row("Telegram", not(t.error ?? `Not answering: ${httpMsg(r.status)}`));
   } catch (e) {
-    return row("Telegram", not(`Not answering: ${(e as Error).message}`));
+    return row("Telegram", not(`Not answering: ${errText(e)}`));
   }
   if (t.connected) return row("Telegram", `<span class="faint">Connected as @${esc(t.bot ?? "?")}</span> <button class="btn small ghost" type="button" data-act="tgoff">Disconnect</button>`,
     `Message the bot to talk to your agent. Only Telegram user ${esc(t.users ?? "")} can command it; in a group, @mention it.`);
@@ -215,7 +215,7 @@ async function googleRow(): Promise<string> {
     g = await r.json();
     if (!r.ok) return row("Google sign-in", not(g.error ?? `Not answering: ${httpMsg(r.status)}`));
   } catch (e) {
-    return row("Google sign-in", not(`Not answering: ${(e as Error).message}`));
+    return row("Google sign-in", not(`Not answering: ${errText(e)}`));
   }
   const pick = `<input type="file" id="gClientPick" accept="application/json,.json" hidden>`;
   if (g.configured) return row("Google sign-in", `<span class="faint">${g.source === "owner" ? `Your OAuth client …${esc(g.clientIdEnd ?? "")}` : "Built in"}</span>` +
@@ -242,7 +242,7 @@ async function act(a: string, n?: string): Promise<void> {
     if (!entry) { H.toast("That app is no longer in this machine's catalogue"); void renderSettings("connections"); return; }
     const out = await (a === "pause" ? pauseConnector(entry) : resumeConnector(entry)).catch((e): { ok: false; note: string } => {
       console.warn(`[nexy] ${a} ${entry.id} failed`, e);
-      return { ok: false, note: `Not changed — ${(e as Error).message}` };
+      return { ok: false, note: `Not changed — ${errText(e)}` };
     });
     H.toast(out.note);
     void renderSettings("connections");
@@ -332,7 +332,7 @@ async function dataRows(): Promise<DataRow[]> {
       const l = await get(path, key);
       return { name, sub, count: l.length, bytes: sized ? sum(l) : null, list: l };
     } catch (e) {
-      return { name, sub: `not answering: ${(e as Error).message}`, count: 0, bytes: null, list: [] };
+      return { name, sub: `not answering: ${errText(e)}`, count: 0, bytes: null, list: [] };
     }
   }));
 }
@@ -349,7 +349,7 @@ async function chatRow(): Promise<DataRow> {
     const l = ((await r.json()) as { chats?: Record<string, unknown>[] }).chats ?? [];
     return { name: "Chats", sub, count: l.length, bytes: null, list: l };
   } catch (e) {
-    return { name: "Chats", sub: `not answering: ${(e as Error).message}`, count: 0, bytes: null, list: [] };
+    return { name: "Chats", sub: `not answering: ${errText(e)}`, count: 0, bytes: null, list: [] };
   }
 }
 

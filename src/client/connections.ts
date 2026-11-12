@@ -1,4 +1,5 @@
 import type { Artifact } from "./canvas";
+import { errText } from "./http";
 import { loadCatalog } from "./perm";
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
@@ -31,7 +32,7 @@ async function fill(host: HTMLElement, connect: (name: string) => void): Promise
     const d = (await r.json()) as { silent?: { label: string }[]; degraded?: { label: string }[] };
     down = new Set([...(d.silent ?? []), ...(d.degraded ?? [])].map((x) => x.label));
   } catch (e) {
-    feedNote = `<p class="faint">Could not check the apps: ${esc((e as Error).message)}</p>`;
+    feedNote = `<p class="faint">Could not check the apps: ${esc(errText(e))}</p>`;
   }
   let outside = "";
   try {
@@ -44,7 +45,7 @@ async function fill(host: HTMLElement, connect: (name: string) => void): Promise
       }).join("")
       : row(" off", "Catalogue", "empty");
   } catch (e) {
-    outside = row(" warn", "Catalogue", `not answering: ${(e as Error).message}`);
+    outside = row(" warn", "Catalogue", `not answering: ${errText(e)}`);
   }
   cm.innerHTML =
     `<h3>Everything Nexy can reach</h3><p class="sp">Local apps stay on this machine; outside apps are the only things that can carry data out, and only within their scope.</p>` +

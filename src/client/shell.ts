@@ -5,7 +5,7 @@ import { prefs, openSettings } from "./settings";
 import { setPrivate, isPrivate, endPrivate } from "./private";
 import { isOpen, closeCanvas } from "./canvas";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 import { hasApp, isBeta, localVoice, notHereYet, voiceApi } from "./place";
 import { speechReady, toWav } from "./voice-local";
 
@@ -143,7 +143,7 @@ function load(pid: string, id: string): void {
       th.scrollTop = th.scrollHeight;
     }).catch((e: Error) => {
       note.className = "feednote bad";
-      note.textContent = `This chat could not be opened: ${e.message}`;
+      note.textContent = `This chat could not be opened: ${errText(e)}`;
     });
     return;
   }
@@ -180,7 +180,7 @@ function persist(body: { id: string; pid: string; title: string; html: string; h
     const r = await fetch("/api/v1/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? httpMsg(r.status));
     writeFailures.delete(body.id);
-  }).catch((e: Error) => { writeFailures.set(body.id, e); H.toast(`This chat was not saved: ${e.message}`); });
+  }).catch((e: Error) => { writeFailures.set(body.id, e); H.toast(`This chat was not saved: ${errText(e)}`); });
   writes.set(body.id, next);
   void next.then(() => { if (writes.get(body.id) === next) writes.delete(body.id); });
 }
@@ -190,7 +190,7 @@ function resave(pid: string, c: Chat): void {
   if (!c.saved) return;
   const go = () => persist({ id: c.id, pid, title: c.title, html: [...c.nodes.childNodes].map((n) => (n as Element).outerHTML ?? n.textContent ?? "").join(""), history: c.history, projectId: c.projectId, ...inChat(c.id, savedOutputs) });
   if (cur?.cid === c.id) { saveChat(); return; }
-  if (c.loaded) go(); else fetchChat(c).then(go).catch((e: Error) => H.toast(`This chat was not saved: ${e.message}`));
+  if (c.loaded) go(); else fetchChat(c).then(go).catch((e: Error) => H.toast(`This chat was not saved: ${errText(e)}`));
 }
 
 // saved chats, newest first, into the sidebar; the open project shows its latest
@@ -326,7 +326,7 @@ function deleteChat(pid: string, id: string): void {
   if (list.find((c) => c.id === id)?.saved) {
     fetch(`/api/v1/chats?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { "content-type": "application/json" } })
       .then((r) => { if (!r.ok) throw new Error(httpMsg(r.status)); })
-      .catch((e: Error) => H.toast(`The saved copy was not deleted: ${e.message}`));
+      .catch((e: Error) => H.toast(`The saved copy was not deleted: ${errText(e)}`));
   }
   if (wasCurrent) {
     const th = $("#thread");
@@ -584,7 +584,7 @@ async function startRecording(): Promise<boolean> {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
-    H.toast(`The microphone is not available: ${(e as Error).message}`);
+    H.toast(`The microphone is not available: ${errText(e)}`);
     return false;
   }
   chunks = [];
@@ -624,7 +624,7 @@ async function startV(): Promise<void> {
   if (listening) return;
   if (localVoice) {
     try { await speechReady((m) => H.toast(m)); }
-    catch (e) { H.toast(`Speech is not ready: ${(e as Error).message}`); return; }
+    catch (e) { H.toast(`Speech is not ready: ${errText(e)}`); return; }
   }
   if (!(await startRecording())) return;
   window.dispatchEvent(new CustomEvent("nexy:did", { detail: "voice" }));
@@ -641,7 +641,7 @@ async function stopV(): Promise<void> {
     if (t) void H.send(t);
     else H.toast("I heard nothing, so nothing was sent.");
   } catch (e) {
-    H.toast(`Could not transcribe: ${(e as Error).message}`);
+    H.toast(`Could not transcribe: ${errText(e)}`);
   } finally {
     $("#voice")?.classList.remove("open");
     $("#micBtn")?.classList.remove("on");
@@ -738,7 +738,7 @@ async function vmListen(): Promise<void> {
   if (!VM.on || VM.state === "listen") return;
   if (localVoice) {
     try { await speechReady((m) => vmState("think", m)); }
-    catch (e) { vmState("idle", `Speech is not ready: ${(e as Error).message}`); return; }
+    catch (e) { vmState("idle", `Speech is not ready: ${errText(e)}`); return; }
     if (!VM.on) return;
   }
   if (!(await startRecording())) { vmClose(); return; }
@@ -755,7 +755,7 @@ async function vmSend(): Promise<void> {
     vmState("think", "Thinking");
     await H.send(t);
   } catch (e) {
-    vmState("idle", `Could not transcribe: ${(e as Error).message}`);
+    vmState("idle", `Could not transcribe: ${errText(e)}`);
   }
 }
 

@@ -34,7 +34,7 @@ import { matchMemory, playMemory, noteExampleRoutine, deviceZone } from "./memor
 import { initSettings, notify, openSettings } from "./settings";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
-import { httpMsg } from "./http";
+import { httpMsg, errText, unreachable, away } from "./http";
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s);
 const $$ = (s: string, r: ParentNode = document) => Array.from(r.querySelectorAll<HTMLElement>(s));
@@ -111,7 +111,9 @@ class HttpError extends Error {
   }
 }
 // loading, busy, or a dropped connection: worth waiting for, not worth showing
-const transient = (e: unknown) => e instanceof HttpError ? [429, 502, 503, 504].includes(e.status) : e instanceof TypeError;
+// GONE: the machine failed a health check mid-request (streamReply); asking again later may work
+const GONE = "the machine did not answer";
+const transient = (e: unknown) => e instanceof HttpError ? [429, 502, 503, 504].includes(e.status) : e instanceof TypeError || (e as Error)?.message === GONE;
 const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
 const api = async <T>(path: string, init?: RequestInit): Promise<T> => {
@@ -135,10 +137,10 @@ const api = async <T>(path: string, init?: RequestInit): Promise<T> => {
 const WAITS = [10, 20, 30, 45, 60];
 // the image engine heals itself within a minute of a failure, then reloads
 const IMAGE_WAITS = [15, 30, 45, 60, 60, 60];
-async function patient<T>(call: () => Promise<T>, waiting: (n: number, secs: number, of: number) => void, waits = WAITS): Promise<T> {
+async function patient<T>(call: () => Promise<T>, waiting: (n: number, secs: number, of: number, e: unknown) => void, waits = WAITS): Promise<T> {
   for (const [n, secs] of waits.entries()) {
     try { return await call(); }
-    catch (e) { if (!transient(e)) throw e; waiting(n + 1, secs, waits.length); await sleep(secs * 1000); }
+    catch (e) { if (!transient(e)) throw e; waiting(n + 1, secs, waits.length, e); await sleep(secs * 1000); }
   }
   return call();
 }
@@ -163,6 +165,13 @@ function tick(el: HTMLElement): void {
 }
 setInterval(() => document.querySelectorAll<HTMLElement>("#thread .wait[data-eta]").forEach(tick), 1000);
 const settle = (holder: HTMLElement) => holder.querySelector(".bub .wait")?.remove();
+// no countdown while the machine can't be reached: it would count down to nothing
+function stopClock(holder: HTMLElement): void {
+  const w = holder.querySelector<HTMLElement>(".bub .wait");
+  if (!w) return;
+  delete w.dataset.eta;
+  const t = w.querySelector(".wt"); if (t) t.textContent = "";
+}
 const retrying = (holder: HTMLElement, gen?: { note(t: string): void }) => (n: number, secs: number, of: number) => {
   const t = `Still loading on this machine. Trying again in ${secs}s (${n} of ${of}).`;
   status(holder, t);
@@ -226,7 +235,7 @@ function onReview(pid: string, taskId: string, verdict: string): void {
   if (verdict === "approve") {
     reviewTask(pid, taskId, "approve")
       .then(() => { push("ai", `Approved <b>${esc(t.t)}</b>.`); saveChat(); })
-      .catch((e: Error) => toast(`That approval did not save: ${e.message}`));
+      .catch((e: Error) => toast(`That approval did not save: ${errText(e)}`));
     return;
   }
   S.redo = { pid, taskId, title: t.t };
@@ -251,7 +260,7 @@ async function openProject(id: string): Promise<void> {
       if (resume) { resume.dataset.resume = p.id; pushBlock(resume); }
     }
   } catch (e) {
-    S.projectsError = `could not open that project (${(e as Error).message})`;
+    S.projectsError = `could not open that project (${errText(e)})`;
   }
   renderAll();
 }
@@ -374,7 +383,7 @@ async function renameProject(p: Project, name: string): Promise<void> {
     p.activity.unshift({ t: now(), x: `<b>You</b> renamed the project to ${esc(name)}`, k: "on" });
     toast(`Renamed to ${name}`);
   } catch (e) {
-    toast(`Own Startup did not rename it: ${(e as Error).message}`);
+    toast(`Own Startup did not rename it: ${errText(e)}`);
   }
   renderAll();
 }
@@ -390,7 +399,7 @@ async function deleteProject(p: Project): Promise<void> {
       S.cur = "";
     }
   } catch (e) {
-    toast(`Own Startup did not delete it: ${(e as Error).message}`);
+    toast(`Own Startup did not delete it: ${errText(e)}`);
   }
   renderAll();
 }
@@ -428,7 +437,7 @@ async function cycleTask(p: Project, id: string): Promise<void> {
     await refreshProject(p.id);
     reshowPlan(p.id);
   } catch (e) {
-    toast(`Own Startup did not change it: ${(e as Error).message}`);
+    toast(`Own Startup did not change it: ${errText(e)}`);
   }
 }
 
@@ -450,7 +459,7 @@ async function fromFrame(e: MessageEvent): Promise<void> {
     showArtifact(artifactFor({ app: "beat", appLabel: "Own Beat Studio", kind: "audio", title: save.name, ts: Date.now(), href: `/api/apps/beat/api/history/${encodeURIComponent(res.id)}` }));
     saveChat();
   } catch (err) {
-    toast(`Own Beat Studio did not take it: ${(err as Error).message}`);
+    toast(`Own Beat Studio did not take it: ${errText(err)}`);
   }
 }
 
@@ -749,7 +758,7 @@ async function attachedDocs(priv: boolean): Promise<{ filename: string; text: st
       const d = await api<{ text?: string }>(url(a.conv)).catch((e) => (a.conv ? api<{ text?: string }>(url()) : Promise.reject(e)));
       out.push({ filename: a.filename, text: d.text?.trim() || a.local || "(still being read; no text yet)" });
     } catch (e) {
-      out.push({ filename: a.filename, text: a.local || `(could not be read: ${(e as Error).message})` });
+      out.push({ filename: a.filename, text: a.local || `(could not be read: ${errText(e)})` });
     }
   }
   return out;
@@ -825,7 +834,7 @@ async function attachFiles(files: File[]): Promise<void> {
       if (a.docId) { added.push({ id: String(a.docId), filename: f.name }); localTurn.attached.push({ id: String(a.docId), filename: f.name, eph: isPrivate(), conv: isPrivate() ? privateConversationId() ?? undefined : undefined,
         local: /\.(csv|txt|md|json|tsv)$/i.test(f.name) && f.size < 200_000 ? await f.text() : undefined }); }
     } catch (e) {
-      failed.push(`${f.name}: ${(e as Error).message}`);
+      failed.push(`${f.name}: ${errText(e)}`);
     }
   }
 
@@ -865,7 +874,7 @@ async function attachFiles(files: File[]): Promise<void> {
           })
           .catch((e: Error) => {
             if (slot) slot.textContent = "";
-            if (row) row.insertAdjacentHTML("beforeend", `<span class="faint">${esc(e.message)}</span>`);
+            if (row) row.insertAdjacentHTML("beforeend", `<span class="faint">${esc(errText(e))}</span>`);
           });
       }),
     );
@@ -955,7 +964,7 @@ async function playLocalMake(brief: string): Promise<void> {
     }
     throw new Error(why || "the build did not finish");
   } catch (e) {
-    const detail = (e as Error).message;
+    const detail = errText(e);
     gen.fail("It did not work this time");
     failedReply(holder.querySelector(".bub")!, checked
       ? "I could not build that well enough to show you. I tried twice and neither version passed my checks, so I kept them back. Try again, or describe it a little differently."
@@ -1036,7 +1045,7 @@ async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web
     gen.replaceWith(output);
     window.dispatchEvent(new CustomEvent("nexy:files-changed"));
   } catch (e) {
-    const why = (e as Error).message;
+    const why = errText(e);
     gen.fail(`Own Build stopped: ${why}`);
     // a generated page that fails the checks is the model's mistake, not a fault in the machine
     failedReply(holder.querySelector(".bub")!, /render gate|not playable|looks broken|cannot draw|not a readable/i.test(why)
@@ -1085,7 +1094,7 @@ async function playChart(question: string, priv: boolean): Promise<void> {
       : `${c.points.length} figures for <b>${esc(c.title)}</b>, each quoted from its source (searched for “${esc(c.query)}”).`) +
       (c.dropped ? `<div class="feednote" style="margin-top:8px">${c.dropped} value${c.dropped === 1 ? "" : "s"} could not be found in any source and were left out.</div>` : "");
   } catch (e) {
-    bub.innerHTML = `The web search did not complete: <code>${esc((e as Error).message)}</code>`;
+    bub.innerHTML = `The web search did not complete: <code>${esc(errText(e))}</code>`;
   }
 }
 
@@ -1120,7 +1129,7 @@ async function playDeck(text: string, tasks: string[]): Promise<void> {
         ? `Three slides on the right, but Own Docs has nothing indexed yet, so the numbers slide says so instead of inventing figures. ${subject ? "Attach material on it" : `Attach the ${esc(month ?? "latest")} P&L`} and ask again.`
         : `Three slides on the right. I found no ${subject ? about : `${esc(month ?? "")} figures`} in your documents that I could trace, so the numbers slide says so rather than making them up.`;
   } catch (e) {
-    holder.querySelector(".bub")!.innerHTML = `The plan is ready, but I could not pull figures from Own Docs: <code>${esc((e as Error).message)}</code>`;
+    holder.querySelector(".bub")!.innerHTML = `The plan is ready, but I could not pull figures from Own Docs: <code>${esc(errText(e))}</code>`;
   }
 }
 
@@ -1207,7 +1216,7 @@ async function playBuild(text: string): Promise<void> {
     if (/\b(deck|slides?|presentation)\b/i.test(text)) await playDeck(text, p.tasks.map((t) => t.t));
   } catch (e) {
     failedReply(holder.querySelector(".bub")!, "I could not build the plan this time. It usually works on a second try.",
-      (e as Error).message, () => void playBuild(text));
+      errText(e), () => void playBuild(text));
   }
 }
 
@@ -1439,8 +1448,8 @@ async function runTask(taskId: string, p: Project | undefined = P()): Promise<"d
     outcome = "done";
   } catch (e) {
     t.s = "todo";
-    const msg = (e as Error).message;
-    if (/\b(429|502|503|504)\b|busy|loading|queue|timed out|hang up|fetch failed|network/i.test(msg)) {
+    const msg = errText(e);
+    if (unreachable(e) || /\b(429|502|503|504)\b|busy|loading|queue|timed out|hang up|fetch failed|network/i.test((e as Error).message)) {
       outcome = "wait";
       holder.remove();
     } else holder.querySelector(".bub")!.innerHTML =
@@ -1588,9 +1597,9 @@ async function playGenerate(medium: "image" | "audio", prompt: string): Promise<
 
     showArtifact({ ...beatStudioArtifact({ title: `${shortTitle(prompt, "Beat")}.studio`, bpm, preset: pat.genre ?? prompt, steps: pat.pattern }), meta: `${who} · ${bits} · on device` });
   } catch (e) {
-    gen?.fail(`${who} stopped: ${(e as Error).message}`);
+    gen?.fail(`${who} stopped: ${errText(e)}`);
     failedReply(holder.querySelector(".bub")!, `${esc(who)} could not make that this time. It usually works on a second try.`,
-      (e as Error).message, () => void playGenerate(medium, prompt));
+      errText(e), () => void playGenerate(medium, prompt));
   } finally {
     settle(holder);
   }
@@ -1680,7 +1689,7 @@ async function playBoardEdit(i: { kind: string; title: string; role?: string; st
     renderAll();
     reshowPlan(p.id);
   } catch (e) {
-    bub.innerHTML = `That did not change: <code>${esc((e as Error).message)}</code>`;
+    bub.innerHTML = `That did not change: <code>${esc(errText(e))}</code>`;
   }
 }
 
@@ -1758,9 +1767,18 @@ function offerTakeover(holder: HTMLElement, what: string): void {
 // going on the server, instead of asking again. The server pings every 15 s, so this long without
 // a byte means the socket is dead: reconnect rather than wait forever.
 const STREAM_IDLE_MS = 40_000;
-async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: () => void): Promise<T> {
+// No turn id this long after asking means the machine may be gone: one quick health check says.
+const PROBE_MS = 8_000;
+async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: (gone: boolean) => void): Promise<T> {
   let id = "";
   let abort = new AbortController(), idle = 0;
+  const probe = window.setTimeout(() => {
+    if (id) return;
+    fetch("/api/v1/health", { signal: AbortSignal.timeout(5_000), cache: "no-store" }).then(
+      (r) => { if (!r.ok) console.warn(`[nexy] health check: HTTP ${r.status}`); },
+      (e) => { console.warn("[nexy] the machine did not answer a health check", e); if (!id) abort.abort(new DOMException(GONE, "AbortError")); },
+    );
+  }, PROBE_MS);
   const alive = () => { clearTimeout(idle); const a = abort; idle = window.setTimeout(() => a.abort(new Error("the reply stream went silent")), STREAM_IDLE_MS); };
   const attempt = () => { abort.abort(); abort = new AbortController(); alive(); return abort.signal; };
   const read = async (r: Response): Promise<T | null> => {
@@ -1805,7 +1823,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
       }
       if (!id) throw new Error("the connection dropped before the reply started");
       if (n >= 30) throw new Error("the connection kept dropping. Send it again when it is steady");
-      onDrop();
+      onDrop(n > 0 && !r);
       await sleep(Math.min(1000 * 2 ** n, 10_000));
       r = await fetch(`/api/v1/chat-turn?id=${encodeURIComponent(id)}`, { headers: { accept: "text/event-stream" }, signal: attempt() }).catch((e) => {
         console.warn("[nexy] could not reconnect yet", e);
@@ -1816,6 +1834,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
     }
   } finally {
     clearTimeout(idle);
+    clearTimeout(probe);
     abort.abort();
   }
 }
@@ -1844,8 +1863,13 @@ async function playChat(text: string, priv = false): Promise<void> {
       streamed = true;
       bub.innerHTML = `${bubbleText(shown)}<span class="cur"></span>`;
       const th = $("#thread"); if (th) th.scrollTop = th.scrollHeight;
-    }, () => status(holder, "The connection dropped. Reconnecting, and the reply keeps going meanwhile.")), (n, secs, of) =>
-      status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`));
+    }, (gone) => {
+      status(holder, gone ? away() : "The connection dropped. Reconnecting, and the reply keeps going meanwhile.");
+      stopClock(holder);
+    }), (n, secs, of, e) => {
+      if (unreachable(e)) { status(holder, away()); stopClock(holder); }
+      else status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`);
+    });
 
     browsing?.stop(d.browsed);
     const m = d.choices?.[0]?.message;
@@ -1879,8 +1903,8 @@ async function playChat(text: string, priv = false): Promise<void> {
     offer();
   } catch (e) {
     thread.pop();
-    holder.querySelector(".bub")!.innerHTML =
-      `The model on this machine did not answer: <code>${esc((e as Error).message)}</code>`;
+    holder.querySelector(".bub")!.innerHTML = unreachable(e) ? esc(away())
+      : `The model on this machine did not answer: <code>${esc((e as Error).message)}</code>`;
   } finally {
     browsing?.stop();
   }
@@ -1964,7 +1988,7 @@ function feedback(signal: "up" | "down" | "frustration" | "runError" | "rephrase
 
 // Good / not right sit in the reply's action row, drawn like copy and retry.
 // a reply that is a failure: asking people to rate an error reads as a joke
-const FAILURE = /could not|did not answer|did not complete|stopped:|is not answering|went wrong|local fault/i;
+const FAILURE = /could not|did not answer|did not complete|stopped:|is not answering|isn't answering|went wrong|local fault/i;
 function rateBar(msg: HTMLElement, prompt: string): void {
   const acts = msg.querySelector<HTMLElement>(".macts");
   if (isPrivate() || EVAL || !acts || acts.querySelector("[data-r]")) return;
@@ -2040,7 +2064,7 @@ async function playFeedbackLog(what: "show" | "clear"): Promise<void> {
       },
     });
   } catch (e) {
-    push("ai", `Could not ${what} the feedback log: <code>${esc((e as Error).message)}</code>`);
+    push("ai", `Could not ${what} the feedback log: <code>${esc(errText(e))}</code>`);
   }
 }
 
@@ -2100,7 +2124,7 @@ async function playRevise(text: string, priv: boolean, part?: Picked | null): Pr
       (d.missed ? `<div class="feednote" style="margin-top:6px">${d.missed} part${d.missed === 1 ? "" : "s"} of the change did not match the page and ${d.missed === 1 ? "was" : "were"} skipped.</div>` : "");
     conversation(priv).push({ role: "user", content: text }, { role: "assistant", content: `I changed the page on the right: ${say}` });
   } catch (e) {
-    bub.innerHTML = `I could not change the page: <code>${esc((e as Error).message)}</code> Nothing on it was changed.`;
+    bub.innerHTML = `I could not change the page: <code>${esc(errText(e))}</code> Nothing on it was changed.`;
   }
 }
 
@@ -2165,7 +2189,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
   if (ready) {
     const resume = bindChat(() => send(text, shown));
     try { await ready; await resume(); }
-    catch (e) { toast(`This chat could not be opened: ${(e as Error).message}`); }
+    catch (e) { toast(`This chat could not be opened: ${errText(e)}`); }
     return;
   }
   if (viewingExample()) leaveExample();
@@ -2586,7 +2610,7 @@ async function boot(): Promise<void> {
       await loadProjects();
       if (S.cur) await loadProjectDetail(S.cur);
     } catch (e) {
-      S.projectsError = (e as Error).message;
+      S.projectsError = errText(e);
     }
   })();
   await Promise.all([projectsLoaded, loadBuilds()]);
@@ -2615,7 +2639,7 @@ async function boot(): Promise<void> {
     await loadFeed();
     renderHead(); renderFiles(); renderApps(); renderActivity();
   } catch (e) {
-    renderFiles(`<div class="feednote bad">The feed did not load: ${esc((e as Error).message)}</div>`);
+    renderFiles(`<div class="feednote bad">The feed did not load: ${esc(errText(e))}</div>`);
   }
 }
 

@@ -4,7 +4,7 @@
 import RFB from "@novnc/novnc/lib/rfb";
 import type { Artifact } from "./canvas";
 import { isPrivate } from "./private";
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 
 interface Screen { available: boolean; watch?: boolean; control?: boolean; driving?: boolean; reason?: string; password?: string; path?: string; error?: string }
 
@@ -28,7 +28,7 @@ export function takeControlFor(what: string): boolean {
 
 const control = async (take: boolean): Promise<{ password?: string; error?: string }> => {
   const r = await fetch("/api/v1/screen", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(take ? { take: true } : { release: true }) });
-  const d = await r.json().catch((e: Error) => ({ error: `unreadable reply: ${e.message}` }));
+  const d = await r.json().catch((e: Error) => ({ error: `unreadable reply: ${errText(e)}` }));
   return r.ok ? d : { error: d?.error ?? `The screen could not change hands: ${httpMsg(r.status)}` };
 };
 // closing the tab mid-drive must not leave the agent paused for the rest of the session
@@ -108,7 +108,7 @@ async function mount(host: HTMLElement): Promise<void> {
   };
   let s: Screen;
   try { s = (await (await fetch("/api/v1/screen")).json()) as Screen; }
-  catch (e) { say(`The agent's screen could not be reached: ${(e as Error).message}`, true); return; }
+  catch (e) { say(`The agent's screen could not be reached: ${errText(e)}`, true); return; }
   if (!s.available) { say("The agent's screen is not running on this machine."); return; }
   if (s.watch === false || !s.password) { say(s.reason ?? "Sign in to the demo to watch the agent's screen."); return; }
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${s.path ?? "/screen/ws"}`;
@@ -202,7 +202,7 @@ async function mount(host: HTMLElement): Promise<void> {
       r.addEventListener("securityfailure", () => say("The agent's screen refused this viewer.", true));
       rfb = r;
     } catch (e) {
-      say(`The agent's screen could not open: ${(e as Error).message}`, true);
+      say(`The agent's screen could not open: ${errText(e)}`, true);
     }
   };
   // a page reload mid-drive: hand the screen back rather than leave the agent paused

@@ -1,4 +1,4 @@
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 export type MemCmd =
   | { kind: "memShow" } | { kind: "memForget" }
   | { kind: "routineMake"; cron: string; local: string; human: string; prompt: string; name: string }
@@ -162,7 +162,7 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
       ui.push("ai", `Stopped <b>${esc(hit[0].name)}</b>. It will not run again.`);
     }
   } catch (e) {
-    ui.push("ai", `That did not work: <code>${esc((e as Error).message)}</code>`);
+    ui.push("ai", `That did not work: <code>${esc(errText(e))}</code>`);
   }
 }
 
@@ -196,7 +196,7 @@ function pendingEl(r: any, ui: MemUI): HTMLElement {
         : `Discarded <b>${esc(r.name)}</b>. It will not run.`);
     } catch (e) {
       buttons.forEach((x) => { x.disabled = false; });
-      ui.push("ai", `Nothing changed: <code>${esc((e as Error).message)}</code>`);
+      ui.push("ai", `Nothing changed: <code>${esc(errText(e))}</code>`);
     }
   };
   return el;
@@ -215,7 +215,7 @@ function wireForget(el: HTMLElement, n: number, ui: MemUI, direct = false): void
       b.textContent = "Forgotten";
     } catch (e) {
       b.disabled = false;
-      ui.push("ai", `Nothing was forgotten: <code>${esc((e as Error).message)}</code>`);
+      ui.push("ai", `Nothing was forgotten: <code>${esc(errText(e))}</code>`);
     }
   };
 }
