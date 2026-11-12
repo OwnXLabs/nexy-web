@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { randomUUID } from "node:crypto";
 import { visible } from "../../../lib/stream-guard";
 import { owner, remember, upstreamFor } from "./private/_session";
 import { owner as signedOwner } from "../../../lib/owner";
@@ -7,12 +8,12 @@ function logTurn(fields: Record<string, unknown>, isPrivate: boolean): void {
   if (isPrivate) return;
   try {
     console.log(JSON.stringify({ at: new Date().toISOString(), endpoint: "chat", ...fields }));
-  } catch {}
+  } catch (e) { console.warn("[nexy] a turn line could not be written", (e as Error).message); }
 }
 import { engineFor, localEngine } from "../../../lib/engine";
 import { agentSessionKey, deniesTools, dropInlineImages, wantsResearch } from "../../../lib/agent-turn";
 import { guardIdentity } from "../../../lib/engine/identity-guard";
-import { canStart, sse, startTurn } from "../../../lib/turns";
+import { canStart, rejoin, sse, startTurn } from "../../../lib/turns";
 import { budget, type Budget } from "../../../lib/budget";
 
 // The longest an engine may stay silent: before its first words and between any two. While it
@@ -240,6 +241,14 @@ export const POST: APIRoute = async (ctx) => {
   if (!messages?.length) return json({ error: "messages required" }, 400);
 
   const priv = body?.private === true;
+  const picker = signedOwner(ctx);
+  // the same question sent again (its first request got no answer in time): join that turn
+  const key = typeof body?.turnKey === "string" && /^[A-Za-z0-9-]{8,64}$/.test(body.turnKey) ? body.turnKey : "";
+  const again = body?.stream === true ? rejoin(picker, key) : null;
+  if (again) {
+    logTurn({ turn: again.slice(0, 8), result: "asked-again" }, priv);
+    return sse(again, picker)!;
+  }
   // the device's zone; an unknown one is logged and the agent reads routine times in UTC
   let tz: string | null = null;
   try { tz = ownerZone(body?.tz); }
@@ -253,7 +262,6 @@ export const POST: APIRoute = async (ctx) => {
       remember(who, { role: "assistant", content: text, ts: Date.now() }, priv);
   };
 
-  const picker = signedOwner(ctx);
   const decided = upstreamFor(engineFor(false, false, picker).id === "gateway", priv);
   const isEval = wantsEval(body?.eval === true);
   const eng = engineFor(priv, isEval, picker);
@@ -268,12 +276,17 @@ export const POST: APIRoute = async (ctx) => {
   // a question about a connected app is answered from it, not from a web search
   const research = !connectorAsk(String(said ?? "")) && wantsResearch(String(said ?? ""), history);
   const startedAt = Date.now();
+  // One line when a turn starts and one when it ends, each with its result, under one id: a turn
+  // that stalls shows as a start with no end, and a question that never reached here shows as nothing.
+  const tid = randomUUID();
+  const log = (fields: Record<string, unknown>) =>
+    logTurn({ turn: tid.slice(0, 8), ...fields, ...(isEval ? { eval: true } : {}) }, priv);
   // stopped while still writing: what it wrote is kept, and the person is offered to continue
   // `broke`: the model died mid-answer (Ollama killed), rather than running past its budget
   const stoppedTurn = (b: Budget, via: string, broke = false) => {
     const reply = guard(dropInlineImages(b.text, false));
     answered(reply);
-    logTurn({ via, stopped: b.stopped, ms: Date.now() - startedAt, replyChars: reply.length, ...(isEval ? { eval: true } : {}) }, priv);
+    log({ result: "stopped", via, stopped: b.stopped, ms: Date.now() - startedAt, replyChars: reply.length });
     return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via, grounded: false, stopped: true, broke: broke || undefined, private: priv || undefined } };
   };
   const run = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
@@ -314,7 +327,8 @@ export const POST: APIRoute = async (ctx) => {
       r.reply = dropInlineImages(r.reply, browsed);
       r.reply = guard(r.reply);
       answered(r.reply);
-      logTurn({
+      log({
+        result: "answered",
         via: r.via,
         grounded: r.grounded,
         ms: Date.now() - startedAt,
@@ -322,8 +336,7 @@ export const POST: APIRoute = async (ctx) => {
         contextKeys: Object.keys(body?.context ?? {}),
         replyChars: typeof r.reply === "string" ? r.reply.length : 0,
         ...(conn ? { connector: conn.id, connectorOutcome: conn.outcome } : {}),
-        ...(isEval ? { eval: true } : {}),
-      }, priv);
+      });
       return { status: 200, body: {
         choices: [{ message: { role: "assistant", content: r.reply } }],
         via: r.via,
@@ -336,7 +349,7 @@ export const POST: APIRoute = async (ctx) => {
         private: priv || undefined,
       } };
     } catch (e: any) {
-      logTurn({ via: eng.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
+      log({ result: "engine-failed", via: eng.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
       if (b.stopped && b.text.trim()) return stoppedTurn(b, eng.id);
       // Words already on screen stay there: asking again from scratch lost them and kept the
       // person waiting minutes while a restarted model loaded (QA 2026-11-12)
@@ -351,7 +364,7 @@ export const POST: APIRoute = async (ctx) => {
         const reply = `That search was still running after ${secs} seconds, so I stopped it rather than keep you waiting. ` +
           "Ask again in a moment, or narrow it down (one topic, or fewer sources) and it will come back faster.";
         answered(reply);
-        logTurn({ via: eng.id, fallback: "timeout-notice", ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
+        log({ result: "timeout-notice", via: eng.id, fallback: "timeout-notice", ms: Date.now() - startedAt });
         return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via: eng.id, grounded: false, fallback: true } };
       }
       if (eng !== localEngine) {
@@ -363,21 +376,34 @@ export const POST: APIRoute = async (ctx) => {
           // the model alone must not contradict what the agent just did on screen
           if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";
           answered(r.reply);
-          logTurn({ via: r.via, fallback: true, ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
+          log({ result: "fallback", via: r.via, fallback: true, ms: Date.now() - startedAt });
           return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true, cut: r.cut || undefined } };
         } catch (e2: any) {
-          logTurn({ via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ...(isEval ? { eval: true } : {}) }, priv);
+          log({ result: "fallback-failed", via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ms: Date.now() - startedAt });
           if (b2.stopped ? b2.text.trim() : visible(b2.text).trim()) return stoppedTurn(b2, localEngine.id, !b2.stopped);
         } finally { b2.end(); }
       }
       // details stay in the log: an engine error can carry file paths and internal names
+      log({ result: "failed", via: eng.id, ms: Date.now() - startedAt });
       return { status: 502, body: { error: "the model on this machine did not answer" } };
     } finally { b.end(); }
   };
+  // whatever throws outside the engine call (a connected app, the screen) still ends the turn's log
+  const turn = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
+    log({ result: "started", via: eng.id, ...(research ? { research: true } : {}), stream: body?.stream === true });
+    try { return await run(onText, restart); }
+    catch (e) {
+      log({ result: "failed", via: eng.id, error: String((e as Error)?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
+      return { status: 502, body: { error: "the model on this machine did not answer" } };
+    }
+  };
   if (body?.stream === true) {
     if (!canStart(picker)) return json({ error: "too many replies are running; wait for one to finish" }, 429);
-    return sse(startTurn(picker, run), picker)!;
+    // the person stopped following: the turn goes on, and can be picked up again
+    let left = false;
+    const gone = () => { if (!left) { left = true; log({ result: "client-left", via: eng.id, ms: Date.now() - startedAt }); } };
+    return sse(startTurn(picker, turn, { id: tid, key, left: gone }), picker)!;
   }
-  const r = await run();
+  const r = await turn();
   return json(r.body, r.status);
 };
