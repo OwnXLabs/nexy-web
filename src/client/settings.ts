@@ -26,7 +26,7 @@ const $ = <T extends Element = HTMLElement>(s: string, r: ParentNode = document)
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
 const SECTIONS: [string, string][] = [["general", "General"], ["nexy", "Nexy"], ["team", "Team"], ["connections", "Connections"], ["permissions", "Permissions"],
-  ["cloud", "OwnXCloud"], ["data", "Your data"], ["security", "Security and privacy"], ["appearance", "Appearance"], ["workspaces", "Workspaces"], ["about", "About"]];
+  ["cloud", "Nexy Cloud"], ["data", "Your data"], ["security", "Security and privacy"], ["appearance", "Appearance"], ["workspaces", "Workspaces"], ["about", "About"]];
 
 const sw = (on: boolean, id: string) => `<button type="button" class="sw${on ? " on" : ""}" data-sw="${id}" role="switch" aria-checked="${on}"><i></i></button>`;
 const row = (l: string, c: string | null, sub?: string) => `<div class="srow"><div><div class="sl">${l}</div>${sub ? `<div class="ss">${sub}</div>` : ""}</div><div class="sc">${c ?? ""}</div></div>`;
@@ -105,7 +105,7 @@ async function section(sec: string): Promise<string> {
     row("Manage the desktop", not("Not available"), "Nexy has no control over the desktop's windows yet") +
     (onOwn1 ? row("Install from the App Store", not("Restricted"), "Installs are switched off on this Own1, by the owner's decision") : "") +
     row("Agents inherit these", null, "An agent never has more than Nexy");
-  if (sec === "cloud") return `<h3>OwnXCloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on ${here}. Everything runs here.</p>` +
+  if (sec === "cloud") return `<h3>Nexy Cloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on ${here}. Everything runs here.</p>` +
     row("Connection", not("Not connected")) + row("Spending", not("Nothing can be spent"), "There is no wallet or payment method on this machine");
   if (sec === "security") return `<h3>Security and privacy</h3>` +
     row("Where your data lives", not(onOwn1 ? "On this Own1" : "On this computer"), "Chats, files, builds and memory stay on this machine") +

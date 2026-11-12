@@ -47,10 +47,12 @@ async function sections(env, names) {
 test('a computer without an Own1: no engine name, no search it lacks, a panel that hides the chat', { timeout: 90000 }, async () => {
   assert(fs.existsSync(ENTRY), 'build first: npm run build');
   // the Mac app: one engine behind the gateway, no web search configured
-  const t = await sections({ NEXY_STUDIOS: 'off', NEXY_ENGINE: 'gateway', NEXY_AGENT_URL: DEAD, NEXY_AGENT_KEY: 'k' }, ['nexy', 'security']);
+  const t = await sections({ NEXY_STUDIOS: 'off', NEXY_ENGINE: 'gateway', NEXY_AGENT_URL: DEAD, NEXY_AGENT_KEY: 'k' }, ['nexy', 'security', 'cloud']);
   assert.doesNotMatch(t.nexy, /Agent engine|Hermes|Nous Research/i, 'one engine: nothing to pick, no name');
   assert.doesNotMatch(t.security, /own search/i, 'no search that does not exist');
   assert.match(t.security, /Web search\s+There is no web search on this computer yet[^]*?Not set up/);
+  assert.match(t.cloud, /Nexy Cloud/, 'the same name the app uses');
+  assert.doesNotMatch(t.cloud + t.nexy, /OwnX ?Cloud/);
   assert(t.panelAlpha >= 0.95, `the panel is near-opaque in WebKit (alpha ${t.panelAlpha})`);
 
   // with web search configured on the computer, the privacy line describes it

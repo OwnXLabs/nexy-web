@@ -56,7 +56,7 @@ async function fill(host: HTMLElement, connect: (name: string) => void): Promise
     `<h4>APIs and models</h4>` +
     row(" off", "Hosted frontier APIs", "none configured") +
     row(" off", "Cloud GPU boost", "available on this box; Nexy does not use it") +
-    row(" off", "OwnXCloud", "not connected") +
+    row(" off", "Nexy Cloud", "not connected") +
     row("", "Local models", "resident on this machine");
   cm.querySelectorAll<HTMLElement>("[data-conn]").forEach((b) => b.addEventListener("click", () => connect(b.dataset.conn!)));
 }
