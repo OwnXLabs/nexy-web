@@ -1,7 +1,7 @@
 import { chatScope, visibleChat, bindChat, inChat } from "./chat-scope";
 import { playSwarm } from "./swarm-view";
 import { shape, typeLabel, plainName, type Project, type FileRow, type Event, type UpstreamProject } from "./state";
-import { initCanvas, show as showArtifact, generating, setFirstWork, current as currentArtifact, outputsForChat, forgetPrivateOutputs, isOpen } from "./canvas";
+import { initCanvas, show as showArtifact, generating, setFirstWork, current as currentArtifact, outputsForChat, forgetPrivateOutputs, isOpen, reopen } from "./canvas";
 import { planArtifact, planBrief, buildable } from "./plan-view";
 import { artifactFor, type FeedLike } from "./artifacts";
 import { connectionsArtifact } from "./connections";
@@ -37,6 +37,10 @@ import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
 import { timeoutSignal } from "./compat";
 import { inline, renderMd } from "./md";
+
+// "on the right" is true only where the pane sits beside the chat. On a phone the pane covers the
+// chat, so there the words are a button that brings it back (QA 2026-11-12).
+const ON_RIGHT = `<span class="wide-only">on the right</span><span class="phone-only"><button type="button" class="linkbtn" data-open-work>in the work view</button></span>`;
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s);
 const $$ = (s: string, r: ParentNode = document) => Array.from(r.querySelectorAll<HTMLElement>(s));
@@ -941,7 +945,7 @@ async function playLocalMake(brief: string): Promise<void> {
   const { push, generating, saveChat } = captureWork();
   localTurn.lastMake = { brief, deliverable: "web_app" };
   const game = gameBrief(brief);
-  const holder = push("ai", "Building that on this computer, not in a datacentre. It will open on the right when it is ready.");
+  const holder = push("ai", "Building that on this computer, not in a datacentre. It will open when it is ready.");
   const gen = generating(titleFor(brief), game ? "game" : "html", "Writing it on this computer", LOCAL_BUILD_MS);
   status(holder, "Starting…", LOCAL_BUILD_MS);
   const t0 = Date.now();
@@ -964,7 +968,7 @@ async function playLocalMake(brief: string): Promise<void> {
       const output = game ? gameArtifact(made) : htmlArtifact({ ...made, url: siteHost });
       output.id = `build:local-${started.id}`;
       gen.replaceWith(output);
-      push("ai", `Done. It is on the right and it runs. Built on this computer in ${secs}s.`);
+      push("ai", `Done. It is ${ON_RIGHT} and it runs. Built on this computer in ${secs}s.`);
       window.dispatchEvent(new CustomEvent("nexy:files-changed"));
       saveChat();
       return;
@@ -989,7 +993,7 @@ async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web
   localTurn.lastMake = { brief, deliverable };
   const holder = push(
     "ai",
-    `${deliverable === "diagram" ? "Drawing that" : "Building that"} on this machine, not in a datacentre. You can watch it come together on the right.`,
+    `${deliverable === "diagram" ? "Drawing that" : "Building that"} on this machine, not in a datacentre. You can watch it come together ${ON_RIGHT}.`,
   );
   const gen = generating(titleFor(brief), deliverable === "diagram" ? "diagram" : "html",
     deliverable === "diagram" ? "Drawing it on this machine" : "Writing it on this machine", typicalMs(deliverable === "diagram" ? "diagram" : "site"));
@@ -1025,7 +1029,7 @@ async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web
     const title = String(done.artifact?.title ?? done.title ?? "app");
     const secs = done.elapsedSeconds;
 
-    const bub = push("ai", `Done — it is on the right. Built on this machine in ${secs}s. Checking it runs…`).querySelector(".bub")!;
+    const bub = push("ai", `Done — it is ${ON_RIGHT}. Built on this machine in ${secs}s. Checking it runs…`).querySelector(".bub")!;
     let fault = "";
     const onMsg = (e: MessageEvent) => { if (!fault && e.data?.nexyRunError) fault = String(e.data.nexyRunError); };
     addEventListener("message", onMsg);
@@ -1037,7 +1041,7 @@ async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web
         : "";
       bub.innerHTML = (fault
         ? `Done in ${secs}s, but it throws when it runs: <code>${esc(fault)}</code>. That is a fault in the generated code — ask me to build it again.`
-        : `Done — it is on the right and it runs. Built on this machine in ${secs}s.`) + note;
+        : `Done — it is ${ON_RIGHT} and it runs. Built on this machine in ${secs}s.`) + note;
       saveChat();
     }, RUN_CHECK_MS);
 
@@ -1130,11 +1134,11 @@ async function playDeck(text: string, tasks: string[]): Promise<void> {
     const title = subject ? `${subject} ${/\bpitch\b/i.test(text) ? "pitch deck" : "deck"}` : `${month ?? "Latest"} investor update`;
     showArtifact(deckArtifact({ title, slides, meta: `${slides.length} slides · figures from Own Docs · on device` }));
     holder.querySelector(".bub")!.innerHTML = traced
-      ? `Three slides on the right. ${traced} figure${traced === 1 ? "" : "s"}, each traced to the document it came from` +
+      ? `Three slides ${ON_RIGHT}. ${traced} figure${traced === 1 ? "" : "s"}, each traced to the document it came from` +
         `${dropped ? `; ${dropped} I could not trace to a document excerpt were left out` : ""}.`
       : d.emptyCorpus
-        ? `Three slides on the right, but Own Docs has nothing indexed yet, so the numbers slide says so instead of inventing figures. ${subject ? "Attach material on it" : `Attach the ${esc(month ?? "latest")} P&L`} and ask again.`
-        : `Three slides on the right. I found no ${subject ? about : `${esc(month ?? "")} figures`} in your documents that I could trace, so the numbers slide says so rather than making them up.`;
+        ? `Three slides ${ON_RIGHT}, but Own Docs has nothing indexed yet, so the numbers slide says so instead of inventing figures. ${subject ? "Attach material on it" : `Attach the ${esc(month ?? "latest")} P&L`} and ask again.`
+        : `Three slides ${ON_RIGHT}. I found no ${subject ? about : `${esc(month ?? "")} figures`} in your documents that I could trace, so the numbers slide says so rather than making them up.`;
   } catch (e) {
     holder.querySelector(".bub")!.innerHTML = `The plan is ready, but I could not pull figures from Own Docs: <code>${esc(errText(e))}</code>`;
   }
@@ -1298,7 +1302,7 @@ async function autopilotRun(p: Project): Promise<void> {
       if (visible() && lastAiSaidDone()) {
         conversation(isPrivate()).push(
           { role: "user", content: objective },
-          { role: "assistant", content: `I built it: ${titleFor(objective)}. It is open on the right.` },
+          { role: "assistant", content: `I built it: ${titleFor(objective)}. It is open in the work pane.` },
         );
       }
     }
@@ -1306,7 +1310,7 @@ async function autopilotRun(p: Project): Promise<void> {
   }
   show("finished", needs.length
     ? `Everything Nexy can do is done. ${needs.length} task${needs.length === 1 ? " is" : "s are"} yours.`
-    : buildable(objective) ? "Every task is done and it is built; it is on the right." : "Every task is done.");
+    : buildable(objective) ? "Every task is done and it is built." : "Every task is done.");
   saveChat();
 }
 
@@ -1377,7 +1381,7 @@ async function addRole(asked: string): Promise<void> {
 function resultHtml(title: string, out: string, show: typeof showArtifact): string {
   if (out && structured(out)) {
     show(markdownArtifact({ title: `${slugOf(title)}.md`, meta: `Own Startup · ${title.slice(0, 40)} · on device`, md: out }));
-    return `<b>${esc(title)}</b> is done. ${inline(firstPart(out).slice(0, 220))}<br><span class="faint">The full result is on the right.</span>`;
+    return `<b>${esc(title)}</b> is done. ${inline(firstPart(out).slice(0, 220))}<br><span class="faint">The full result is ${ON_RIGHT}.</span>`;
   }
   return out
     ? `<b>${esc(title)}</b><div style="margin-top:6px">${bubbleText(out.slice(0, 1200))}</div>`
@@ -1553,8 +1557,8 @@ async function playGenerate(medium: "image" | "audio", prompt: string): Promise<
           { method: "POST", body: JSON.stringify({ prompt: sharpen(prompt), size: "512x512", seed: seed() }) }).catch((e) => { console.warn("[nexy] image retry failed", e); return {} as { image_b64?: string }; });
         if (again.image_b64) { src = `data:image/png;base64,${again.image_b64}`; q = await imageQuality(src); }
       }
-      if (q) holder.querySelector(".bub")!.innerHTML = `${esc(who)} returned an image, but it is ${q}, twice. It is on the right as it came back; this is a fault in the image engine on this machine, not your prompt.`;
-      else push("ai", `Done. It is on the right, made by ${esc(who)} on this machine. Want variations, or a crop for social?`);
+      if (q) holder.querySelector(".bub")!.innerHTML = `${esc(who)} returned an image, but it is ${q}, twice. It is ${ON_RIGHT} as it came back; this is a fault in the image engine on this machine, not your prompt.`;
+      else push("ai", `Done. It is ${ON_RIGHT}, made by ${esc(who)} on this machine. Want variations, or a crop for social?`);
       if (!q) noteMs("image", Date.now() - paintStart);
       gen.replaceWith(imageArtifact({
         id: `gen:image:${Date.now()}`,
@@ -1600,7 +1604,7 @@ async function playGenerate(medium: "image" | "audio", prompt: string): Promise<
 
     const bits = [pat.genre, pat.tempo_bpm ? `${pat.tempo_bpm} bpm` : "", pat.key].filter(Boolean).join(" · ");
     holder.querySelector(".bub")!.innerHTML =
-      `Done — ${esc(bits || "a pattern")}, written on this machine. It is on the right: press Play or space, click a step to change it, and WAV renders two bars to a file. Every sound is synthesised here.`;
+      `Done — ${esc(bits || "a pattern")}, written on this machine. It is ${ON_RIGHT}: press Play or space, click a step to change it, and WAV renders two bars to a file. Every sound is synthesised here.`;
 
     showArtifact({ ...beatStudioArtifact({ title: `${shortTitle(prompt, "Beat")}.studio`, bpm, preset: pat.genre ?? prompt, steps: pat.pattern }), meta: `${who} · ${bits} · on device` });
   } catch (e) {
@@ -1861,6 +1865,11 @@ const closeBold = (t: string): string => ((t.match(/\*\*/g)?.length ?? 0) % 2 ? 
 
 // how often a reply being written is saved, so a quit or crash keeps what had arrived
 const PARTIAL_SAVE_MS = 3_000;
+// what "Continue?" sends. A continued answer keeps the question it continues: its document was
+// titled "continue-from-where-you-stop" (QA 2026-11-12) and is now the same document, grown.
+const CONTINUE = "Continue from where you stopped.";
+// per chat and title: the document an answer made, and the answer that last went into it
+const answerDocs = new Map<string, { md: string; last: string }>();
 async function playChat(text: string, priv = false): Promise<void> {
   const { push, pushBlock, showArtifact, conversation, context, attachedDocs, saveChat } = captureWork();
   const holder = push("ai", "");
@@ -1872,6 +1881,12 @@ async function playChat(text: string, priv = false): Promise<void> {
   const browsing = priv ? null : watchBrowsing(chat, () => showArtifact(screenArtifact()));
   const askedAt = Date.now();
   const thread = conversation(priv);
+  const continuing = text === CONTINUE;
+  const asked = continuing ? [...thread].reverse().find((m) => m.role === "user" && m.content !== CONTINUE)?.content ?? text : text;
+  // the document the cut answer went into, if that answer is the one just before
+  const docKey = `${chat ?? ""}\n${slugOf(asked)}.md`;
+  const prior = continuing ? answerDocs.get(docKey) : undefined;
+  const grows = !!prior && thread[thread.length - 1]?.role === "assistant" && thread[thread.length - 1].content === prior.last;
   thread.push({ role: "user", content: text });
   saveChat();
   let savedAt = Date.now();
@@ -1924,20 +1939,24 @@ async function playChat(text: string, priv = false): Promise<void> {
     if (!priv && /\bRoutines\b/.test(answer)) showWaitingRoutines({ push: (_w, html) => push("ai", html), block: pushBlock }, bindChat(chatThread))
       .catch((e: Error) => console.warn("[nexy] waiting routines not shown", e));
 
-    const lifted = fromReply(answer, text);
+    const lifted = grows ? null : fromReply(answer, asked);
     if (lifted) {
       showArtifact(lifted.artifact);
       // everything but the table stays in the chat: the pane holds only the table, and showing the
       // first paragraph alone lost the price and the paragraph after it (2026-10-28)
       const prose = lifted.prose.split("\n").filter((l) => !l.trim().startsWith("|")).join("\n").replace(/\n{3,}/g, "\n\n").trim();
       holder.querySelector(".bub")!.innerHTML =
-        (prose ? `${bubbleText(prose.length > 2000 ? `${prose.slice(0, 2000)}…` : prose)}<br>` : "") + `<span class="faint">${esc(lifted.note)}</span>`;
+        (prose ? `${bubbleText(prose.length > 2000 ? `${prose.slice(0, 2000)}…` : prose)}<br>` : "") + `<span class="faint">${esc(lifted.note).replace(/\bon the right\b/g, ON_RIGHT)}</span>`;
       offer();
       return;
     }
-    if (structured(answer)) {
-      showArtifact(markdownArtifact({ title: `${slugOf(text)}.md`, meta: "Nexy · on device", md: answer }));
-      holder.querySelector(".bub")!.innerHTML = `${bubbleText(firstPart(answer))}<br><span class="faint">The full answer is on the right.</span>`;
+    if (grows || structured(answer)) {
+      // a continuation with no document of its own to grow gets its own, named for the question
+      const title = continuing && !grows ? `${slugOf(asked).slice(0, 18)}-continued.md` : `${slugOf(asked)}.md`;
+      const md = grows ? `${prior!.md.trimEnd()}\n\n${answer.trimStart()}` : answer;
+      answerDocs.set(`${chat ?? ""}\n${title}`, { md, last: answer });
+      showArtifact(markdownArtifact({ title, meta: "Nexy · on device", md }));
+      holder.querySelector(".bub")!.innerHTML = `${bubbleText(firstPart(answer))}<br><span class="faint">The full answer is ${ON_RIGHT}.</span>`;
       offer();
       return;
     }
@@ -2097,7 +2116,7 @@ async function playFeedbackLog(what: "show" | "clear"): Promise<void> {
     const rows = d.entries ?? [];
     const icon: Record<string, string> = { up: "👍", down: "👎", frustration: "😤", runError: "⚠️" };
     push("ai", rows.length
-      ? `${rows.length} item${rows.length === 1 ? "" : "s"}, on the right. They are stored only on this machine; say <b>clear my feedback</b> to delete them.`
+      ? `${rows.length} item${rows.length === 1 ? "" : "s"}, ${ON_RIGHT}. They are stored only on this machine; say <b>clear my feedback</b> to delete them.`
       : "No feedback recorded yet. Ratings you give with 👍/👎 are kept here, on this machine only.");
     if (!rows.length) return;
     showArtifact({
@@ -2129,7 +2148,7 @@ function instant(intent: ReturnType<typeof classify>): void {
   } else if (intent.kind === "paint") {
     push("ai", "Building you a paint workspace: brush, shapes, fill, eraser, colours, undo, and Save straight into Files.");
     showArtifact(paintArtifact({ title: "Drawing app" }));
-    push("ai", "Ready on the right. Draw something and press Save; it lands in Files through Own Image Studio.");
+    push("ai", `Ready ${ON_RIGHT}. Draw something and press Save; it lands in Files through Own Image Studio.`);
   } else if (intent.kind === "help") {
     push("ai", "Ask for a site, app, game, diagram, image or beat and I make it on this machine in a few minutes. For something bigger, say “start a project” and I plan it and run a team of agents through it. Your chats, projects and files stay here.");
   } else if (intent.kind === "connections") {
@@ -2167,9 +2186,9 @@ async function playRevise(text: string, priv: boolean, part?: Picked | null): Pr
       (n, secs, of) => status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`));
     if (!d.html || !applyRevision(page.id, d.html, "that change")) throw new Error("the page changed or closed while I was working, so I left it as it is");
     const say = (d.say || "Changed it.").replace(/\.?$/, ".");
-    bub.innerHTML = `Done — ${esc(say)} It is on the right; say “undo” to put it back.` +
+    bub.innerHTML = `Done — ${esc(say)} It is ${ON_RIGHT}; say “undo” to put it back.` +
       (d.missed ? `<div class="feednote" style="margin-top:6px">${d.missed} part${d.missed === 1 ? "" : "s"} of the change did not match the page and ${d.missed === 1 ? "was" : "were"} skipped.</div>` : "");
-    conversation(priv).push({ role: "user", content: text }, { role: "assistant", content: `I changed the page on the right: ${say}` });
+    conversation(priv).push({ role: "user", content: text }, { role: "assistant", content: `I changed the page in the work pane: ${say}` });
   } catch (e) {
     bub.innerHTML = `I could not change the page: <code>${esc(errText(e))}</code> Nothing on it was changed.`;
   }
@@ -2381,7 +2400,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     } else if (intent.kind === "generate") {
       S.eta = { start: Date.now(), ms: typicalMs("image") };
       await playGenerate(intent.medium, intent.prompt);
-      madeIt(`I made ${intent.medium === "image" ? "an image" : "a beat"} of: ${intent.prompt}. It is open on the right.`);
+      madeIt(`I made ${intent.medium === "image" ? "an image" : "a beat"} of: ${intent.prompt}. It is open in the work pane.`);
     } else if (intent.kind === "unavailable") {
       push("ai", esc(intent.say));
     } else if (intent.kind === "make") {
@@ -2389,7 +2408,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
       // a site goes across the owner's devices when this Own 1 can; otherwise the normal builder
       if (intent.deliverable === "diagram" || !(await playSwarm(intent.brief, (el) => pushBlock(el))))
         await playMake(intent.brief, intent.deliverable);
-      madeIt(`I built ${intent.deliverable === "diagram" ? "a diagram" : "it"}: ${titleFor(intent.brief)}. It is open on the right.`);
+      madeIt(`I built ${intent.deliverable === "diagram" ? "a diagram" : "it"}: ${titleFor(intent.brief)}. It is open in the work pane.`);
     } else if (intent.kind === "build") {
       S.job = "build"; S.eta = { start: Date.now(), ms: typicalMs("site") };
       await playBuild(text);
@@ -2439,7 +2458,8 @@ function wireComposer(): void {
   // before it finished (saveChat in shell.ts)
   document.addEventListener("click", (e) => {
     const more = (e.target as Element | null)?.closest<HTMLButtonElement>("#thread [data-continue]");
-    if (more) { more.remove(); void send("Continue from where you stopped."); return; }
+    if (more) { more.remove(); void send(CONTINUE); return; }
+    if ((e.target as Element | null)?.closest("#thread [data-open-work]")) { if (!reopen()) toast("That work is no longer open"); return; }
     const again = (e.target as Element | null)?.closest<HTMLButtonElement>("#thread [data-ask-again]");
     if (!again) return;
     const q = again.dataset.askAgain ?? "";

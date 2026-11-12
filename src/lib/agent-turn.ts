@@ -42,6 +42,6 @@ export function dropInlineImages(reply: string, browsed: boolean): string {
   if (left === reply.trim()) return reply;
   if (left) return left;
   return browsed
-    ? "It's open on my screen, on the right, where you can watch it."
+    ? "It's open on my screen, where you can watch it."
     : "I can't put pictures in the chat. Ask me to open the page and you can watch it on my screen.";
 }

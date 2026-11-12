@@ -80,8 +80,10 @@ function stash(): void {
   c.nodes = document.createDocumentFragment();
   while (th.firstChild) c.nodes.appendChild(th.firstChild);
   H.history.length = 0;
-
+  // a New chat left before anything was said in it goes: they piled up in the list (QA 2026-11-12)
+  if (untouched(c)) chats.set(cur.pid, (chats.get(cur.pid) ?? []).filter((x) => x !== c));
 }
+const untouched = (c: Chat) => c.title === "New chat" && !c.saved && c.example === undefined && !c.history.length && !c.nodes.querySelector(".msg");
 
 // A saved transcript comes back as markup only: its buttons belonged to a page that
 // is gone, so they are disabled rather than left looking clickable.
@@ -92,8 +94,9 @@ function revive(html: string): DocumentFragment {
   t.content.querySelectorAll<HTMLElement>("*").forEach((el) => {
     for (const a of [...el.attributes]) if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
   });
-  // "Ask again" on an interrupted answer still works: it only sends the question again
-  t.content.querySelectorAll<HTMLButtonElement>("button:not([data-ask-again])").forEach((b) => { b.disabled = true; b.title = "From an earlier visit"; });
+  // "Ask again" on an interrupted answer still works: it only sends the question again; the
+  // phone's "in the work view" only opens the pane
+  t.content.querySelectorAll<HTMLButtonElement>("button:not([data-ask-again]):not([data-open-work])").forEach((b) => { b.disabled = true; b.title = "From an earlier visit"; });
   return t.content;
 }
 
@@ -419,7 +422,7 @@ export function nameChat(reply: string): void {
 let chatsAll = false;
 // `max` keeps a long list short; the open chat is never hidden behind "Show all"
 export function chatRows(pid: string, max = Infinity): string {
-  const all = chats.get(pid) ?? [];
+  const all = (chats.get(pid) ?? []).filter((c) => c.id === cur?.cid || !untouched(c));
   if (all.length <= 1 && all[0]?.title === "New chat" && !isPrivate()) return "";
   const open = chatsAll || all.findIndex((c) => c.id === cur?.cid) >= max;
   const list = open ? all : all.slice(0, max);

@@ -263,7 +263,7 @@ export function fromReply(reply: string, hint = ""): Lifted | null {
       return {
         artifact: markdownArtifact({ title: `${slug(hint)}.md`, md: reply }),
         prose: reply,
-        note: wrong.length ? `The tables are in the pane on the right. Check ${wrong.length === 1 ? "this total" : "these totals"}: ${wrong.join("; ")}.` : "The tables are in the pane on the right.",
+        note: wrong.length ? `The tables are on the right. Check ${wrong.length === 1 ? "this total" : "these totals"}: ${wrong.join("; ")}.` : "The tables are on the right.",
       };
     }
     const rows = tables.flatMap((t) => t.rows);
@@ -273,8 +273,8 @@ export function fromReply(reply: string, hint = ""): Lifted | null {
       artifact: sheetArtifact({ title: `${slug(hint)}.csv`, rows: rows.map((r) => r.map((v) => v ?? null)) }),
       prose: reply,
       note: fixes.length
-        ? `The table is in the pane on the right. I checked its totals and corrected ${fixes.length}: ${fixes.join("; ")}.`
-        : "The table is in the pane on the right.",
+        ? `The table is on the right. I checked its totals and corrected ${fixes.length}: ${fixes.join("; ")}.`
+        : "The table is on the right.",
     };
   }
 
@@ -287,7 +287,7 @@ export function fromReply(reply: string, hint = ""): Lifted | null {
   const lift = (artifact: Artifact, what: string): Lifted => ({
     artifact,
     prose,
-    note: `The ${what} is in the pane on the right.`,
+    note: `The ${what} is on the right.`,
   });
 
   if (lang === "mermaid")

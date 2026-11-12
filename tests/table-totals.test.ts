@@ -35,7 +35,7 @@ const QA = `### Step 2: Calculate the Total Cost per Pack
 test("two tables in one reply: neither total is touched, and nothing is said", () => {
   const l = fromReply(QA, "explain step by step how to")!;
   assert.ok(l, "the tables go to the pane");
-  assert.equal(l.note, "The tables are in the pane on the right.");
+  assert.equal(l.note, "The tables are on the right.");
   assert.doesNotMatch(l.note, /corrected|rows add to/);
   // two tables are two tables: not joined into one sheet whose total adds both (QA 2026-11-12)
   assert.equal(l.artifact.kind, "doc");

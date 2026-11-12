@@ -112,7 +112,7 @@ test('a computer builds with the engine: checked, shown in the canvas, one retry
 
     // a brief with a name: built, checked, in the canvas
     await ask(pg, 'build me a website for a flower shop called Petal & Stem');
-    await pg.getByText('Done. It is on the right and it runs.').waitFor({ timeout: 30000 });
+    await pg.getByText(/Done\. It is on the right/).waitFor({ timeout: 30000 });
     await canvasFrame(pg).getByRole('heading', { name: 'Petal & Stem' }).waitFor({ timeout: 10000 });
     assert.match(e.asked[0], /Petal & Stem/);
     assert.match(e.asked[0], /Save it as index\.html/);
@@ -120,7 +120,7 @@ test('a computer builds with the engine: checked, shown in the canvas, one retry
 
     // a page that leaves out the name is never shown; the second try is told why
     await ask(pg, 'make a website for my bakery called Crumb & Co');
-    await pg.getByText('Done. It is on the right and it runs.').nth(1).waitFor({ timeout: 30000 });
+    await pg.getByText(/Done\. It is on the right/).nth(1).waitFor({ timeout: 30000 });
     await canvasFrame(pg).getByRole('heading', { name: 'Crumb & Co' }).waitFor({ timeout: 10000 });
     assert.equal(e.asked.length, 3);
     assert.match(e.asked[2], /left out the name "Crumb & Co"/);

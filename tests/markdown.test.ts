@@ -47,6 +47,17 @@ test("snake_case and sums are not emphasis", () => {
   assert.equal(inline("my_file_name and 2*3*4"), "my_file_name and 2*3*4");
 });
 
+test("checklists show boxes, ticked or not, not brackets", () => {
+  const h = renderMd("- [ ] Count the stock\n- [x] Pay the rent\n* [X] Lock up\n1. [ ] First call");
+  assert.doesNotMatch(h, /\[ \]|\[x\]|\[X\]/, h);
+  assert.match(h, /<ul><li class="task"><span class="tick">\u2610<\/span> Count the stock<\/li><li class="task"><span class="tick">\u2611<\/span> Pay the rent<\/li>/);
+  assert.match(h, /<li class="task"><span class="tick">\u2611<\/span> Lock up<\/li>/);
+  assert.match(h, /<ol><li class="task"><span class="tick">\u2610<\/span> First call<\/li><\/ol>/);
+  assert.doesNotMatch(h, /<input/, "a picture of the list, nothing to click");
+  assert.equal(renderMd("- [link](https://a.example) here"), '<ul><li><a href="https://a.example" target="_blank" rel="noopener noreferrer">link</a> here</li></ul>', "a link is not a box");
+  assert.match(renderMd("- [ ]"), /\[ \]/, "an empty item stays as written");
+});
+
 const XSS = [
   "<script>alert(1)</script>",
   "<img src=x onerror=alert(1)>",
@@ -63,6 +74,8 @@ const XSS = [
   "> <iframe src=javascript:alert(1)>",
   "**<style>body{display:none}</style>**",
   "\u00000\u0000 [x](https://a.example)",
+  "- [ ] <img src=x onerror=alert(1)>\n- [x] [done](javascript:alert(1))",
+  '- [x]" onmouseover="alert(1) ok',
 ];
 
 test("no HTML, script or non-http link gets through", () => {
@@ -70,7 +83,7 @@ test("no HTML, script or non-http link gets through", () => {
     const h = renderMd(x);
     // the only tags are the renderer's own
     for (const tag of h.match(/<\/?([a-z0-9]+)/gi) ?? [])
-      assert.match(tag, /^<\/?(p|br|b|i|s|code|a|ul|ol|li|h3|h4|blockquote|div|table|thead|tbody|tr|th|td|pre|hr)$/i, `${x} -> ${h}`);
+      assert.match(tag, /^<\/?(p|br|b|i|s|code|a|ul|ol|li|span|h3|h4|blockquote|div|table|thead|tbody|tr|th|td|pre|hr)$/i, `${x} -> ${h}`);
     // every attribute is one the renderer writes, with a safe value
     for (const [, name, value] of h.matchAll(/\s([a-z-]+)="([^"]*)"/gi)) {
       assert.match(name, /^(href|target|rel|class|start)$/, `${x} -> ${h}`);
