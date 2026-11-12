@@ -39,6 +39,8 @@ function agent(zones) {
         const tz = zones ? (b.tz ?? 'UTC') : undefined;
         return res.end(JSON.stringify({ job: { id, name: b.name, schedule: b.schedule, next_run_at: MANILA_8AM, ...(tz ? { tz } : {}) } }));
       }
+      const run = /^\/api\/jobs\/(\d+)\/run$/.exec(req.url);
+      if (run && req.method === 'POST') return res.end(JSON.stringify({ run: { id: Number(run[1]), session: `cron-${run[1]}-1`, status: 'ok', reply: 'Sales: 12 orders.' } }));
       if (req.method === 'DELETE' && req.url.startsWith('/api/jobs/')) return res.end('{"deleted":1}');
       if (req.url === '/api/jobs') return res.end(JSON.stringify({ jobs }));
       if (req.url.startsWith('/api/sessions')) return res.end('{"data":[]}');
@@ -164,13 +166,10 @@ test('the Routines view shows times on the device\'s clock', async () => {
     const made = g.seen.find((s) => s.method === 'POST' && s.path === '/api/jobs');
     assert.deepEqual([made.body.schedule, made.body.tz], ['0 8 * * *', 'Asia/Manila']);
     assert.match(await p.locator('.block', { hasText: 'Routine: check my sales' }).textContent(), /Next runFri 13 Nov, 8:00 am/);
-    let turn;
-    for (let i = 0; i < 100 && !turn; i++) {
-      turn = g.seen.find((s) => s.path.startsWith('/v1/chat/completions'));
-      if (!turn) await new Promise((r) => setTimeout(r, 200));
-    }
-    assert.ok(turn, 'the first run went to the agent');
-    assert.equal(turn.body.tz, 'Asia/Manila', 'chat turns from the page carry the zone');
+    // its first run is the agent's run of that routine, in the zone the routine was made with
+    await p.locator('#thread .m.ai', { hasText: 'Sales: 12 orders.' }).waitFor();
+    assert.ok(g.seen.some((s) => s.method === 'POST' && /^\/api\/jobs\/\d+\/run$/.test(s.path)), 'the first run went to the agent as a run');
+    assert.ok(!g.seen.some((s) => s.path.startsWith('/v1/chat/completions')), 'not as a chat turn');
     assert.deepEqual(errs, []);
   } finally {
     await b.close(); stop(a, g);

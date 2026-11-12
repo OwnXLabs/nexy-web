@@ -10,7 +10,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
   const api = async (path: string, init: RequestInit = {}): Promise<any> => {
     if (!URL_) throw new Error("no agent gateway is configured");
     const res = await fetch(`${URL_}${path}`, {
-      ...init, signal: AbortSignal.timeout(30_000),
+      ...init, signal: init.signal ?? AbortSignal.timeout(30_000),
       headers: { "content-type": "application/json", ...(KEY ? { authorization: `Bearer ${KEY}` } : {}), ...(init.headers ?? {}) },
     });
     const body = await res.json().catch(() => ({}));
@@ -152,6 +152,12 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
       async setPaused(id, paused) {
         const b = await api(`/api/jobs/${encodeURIComponent(id)}/${paused ? "pause" : "resume"}`, { method: "POST" });
         return { enabled: typeof b?.job?.enabled === "boolean" ? b.job.enabled : !paused, nextRunAt: when(b?.job?.next_run_at) };
+      },
+      // a model run: as long as a chat turn may take
+      async runNow(id) {
+        const b = await api(`/api/jobs/${encodeURIComponent(id)}/run`, { method: "POST", signal: AbortSignal.timeout(240_000) });
+        if (typeof b?.run?.reply !== "string") throw new Error("the agent gave no result for this run");
+        return { reply: b.run.reply };
       },
     },
   };

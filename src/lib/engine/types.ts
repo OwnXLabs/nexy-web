@@ -54,5 +54,7 @@ export interface NexyEngine {
     discard?(id: string): Promise<void>;
     // the owner's pause: no runs on the clock or on events; resume counts the next run from now
     setPaused?(id: string, paused: boolean): Promise<{ enabled: boolean; nextRunAt: string | null }>;
+    // one run now, the agent's own run of the routine (never a chat turn about it): its result
+    runNow?(id: string): Promise<{ reply: string }>;
   };
 }

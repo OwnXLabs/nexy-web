@@ -22,7 +22,8 @@ const JOBS = () => [
   job({ id: 24, name: 'Morning sales', schedule: '30 7 * * 1-5', prompt: 'Sum yesterday\'s sales.', next_run_at: RUN_AT + 86400, last_run_at: RUN_AT, last_status: 'ok' }),
   job({ id: 25, name: 'Invoices folder', trigger: 'file folder="Invoices 2026"', prompt: 'Read the new invoice and tell me the total.', last_run_at: RUN_AT, last_status: 'ok' }),
 ];
-const RESULT = 'Invoice 4471 from Acme: $1,200 due 30 Nov.\n<img src=x onerror="window.__pwned=3">';
+// a model's answer: markdown, and markup that must stay text
+const RESULT = 'Invoice 4471 from **Acme**: $1,200 due 30 Nov.\n<img src=x onerror="window.__pwned=3">';
 
 function agent() {
   const seen = [];
@@ -92,7 +93,7 @@ test('the list carries each trigger, and an event run\'s result', async () => {
   assert.equal(by(21).trigger, 'mail from=billing@acme.example');
   assert.equal(by(21).pending, true);
   assert.equal(by(24).trigger, null, 'a scheduled routine has no trigger');
-  assert.match(by(25).lastResult, /Invoice 4471 from Acme/, 'the event run\'s reply, from its event-25-… session');
+  assert.match(by(25).lastResult, /Invoice 4471 from \*\*Acme\*\*/, 'the event run\'s reply, from its event-25-… session');
   assert.equal(by(23).lastResult, undefined, 'no run of its own: another chat titled alike is not its result');
 });
 
@@ -185,6 +186,7 @@ test('in the browser: card wording, escaping, waiting until turned on, list chip
       /It runs when an email arrives from billing@acme\.example, at most once every 5 minutes, and can only read\./);
     assert.ok(g.seen.some((s) => s.method === 'POST' && s.path === '/api/jobs/21/confirm'));
     assert.equal((await card.locator('.ba').textContent()).trim(), 'Turned on');
+    assert.equal((await card.locator('.bh .r').textContent()).trim(), 'on: runs when it arrives, read only', 'the header no longer says it is off');
 
     // one list, scheduled and triggered, a chip each
     await p.fill('#input', 'show my routines'); await p.press('#input', 'Enter');
@@ -209,6 +211,11 @@ test('in the browser: card wording, escaping, waiting until turned on, list chip
     await res.waitFor();
     assert.match(await res.textContent(), /Invoice 4471 from Acme: \$1,200 due 30 Nov\./);
     assert.equal(await res.locator('img').count(), 0);
+    assert.equal(await res.locator('b', { hasText: 'Acme' }).count(), 1, 'its markdown is drawn');
+    assert.doesNotMatch(await res.textContent(), /\*\*/, 'no raw ** in the result');
+    assert.ok((await res.textContent()).includes('<img src=x'), 'markup in the result stays text');
+    const latest = p.locator('#thread .m.ai', { hasText: 'Latest from' }).last();
+    assert.doesNotMatch(await latest.textContent(), /\*\*/, 'no raw ** in the chat either');
     assert.ok(await p.locator('#thread .m.ai', { hasText: 'Latest from' }).count() > 0, 'the latest result is in the chat too');
     await shot(all, 'routines-list.png');
     await all.locator('.row[data-rid="25"] button', { hasText: 'Hide result' }).click();
