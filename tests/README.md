@@ -73,6 +73,19 @@ as pending with its prompt, schedule and source; Confirm and Discard in the Rout
 the routines API reach the agent; and chat vouches for a clean context only when no file,
 mail or page is in the system message. `SHOTS_DIR` saves a screenshot of the pending routine.
 
+Routines on events
+==================
+
+A routine can run when an email or a file arrives instead of on a schedule. `tests/trigger-words.test.ts`
+checks the plain words for a trigger ("an email arrives from billing@acme.example") and its chip
+("Email from Acme"), and that a trigger the agent would refuse is quoted as it is.
+`node --test tests/trigger-routines.cjs` (after `npm run build`) drives the page against a stand-in
+agent: the card that follows the agent's reply reads When / Does / Can (read only) / Limit, waits
+until Turn on, and shows a hostile trigger, name and prompt as text; the Routines list holds
+scheduled and triggered routines with a chip each, the last run and how it went, the latest result
+under its row and Delete; a saved chat's cards and list work again when it is reopened; and the
+agent is told how to make one. `SHOTS_DIR` saves the card and the list, wide and phone.
+
 Old browsers and long answers
 =============================
 

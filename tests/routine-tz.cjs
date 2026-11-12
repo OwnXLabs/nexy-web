@@ -142,7 +142,7 @@ test('the Routines view shows times on the device\'s clock', async () => {
     await p.fill('#input', 'show my routines'); await p.press('#input', 'Enter');
     const live = p.locator('.block', { hasText: 'Morning sales' });
     await live.waitFor();
-    assert.match(await live.textContent(), /every day at 8:00 am · next Fri 13 Nov, 8:00 am · not run yet/);
+    assert.match(await live.textContent(), /🕖 Daily 8:00 am next Fri 13 Nov, 8:00 am · not run yet/);
     const card = p.locator('.block', { hasText: 'Waiting for you: Manila weather' });
     await card.waitFor();
     const text = await card.textContent();
