@@ -72,3 +72,15 @@ stand-in agent. A routine the agent made while outside content was in its contex
 as pending with its prompt, schedule and source; Confirm and Discard in the Routines view and
 the routines API reach the agent; and chat vouches for a clean context only when no file,
 mail or page is in the system message. `SHOTS_DIR` saves a screenshot of the pending routine.
+
+Old browsers and long answers
+=============================
+
+The phone app runs in Android WebView 91 and older Macs in Safari 15. `astro.config.mjs` builds
+for them, which lowers syntax only. After `npm run build`, `tests/old-browsers.test.ts` scans the
+built client for APIs and CSS those engines lack (`Array.prototype.at`, `AbortSignal.timeout`,
+regex lookbehind, `:has()`, range media queries and others; `NEXY_DIST` scans another build), and
+`tests/old-engine.cjs` deletes those APIs from a real page before a chat. `tests/answer-budget.cjs`
+checks that a reply still being written runs past 90 s (it streams for 150 s), that an engine
+silent past `NEXY_AGENT_BUDGET_MS` is stopped with its words kept, and that a length stop offers
+Continue. About 2.5 minutes, the three side by side.

@@ -1866,7 +1866,7 @@ async function playChat(text: string, priv = false): Promise<void> {
   saveChat();
   let savedAt = Date.now();
   try {
-    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean };
+    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean };
     // tz: routines the agent makes run at this device's local time
     const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
@@ -1897,6 +1897,8 @@ async function playChat(text: string, priv = false): Promise<void> {
       if (ask && !priv) offerTakeover(holder, ask);
       // the model hit its length limit: say so rather than stop mid-sentence
       if (d.cut) holder.querySelector(".bub")!.insertAdjacentHTML("beforeend", `<div class="feednote" data-cut>Answer cut short. <button type="button" class="btn small" data-continue>Continue?</button></div>`);
+      // the engine went quiet mid-answer, or ran past the cap: what it wrote stays
+      else if (d.stopped) holder.querySelector(".bub")!.insertAdjacentHTML("beforeend", `<div class="feednote" data-cut>That answer was taking too long, so I stopped it. <button type="button" class="btn small" data-continue>Continue?</button></div>`);
     };
     if (answer) noteMs("chat", Date.now() - askedAt);
 
@@ -2412,7 +2414,7 @@ function wireComposer(): void {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(inp.value); }
   });
   btn?.addEventListener("click", () => void send(inp.value));
-  // "Continue?" under an answer cut at the length limit; "Ask again" under one Nexy closed
+  // "Continue?" under an answer cut at the length limit or stopped as too slow; "Ask again" under one cut off
   // before it finished (saveChat in shell.ts)
   document.addEventListener("click", (e) => {
     const more = (e.target as Element | null)?.closest<HTMLButtonElement>("#thread [data-continue]");

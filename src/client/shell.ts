@@ -181,7 +181,7 @@ function interrupted(m: HTMLElement): void {
   const note = document.createElement("div");
   note.className = "feednote";
   note.dataset.interrupted = "1";
-  note.textContent = "Nexy closed before this answer finished. ";
+  note.textContent = "This answer stopped before it finished. ";
   const again = document.createElement("button");
   again.type = "button";
   again.className = "btn small";
