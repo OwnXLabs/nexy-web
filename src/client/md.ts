@@ -1,6 +1,6 @@
 // Markdown from a model, as safe HTML: for chat bubbles and for documents in the pane. Everything
 // is escaped first and only these tags are made: headings, paragraphs, lists, block quotes, tables,
-// code, emphasis and http(s) links that open outside. No raw HTML, no other link schemes.
+// code, emphasis, checklist boxes and http(s) links that open outside. No raw HTML, no other link schemes.
 // Output has no newlines outside <pre>: chat bubbles keep white-space: pre-wrap.
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -27,6 +27,12 @@ const cells = (l: string) => l.trim().replace(/^\|/, "").replace(/\|$/, "").spli
 const BULLET = /^\s*([-*+]|\d+[.)])\s+/;
 const HEAD = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
 const RULE = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
+const TASK = /^\[([ xX])\]\s+/;
+// a checklist item shows a box, ticked or not; it is a picture of the list, not a control
+const item = (t: string) => {
+  const k = TASK.exec(t);
+  return k ? `<li class="task"><span class="tick">${k[1] === " " ? "\u2610" : "\u2611"}</span> ${inline(t.slice(k[0].length))}</li>` : `<li>${inline(t)}</li>`;
+};
 
 export type Heads = "doc" | "chat";
 // a document's title is h1 and its sections h2; in a chat bubble headings stay small
@@ -62,7 +68,7 @@ function lines(ls: string[], heads: Heads): string {
       // "1. … (blank line) 2. …" is one list in two blocks: it keeps counting from its own number
       const start = ordered ? Number(/\d+/.exec(l)![0]) : 1;
       const tag = ordered ? `ol${start !== 1 ? ` start="${start}"` : ""}` : "ul";
-      out += `<${tag}>${items.map((t) => `<li>${inline(t)}</li>`).join("")}</${ordered ? "ol" : "ul"}>`;
+      out += `<${tag}>${items.map(item).join("")}</${ordered ? "ol" : "ul"}>`;
       continue;
     }
     const para: string[] = [];

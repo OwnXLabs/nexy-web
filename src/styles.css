@@ -294,6 +294,7 @@ body.canvas-open .canvas{opacity:1;pointer-events:auto}
 .doc{max-width:600px;margin:0 auto;padding:10px 6px 30px;color:rgba(255,255,255,.9);line-height:1.6;font-size:13.5px}
 .doc h1{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0 0 14px}.doc h2{font-size:14px;font-weight:600;margin:20px 0 6px;color:#fff}
 .doc p{margin:0 0 10px}.doc ul{margin:0 0 10px 18px}.doc li{margin:2px 0}.doc hr{border:0;border-top:1px solid var(--line);margin:16px 0}.doc i{color:var(--fg3)}
+li.task{list-style:none}li.task .tick{display:inline-block;width:1.1em;margin-left:-1.1em;opacity:.85}
 .sheet{overflow:auto;border-radius:10px;border:1px solid var(--line)}
 .sheet table{border-collapse:collapse;width:100%;font-size:12.5px}
 .sheet th{text-align:left;font-weight:500;color:var(--fg3);font-size:11px;padding:8px 10px;border-bottom:1px solid var(--line2);position:sticky;top:0;background:rgba(16,14,20,.95)}
