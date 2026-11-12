@@ -15,10 +15,16 @@ export interface Routine {
   nextRunAt: string | null; lastRunAt: string | null; lastStatus: string | null; lastResult?: string;
   // made while outside content was in the agent's context: it waits for the owner's confirm
   pending?: boolean; origin?: string | null;
+  // the zone its clock times are read in (IANA name); absent when the agent reads them in UTC
+  tz?: string | null;
 }
 
+// a new routine: schedule in the owner's zone (tz); utcSchedule is the same in UTC, for agents without zones
+export interface NewRoutine { name: string; schedule: string; prompt: string; tz?: string; utcSchedule?: string }
+
 // outside: the system message holds content from outside (files, mail, pages), not only Nexy's own text
-export interface ChatOpts { outside?: boolean }
+// tz: the owner's zone (IANA name), so "8 am" in a routine the agent makes means 8 am there
+export interface ChatOpts { outside?: boolean; tz?: string }
 
 export interface NexyEngine {
   readonly id: string;
@@ -35,10 +41,11 @@ export interface NexyEngine {
   };
   routines?: {
     list(): Promise<Routine[]>;
-    create(r: { name: string; schedule: string; prompt: string }): Promise<Routine>;
+    create(r: NewRoutine): Promise<Routine>;
     remove(id: string): Promise<void>;
     // the owner's answer to a pending routine
-    confirm?(id: string): Promise<{ nextRunAt: string | null }>;
+    // tz: the confirming owner's zone, which the routine then runs in
+    confirm?(id: string, tz?: string): Promise<{ nextRunAt: string | null; tz?: string | null }>;
     discard?(id: string): Promise<void>;
   };
 }

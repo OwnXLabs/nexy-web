@@ -1,7 +1,7 @@
 import { httpMsg } from "./http";
 export type MemCmd =
   | { kind: "memShow" } | { kind: "memForget" }
-  | { kind: "routineMake"; cron: string; human: string; prompt: string; name: string }
+  | { kind: "routineMake"; cron: string; local: string; human: string; prompt: string; name: string }
   | { kind: "routineList" } | { kind: "routineStop"; what: string } | { kind: "routineRunLast" };
 
 export interface MemUI {
@@ -18,12 +18,36 @@ let lastRoutine: { name: string; prompt: string } | null = null;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-export function parseSchedule(text: string, now = new Date()): { cron: string; human: string; prompt: string } | null {
+/** The device's time zone, e.g. "Asia/Manila": routine times are read and shown in it. */
+export const deviceZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+const LOCAL = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
+/** A moment on this device's clock: "Fri 13 Nov, 8:00 am". */
+export const localTime = (iso: string): string => LOCAL.format(new Date(iso));
+
+const clock = (h: number, m: number) => `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+
+/** A schedule in plain words. tz: the zone it runs in; null when the agent reads it in UTC. */
+export function scheduleText(schedule: string, tz: string | null): string {
+  const s = schedule.trim().toLowerCase();
+  const every = /^every (\d+)([mhd])$/.exec(s);
+  if (every) {
+    const unit = { m: "minute", h: "hour", d: "day" }[every[2] as "m" | "h" | "d"];
+    return every[1] === "1" ? `every ${unit}` : `every ${every[1]} ${unit}s`;
+  }
+  const daily = /^daily (\d{1,2}):(\d{2})$/.exec(s), cron = /^(\d{1,2}) (\d{1,2}) \* \* (\*|1-5|mon-fri)$/.exec(s);
+  const text = daily ? `every day at ${clock(+daily[1], +daily[2])}`
+    : cron ? `${cron[3] === "*" ? "every day" : "every weekday"} at ${clock(+cron[2], +cron[1])}`
+    : schedule;
+  return tz == null ? `${text} (UTC)` : tz === deviceZone() ? text : `${text} (${tz} time)`;
+}
+
+export function parseSchedule(text: string, now = new Date()): { cron: string; local: string; human: string; prompt: string } | null {
   const m = /^\s*(?:please\s+)?(?:(?:every|each)\s+(day|morning|evening|night|weekday|hour|sunday|monday|tuesday|wednesday|thursday|friday|saturday)|(daily|hourly))(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?\s*[,:-]?\s+(.{4,})$/i.exec(text);
   if (!m) return null;
   const unit = (m[1] ?? (m[2]?.toLowerCase() === "hourly" ? "hour" : "day")).toLowerCase();
   const prompt = m[6].trim();
-  if (unit === "hour") return { cron: "0 * * * *", human: "every hour", prompt };
+  if (unit === "hour") return { cron: "0 * * * *", local: "0 * * * *", human: "every hour", prompt };
   let h = m[3] ? Number(m[3]) : unit === "morning" ? 8 : unit === "evening" ? 18 : unit === "night" ? 21 : 9;
   const min = m[4] ? Number(m[4]) : 0;
   if (m[5]?.toLowerCase() === "pm" && h < 12) h += 12;
@@ -34,10 +58,12 @@ export function parseSchedule(text: string, now = new Date()): { cron: string; h
   const s = shift > 1 ? -1 : shift < -1 ? 1 : shift;
   const dow = (d: number) => (((d + s) % 7) + 7) % 7;
   const at = `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
-  if (unit === "weekday") return { cron: `${um} ${uh} * * ${[1, 2, 3, 4, 5].map(dow).join(",")}`, human: `every weekday at ${at}`, prompt };
+  // cron: the same in UTC, for an agent that reads schedules in UTC; local: on this device's clock
+  const onClock = (days: string) => `${min} ${h} * * ${days}`;
+  if (unit === "weekday") return { cron: `${um} ${uh} * * ${[1, 2, 3, 4, 5].map(dow).join(",")}`, local: onClock("1-5"), human: `every weekday at ${at}`, prompt };
   const d = DAYS.indexOf(unit);
-  if (d >= 0) return { cron: `${um} ${uh} * * ${dow(d)}`, human: `every ${unit[0].toUpperCase()}${unit.slice(1)} at ${at}`, prompt };
-  return { cron: `${um} ${uh} * * *`, human: `every day at ${at}`, prompt };
+  if (d >= 0) return { cron: `${um} ${uh} * * ${dow(d)}`, local: onClock(String(d)), human: `every ${unit[0].toUpperCase()}${unit.slice(1)} at ${at}`, prompt };
+  return { cron: `${um} ${uh} * * *`, local: onClock("*"), human: `every day at ${at}`, prompt };
 }
 
 export function matchMemory(text: string): MemCmd | null {
@@ -68,9 +94,9 @@ async function call(path: string, init: RequestInit = {}): Promise<any> {
   return d;
 }
 
-function blockEl(title: string, right: string, rows: string, foot = ""): HTMLElement {
+function blockEl(title: string, right: string, rows: string, foot = "", cls = ""): HTMLElement {
   const el = document.createElement("div");
-  el.className = "block";
+  el.className = cls ? `block ${cls}` : "block";
   el.innerHTML = `<div class="bh">${esc(title)}<span class="r">${esc(right)}</span></div>${rows}${foot}`;
   return el;
 }
@@ -101,9 +127,10 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
     }
     if (cmd.kind === "routineMake") {
       if (ui.isPrivate()) { ui.push("ai", "A routine keeps its results, so I cannot set one up from an ultra-private chat. End the private session first."); return; }
-      const { routine } = await call("/api/v1/routines", { method: "POST", body: JSON.stringify({ name: cmd.name, schedule: cmd.cron, prompt: cmd.prompt }) });
-      ui.block(blockEl(`Routine: ${cmd.name}`, cmd.human, row("What it does", cmd.prompt) + row("Schedule on this machine (UTC)", cmd.cron) +
-        row("Next run", routine.nextRunAt ? new Date(routine.nextRunAt).toLocaleString() : "set by the scheduler")));
+      // the schedule on this device's clock, with the UTC one for an agent without time zones
+      const { routine } = await call("/api/v1/routines", { method: "POST", body: JSON.stringify({ name: cmd.name, schedule: cmd.local, utcSchedule: cmd.cron, tz: deviceZone(), prompt: cmd.prompt }) });
+      ui.block(blockEl(`Routine: ${cmd.name}`, cmd.human, row("What it does", cmd.prompt) + row("When", cmd.human) +
+        row("Next run", routine.nextRunAt ? localTime(routine.nextRunAt) : "set by the scheduler"), "", "routine"));
       lastRoutine = { name: cmd.name, prompt: cmd.prompt };
       ui.push("ai", `Set. I will do this ${esc(cmd.human)}, on this machine, and keep the result. Say <b>show my routines</b> to see the latest one.${ui.runNow ? " Here is the first one now, so you can see what it looks like." : ""}`);
       // a first run straight away: what the owner will get, without waiting for the schedule
@@ -120,7 +147,7 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
       if (!routines.length) { ui.push("ai", "No routines yet. Try “every weekday at 8am, summarise what my projects need”."); return; }
       const waiting = routines.filter((r: any) => r.pending), live = routines.filter((r: any) => !r.pending);
       if (live.length) ui.block(blockEl("Routines", `${live.length} on this machine`, live.map((r: any) =>
-        row(r.name, `${r.schedule}${r.lastRunAt ? ` · last ${new Date(r.lastRunAt).toLocaleString()}` : " · not run yet"}`, !r.enabled)).join("")));
+        row(r.name, `${scheduleText(r.schedule, r.tz ?? null)}${r.nextRunAt ? ` · next ${localTime(r.nextRunAt)}` : ""}${r.lastRunAt ? ` · last ${localTime(r.lastRunAt)}` : " · not run yet"}`, !r.enabled)).join(""), "", "routine"));
       for (const r of waiting) ui.block(pendingEl(r, ui));
       if (waiting.length) ui.push("ai", `${waiting.length === 1 ? "One routine is" : `${waiting.length} routines are`} waiting for you. I set ${waiting.length === 1 ? "it" : "them"} up while reading something from outside, so ${waiting.length === 1 ? "it" : "they"} will not run until you confirm.`);
       const latest = routines.find((r: any) => r.lastResult);
@@ -153,18 +180,19 @@ function originText(o: unknown): string {
 
 /** A routine made while outside content was in context: the owner confirms or discards it. */
 function pendingEl(r: any, ui: MemUI): HTMLElement {
+  // confirming sends this device's zone, so an agent with zones runs it on this clock
   const el = blockEl(`Waiting for you: ${r.name}`, "not running yet",
-    row("What it will run", r.prompt, true) + row("When (UTC)", r.schedule, true) + row("Came from", originText(r.origin), true),
-    `<div class="ba"><button class="btn small" data-confirm>Confirm</button> <button class="btn small" data-discard>Discard</button></div>`);
+    row("What it will run", r.prompt, true) + row("When", scheduleText(r.schedule, r.tz == null ? null : deviceZone()), true) + row("Came from", originText(r.origin), true),
+    `<div class="ba"><button class="btn small" data-confirm>Confirm</button> <button class="btn small" data-discard>Discard</button></div>`, "routine");
   const buttons = [...el.querySelectorAll<HTMLButtonElement>("[data-confirm], [data-discard]")];
   for (const b of buttons) b.onclick = async () => {
     const action = b.hasAttribute("data-confirm") ? "confirm" : "discard";
     buttons.forEach((x) => { x.disabled = true; });
     try {
-      const d = await call("/api/v1/routines", { method: "PATCH", body: JSON.stringify({ id: r.id, action }) });
+      const d = await call("/api/v1/routines", { method: "PATCH", body: JSON.stringify({ id: r.id, action, tz: deviceZone() }) });
       el.querySelector(".ba")!.textContent = action === "confirm" ? "Confirmed" : "Discarded";
       ui.push("ai", action === "confirm"
-        ? `Confirmed <b>${esc(r.name)}</b>. ${d?.routine?.nextRunAt ? `First run ${esc(new Date(d.routine.nextRunAt).toLocaleString())}.` : "It runs on its schedule."}`
+        ? `Confirmed <b>${esc(r.name)}</b>. ${d?.routine?.nextRunAt ? `First run ${esc(localTime(d.routine.nextRunAt))}.` : "It runs on its schedule."}`
         : `Discarded <b>${esc(r.name)}</b>. It will not run.`);
     } catch (e) {
       buttons.forEach((x) => { x.disabled = false; });

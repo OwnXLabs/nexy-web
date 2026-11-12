@@ -30,7 +30,7 @@ import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost } fro
 import { renderGate } from "./build-gate";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
-import { matchMemory, playMemory, noteExampleRoutine } from "./memory";
+import { matchMemory, playMemory, noteExampleRoutine, deviceZone } from "./memory";
 import { initSettings, notify, openSettings } from "./settings";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
@@ -1831,7 +1831,8 @@ async function playChat(text: string, priv = false): Promise<void> {
   thread.push({ role: "user", content: text });
   try {
     type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean };
-    const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
+    // tz: routines the agent makes run at this device's local time
+    const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
     let streamed = false;
     const d = await patient(() => streamReply<Reply>(body, (t) => {

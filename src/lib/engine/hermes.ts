@@ -50,7 +50,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           ...(KEY && session ? { "X-Hermes-Session-Id": `nexy-${session}` } : {}),
         },
         // vouch for the system message only when the caller says it holds nothing from outside
-        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}) }),
+        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}), ...(opts?.tz ? { tz: opts.tz } : {}) }),
       });
 
       if (!res.ok) {
@@ -119,19 +119,26 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
             nextRunAt: when(j.next_run_at), lastRunAt: when(j.last_run_at), lastStatus: j.last_status ?? null,
             lastResult: run ? (await lastReply(String(run.id)).catch(() => undefined))?.slice(0, 1500) : undefined,
             pending: j.status === "pending", origin: j.origin == null ? null : String(j.origin),
+            tz: typeof j.tz === "string" ? j.tz : null,
           });
         }
         return out;
       },
       async create(r) {
-        const b = await api("/api/jobs", { method: "POST", body: JSON.stringify({ name: r.name, schedule: r.schedule, prompt: r.prompt, deliver: "local" }) });
-        const j = b?.job ?? {};
-        return { id: String(j.id ?? ""), name: r.name, schedule: r.schedule, prompt: r.prompt, enabled: true, nextRunAt: when(j.next_run_at), lastRunAt: null, lastStatus: null };
+        const post = async (schedule: string, tz?: string) => (await api("/api/jobs", { method: "POST", body: JSON.stringify({ name: r.name, schedule, prompt: r.prompt, deliver: "local", ...(tz ? { tz } : {}) }) }))?.job ?? {};
+        let schedule = r.schedule, j = await post(schedule, r.tz);
+        // an agent that does not keep zones read the local schedule as UTC: replace it with the UTC one
+        if (r.tz && r.tz !== "UTC" && j.tz !== r.tz) {
+          if (j.id != null) await api(`/api/jobs/${encodeURIComponent(String(j.id))}`, { method: "DELETE" });
+          if (!r.utcSchedule) throw new Error("this agent reads routine times in UTC only");
+          schedule = r.utcSchedule; j = await post(schedule);
+        }
+        return { id: String(j.id ?? ""), name: r.name, schedule, prompt: r.prompt, enabled: true, nextRunAt: when(j.next_run_at), lastRunAt: null, lastStatus: null, tz: typeof j.tz === "string" ? j.tz : null };
       },
       async remove(id) { await api(`/api/jobs/${encodeURIComponent(id)}`, { method: "DELETE" }); },
-      async confirm(id) {
-        const b = await api(`/api/jobs/${encodeURIComponent(id)}/confirm`, { method: "POST" });
-        return { nextRunAt: when(b?.job?.next_run_at) };
+      async confirm(id, tz) {
+        const b = await api(`/api/jobs/${encodeURIComponent(id)}/confirm`, { method: "POST", ...(tz ? { body: JSON.stringify({ tz }) } : {}) });
+        return { nextRunAt: when(b?.job?.next_run_at), tz: typeof b?.job?.tz === "string" ? b.job.tz : null };
       },
       async discard(id) { await api(`/api/jobs/${encodeURIComponent(id)}/discard`, { method: "POST" }); },
     },

@@ -30,6 +30,7 @@ import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/
 import { connectorAsk, connectorTurn } from "../../../lib/connectors";
 import { byId } from "../../../lib/apps";
 import { wantsEval } from "../../../lib/eval";
+import { ownerZone } from "../../../lib/tz";
 
 export const prerender = false;
 
@@ -215,6 +216,10 @@ export const POST: APIRoute = async (ctx) => {
   if (!messages?.length) return json({ error: "messages required" }, 400);
 
   const priv = body?.private === true;
+  // the device's zone; an unknown one is logged and the agent reads routine times in UTC
+  let tz: string | null = null;
+  try { tz = ownerZone(body?.tz); }
+  catch (e) { if (!(e instanceof RangeError)) throw e; console.warn(`[nexy] chat: no time zone sent on: ${e.message}`); }
   const who = owner(ctx);
   const said = messages[messages.length - 1]?.content;
   if (typeof said === "string" && said)
@@ -264,7 +269,8 @@ export const POST: APIRoute = async (ctx) => {
         agentSession,
         onText,
         // attached files, mail, an open or fetched page: the agent then holds new routines for the owner
-        { outside: pageRead || conn?.outcome === "read" || hasOutside(body) },
+        // and the owner's zone, so a routine the agent makes runs at the owner's local time
+        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}) },
       );
       const browsed = !!agentSession && !!eng.browsed && await eng.browsed(agentSession, startedAt).catch((e) => {
         console.warn("[nexy] could not read the agent's tool use", (e as Error).message);
