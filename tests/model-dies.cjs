@@ -98,7 +98,9 @@ test('a long guide cut off: the notice at once, the words so far on the right, C
     const pane = await page.locator('.doc').last().innerText();
     assert.match(pane, /Supplier1[01]\b/, 'the words so far are on the right');
     await again.click();
-    await page.getByText('The whole answer, second time.').waitFor({ timeout: 20000 });
+    // Continue grows the same document: the earlier words and the rest, in one pane
+    await page.locator('.doc').last().getByText('The whole answer, second time.').waitFor({ timeout: 20000 });
+    assert.match(await page.locator('.doc').last().innerText(), /Supplier1[01]\b[\s\S]*The whole answer, second time\./, 'the continuation follows the words so far');
     assert.deepEqual(errors, []);
   } finally { await b.close(); s.p.kill(); m.srv.close(); fs.rmSync(data, { recursive: true, force: true }); }
 });
