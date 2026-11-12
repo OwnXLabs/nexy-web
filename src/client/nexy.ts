@@ -46,6 +46,9 @@ const S = { projects: [] as Project[], cur: "", busy: false, job: "" as "" | "bu
   redo: null as null | { pid: string; taskId: string; title: string } };
 const P = () => S.projects.find((p) => p.id === chatProject());
 const EVAL = new URLSearchParams(location.search).get("eval") === "1";
+// The Android app draws its own Nexy button over the page's lower left (MainActivity.kt in the
+// app); the page leaves room for it under the last message.
+if (/; wv\)/.test(navigator.userAgent)) document.documentElement.dataset.shell = "android";
 
 const conversation = (priv: boolean) => priv ? privateConversation(true) : chatHistory();
 function captureWork() {
