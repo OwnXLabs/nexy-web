@@ -21,8 +21,11 @@ let lastRoutine: { name: string; prompt: string; human: string } | null = null;
  * as a new routine and made a second one at a time of its own (QA 0.2.8).
  */
 export function runOnce(r: { name: string; prompt: string; human: string }): string {
-  return `${r.prompt}\n\n(This is one run, now, of the routine "${r.name}", which is already set for ${r.human}. ` +
-    "It exists: do not create, change or delete any routine. If you mention it, say it runs " + `${r.human}.)`;
+  // The note leads and the reply is named: placed after the task, it was answered instead of the
+  // task ("Understood. I won't create… any routine", QA 2026-11-12).
+  return `The routine "${r.name}" is already set for ${r.human}. It exists: do not create, change or delete any routine. ` +
+    `Run it once now and reply with only its result, as the routine would each time${/\bremind\b/i.test(r.prompt) ? " (for a reminder, the reminder itself)" : ""}. ` +
+    `If you mention when it runs, say ${r.human}.\n\nThe routine's task: ${r.prompt}`;
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
