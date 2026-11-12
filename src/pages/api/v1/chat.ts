@@ -309,6 +309,9 @@ export const POST: APIRoute = async (ctx) => {
       return { status: 200, body: { choices: [{ message: { role: "assistant", content: plain } }], via: "connector", grounded: false, private: priv || undefined } };
     }
     const connPrompt = conn?.outcome === "read" ? conn.prompt : "";
+    // A turn that read the owner's mail is answered by the model alone, with no tools: an email could
+    // otherwise tell the agent to search the web with what it says, and send the owner's mail out.
+    const use = conn?.outcome === "read" ? localEngine : eng;
     if (page) {
       const opened = await openOnScreen(page);
       onScreen = "text" in opened;
@@ -316,13 +319,13 @@ export const POST: APIRoute = async (ctx) => {
       else if ("error" in opened) console.warn(`[nexy] could not open ${new URL(page).hostname} on the agent's screen: ${opened.error}`);
     }
     // always streamed from the engine, so its progress is seen even when this request is not
-    const b = budget(eng === localEngine ? LOCAL_BUDGET_MS : research ? RESEARCH_BUDGET_MS : AGENT_BUDGET_MS);
+    const b = budget(use === localEngine ? LOCAL_BUDGET_MS : research ? RESEARCH_BUDGET_MS : AGENT_BUDGET_MS);
     const heard = (d: string) => { b.heard(d); onText?.(d); };
     try {
-      const r = await eng.chat(
+      const r = await use.chat(
         String(said ?? ""),
         history,
-        systemPrompt(body?.context, priv, body?.docs, isEval, eng !== localEngine) + browse + connPrompt,
+        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine) + browse + connPrompt,
         // silent past its budget, the agent gives way to the model alone (below): a stuck agent
         // turn must not leave the person waiting minutes for nothing
         b.signal,
@@ -332,7 +335,7 @@ export const POST: APIRoute = async (ctx) => {
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
         { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}) },
       );
-      const browsed = !!agentSession && !!eng.browsed && await eng.browsed(agentSession, startedAt).catch((e) => {
+      const browsed = !!agentSession && !!use.browsed && await use.browsed(agentSession, startedAt).catch((e) => {
         console.warn("[nexy] could not read the agent's tool use", (e as Error).message);
         return false;
       });
@@ -361,25 +364,25 @@ export const POST: APIRoute = async (ctx) => {
         private: priv || undefined,
       } };
     } catch (e: any) {
-      log({ result: "engine-failed", via: eng.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
-      if (b.stopped && b.text.trim()) return stoppedTurn(b, eng.id);
+      log({ result: "engine-failed", via: use.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
+      if (b.stopped && b.text.trim()) return stoppedTurn(b, use.id);
       // Words already on screen stay there: asking again from scratch lost them and kept the
       // person waiting minutes while a restarted model loaded (QA 2026-11-12)
       // (only words the person saw: an engine's own failure, worded as a reply, is never shown)
-      if (visible(b.text).trim()) return stoppedTurn(b, eng.id, true);
+      if (visible(b.text).trim()) return stoppedTurn(b, use.id, true);
       // The agent adds memory and tools; the model alone can still answer. A broken agent
       // must not mean a broken chat.
       const timedOut = b.stopped !== null || e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message ?? ""));
       // A search that ran out of time: say so. The model alone would guess at current facts.
-      if (eng !== localEngine && research && timedOut) {
+      if (use !== localEngine && research && timedOut) {
         const secs = Math.round(RESEARCH_BUDGET_MS / 1000);
         const reply = `That search was still running after ${secs} seconds, so I stopped it rather than keep you waiting. ` +
           "Ask again in a moment, or narrow it down (one topic, or fewer sources) and it will come back faster.";
         answered(reply);
-        log({ result: "timeout-notice", via: eng.id, fallback: "timeout-notice", ms: Date.now() - startedAt });
-        return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via: eng.id, grounded: false, fallback: true } };
+        log({ result: "timeout-notice", via: use.id, fallback: "timeout-notice", ms: Date.now() - startedAt });
+        return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via: use.id, grounded: false, fallback: true } };
       }
-      if (eng !== localEngine) {
+      if (use !== localEngine) {
         const b2 = budget(FALLBACK_BUDGET_MS);
         try {
           restart?.();
@@ -396,7 +399,7 @@ export const POST: APIRoute = async (ctx) => {
         } finally { b2.end(); }
       }
       // details stay in the log: an engine error can carry file paths and internal names
-      log({ result: "failed", via: eng.id, ms: Date.now() - startedAt });
+      log({ result: "failed", via: use.id, ms: Date.now() - startedAt });
       return { status: 502, body: { error: "the model on this machine did not answer" } };
     } finally { b.end(); }
   };
