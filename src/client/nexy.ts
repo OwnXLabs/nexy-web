@@ -2336,7 +2336,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     }
     if (/\b(use|try|with|load|attach)\s+(?:it\s+(?:on|with)\s+)?(?:the\s+|some\s+)?(sample|example|demo|dummy|fake|test)\s+(data|files?|numbers|figures|sheets?|records)\b/i.test(text)) { await attachSample(text); return; }
     const mem = matchMemory(text);
-    if (mem) { await playMemory(mem, { push, block: (el) => void pushBlock(el), isPrivate, runNow: (q) => playChat(`Do this now, using your web search and your browser as needed: ${q}`, nowPrivate) }); return; }
+    if (mem) { await playMemory(mem, { push, block: (el) => void pushBlock(el), isPrivate }); return; }
     const soc = matchSocial(text);
     if (soc) { await playSocial(soc, { push, showArtifact, project: P()?.name, block: (t, r, rows) => void pushBlock(summaryBlock(t, r, rows)) }); return; }
 

@@ -1,4 +1,5 @@
 import { httpMsg, errText } from "./http";
+import { renderMd } from "./md";
 import { triggerChip, triggerText } from "./triggers";
 export type MemCmd =
   | { kind: "memShow" } | { kind: "memForget" }
@@ -9,23 +10,31 @@ export interface MemUI {
   push(who: "ai", html: string): HTMLElement;
   block(el: HTMLElement): void;
   isPrivate(): boolean;
-  // run a task now, as a normal turn in this chat
-  runNow?(prompt: string): Promise<void>;
 }
 
-// the routine set in this page, so "run it now" right after means that routine
-let lastRoutine: { name: string; prompt: string; human: string } | null = null;
+// the routine set in this page, so "run it now" right after means that routine; id: the agent's,
+// unknown for one carried over from an example
+let lastRoutine: { id?: string; name: string; prompt: string; human: string } | null = null;
 
 /**
- * One run, now, of a routine that is already set. Told nothing, the agent read "remind me to …"
- * as a new routine and made a second one at a time of its own (QA 0.2.8).
+ * One run, now, by the agent itself: the routine's own run, as its schedule will run it, and its
+ * result in the chat. A chat turn about the routine was answered "I cannot run existing
+ * routines" (QA 0.2.9), or made a second routine (QA 0.2.8).
  */
-export function runOnce(r: { name: string; prompt: string; human: string }): string {
-  // The note leads and the reply is named: placed after the task, it was answered instead of the
-  // task ("Understood. I won't create… any routine", QA 2026-11-12).
-  return `The routine "${r.name}" is already set for ${r.human}. It exists: do not create, change or delete any routine. ` +
-    `Run it once now and reply with only its result, as the routine would each time${/\bremind\b/i.test(r.prompt) ? " (for a reminder, the reminder itself)" : ""}. ` +
-    `If you mention when it runs, say ${r.human}.\n\nThe routine's task: ${r.prompt}`;
+async function runRoutine(r: { id?: string; name: string; prompt: string }, ui: MemUI): Promise<void> {
+  let id = r.id;
+  if (!id) {
+    const { routines } = await call("/api/v1/routines");
+    id = (routines as any[]).find((x) => !x.pending && !x.trigger && x.name === r.name && x.prompt === r.prompt)?.id;
+    if (!id) { ui.push("ai", "That routine is not set any more. Say <b>show my routines</b> to see them."); return; }
+  }
+  try {
+    const { run } = await call("/api/v1/routines", { method: "PATCH", body: JSON.stringify({ id, action: "run" }) });
+    const reply = String(run?.reply ?? "").trim();
+    ui.push("ai", reply ? renderMd(reply) : "It ran, and had nothing to report this time.");
+  } catch (e) {
+    ui.push("ai", `It could not run just now: <code>${esc(errText(e))}</code>. It still runs on its schedule.`);
+  }
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
@@ -158,15 +167,15 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
       const { routine } = await call("/api/v1/routines", { method: "POST", body: JSON.stringify({ name: cmd.name, schedule: cmd.local, utcSchedule: cmd.cron, tz: deviceZone(), prompt: cmd.prompt }) });
       ui.block(blockEl(`Routine: ${cmd.name}`, cmd.human, row("What it does", cmd.prompt) + row("When", cmd.human) +
         row("Next run", routine.nextRunAt ? localTime(routine.nextRunAt) : "set by the scheduler"), "", "routine"));
-      lastRoutine = { name: cmd.name, prompt: cmd.prompt, human: cmd.human };
-      ui.push("ai", `Set. I will do this ${esc(cmd.human)}, on this machine, and keep the result. Say <b>show my routines</b> to see the latest one.${ui.runNow ? " Here is the first one now, so you can see what it looks like." : ""}`);
+      lastRoutine = { id: routine.id ? String(routine.id) : undefined, name: cmd.name, prompt: cmd.prompt, human: cmd.human };
+      ui.push("ai", `Set. I will do this ${esc(cmd.human)}, on this machine, and keep the result. Say <b>show my routines</b> to see the latest one. Here is the first one now, so you can see what it looks like.`);
       // a first run straight away: what the owner will get, without waiting for the schedule
-      if (ui.runNow) await ui.runNow(runOnce(lastRoutine));
+      await runRoutine(lastRoutine, ui);
       return;
     }
     if (cmd.kind === "routineRunLast") {
-      if (!lastRoutine || !ui.runNow) { ui.push("ai", "There is no routine from this chat to run. Say <b>show my routines</b> to see them."); return; }
-      await ui.runNow(runOnce(lastRoutine));
+      if (!lastRoutine) { ui.push("ai", "There is no routine from this chat to run. Say <b>show my routines</b> to see them."); return; }
+      await runRoutine(lastRoutine, ui);
       return;
     }
     if (cmd.kind === "routineList") {
@@ -177,7 +186,7 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
       for (const r of waiting) ui.block(pendingEl(r, (html) => ui.push("ai", html)));
       if (waiting.length) ui.push("ai", waitingText(waiting));
       const latest = routines.find((r: any) => r.lastResult);
-      if (latest) ui.push("ai", `Latest from <b>${esc(latest.name)}</b>:<br>${esc(latest.lastResult).slice(0, 700).replace(/\n/g, "<br>")}`);
+      if (latest) ui.push("ai", `Latest from <b>${esc(latest.name)}</b>:${renderMd(String(latest.lastResult).slice(0, 700))}`);
       return;
     }
     if (cmd.kind === "routineStop") {
@@ -208,6 +217,9 @@ function originText(o: unknown): string {
 const READ_ONLY = "read only: it can't reply, send or delete anything";
 const EVENT_GAP = "at most once every 5 minutes";
 const settled = (r: { trigger?: string | null }) => (r.trigger ? "Turned on" : "Confirmed");
+// a card's header once answered: no longer "off until you turn it on"
+const settledHead = (text: string, r: { trigger?: string | null }) =>
+  text === "Discarded" ? "discarded" : r.trigger ? "on: runs when it arrives, read only" : "running on its schedule";
 
 function waitingText(waiting: any[]): string {
   const one = waiting.length === 1, head = `${one ? "One routine is" : `${waiting.length} routines are`} waiting for you.`;
@@ -297,7 +309,8 @@ function wireRow(root: ParentNode, r: any): void {
     const d = document.createElement("div");
     d.className = "why";
     d.dataset.result = String(r.id);
-    d.innerHTML = `<b>${r.lastRunAt ? esc(localTime(r.lastRunAt)) : "Latest run"}</b><br>${esc(String(r.lastResult)).replace(/\n/g, "<br>")}`;
+    // a model's answer: its markdown drawn by the shared safe renderer, never as raw ** and #
+    d.innerHTML = `<b>${r.lastRunAt ? esc(localTime(r.lastRunAt)) : "Latest run"}</b>${renderMd(String(r.lastResult))}`;
     rowEl.after(d);
     see.textContent = "Hide result";
   };
@@ -344,7 +357,7 @@ function wireCard(el: HTMLElement, r: { id: unknown; name: string; trigger?: str
     buttons.forEach((x) => { x.disabled = true; });
     try {
       const d = await call("/api/v1/routines", { method: "PATCH", body: JSON.stringify({ id: r.id, action, tz: deviceZone() }) });
-      settleCards(String(r.id), action === "confirm" ? settled(r) : "Discarded");
+      settleCards(String(r.id), action === "confirm" ? settled(r) : "Discarded", r);
       tell(action === "confirm"
         ? r.trigger
           ? `Turned on <b>${esc(r.name)}</b>. It runs when ${esc(triggerText(r.trigger))}, ${esc(EVENT_GAP)}, and can only read.`
@@ -365,8 +378,12 @@ const cardNote = (el: HTMLElement, text: string) => {
   el.querySelector(".ba")!.after(n);
 };
 
-function settleCards(id: string, text: string): void {
-  document.querySelectorAll<HTMLElement>(`[data-routine="${CSS.escape(id)}"] .ba`).forEach((b) => { b.textContent = text; });
+function settleCards(id: string, text: string, r: { trigger?: string | null }): void {
+  document.querySelectorAll<HTMLElement>(`[data-routine="${CSS.escape(id)}"]`).forEach((c) => {
+    const ba = c.querySelector(".ba"), head = c.querySelector(".bh .r");
+    if (ba) ba.textContent = text;
+    if (head) head.textContent = settledHead(text, r);
+  });
 }
 
 /**
@@ -382,7 +399,8 @@ export async function refreshRoutineCards(root: ParentNode): Promise<void> {
   for (const c of cards) {
     const r = byId(c.dataset.routine);
     if (r?.pending) wireCard(c, r);
-    else c.querySelector(".ba")!.textContent = r ? settled(r) : "No longer waiting";
+    else if (r) settleCards(String(r.id), settled(r), r);
+    else c.querySelector(".ba")!.textContent = "No longer waiting";
   }
   // a list shown again: its buttons work on the routine as it is now, or it says it is gone
   for (const c of rows) {

@@ -1,7 +1,8 @@
 // One request, one routine (QA 0.2.8): "Every weekday at 7:30 am, remind me to …" set the routine
-// from the owner's words, then its first run went to the agent as a plain "remind me to …", which
-// the agent took for a new routine and made again at 8:00 every day. The stand-in agent does what
-// that model did: it makes a routine of its own unless the turn says one is already set.
+// from the owner's words, then its first run went to the agent as a chat turn, which made the
+// routine again at 8:00 (0.2.8) or answered "I cannot run existing routines" (0.2.9). The first run
+// and "run it now" are now the agent's own run of the routine. The stand-in agent's chat still
+// does what those models did, so a chat turn about the routine would show.
 // Run after `npm run build`: node --test tests/one-routine.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -15,7 +16,7 @@ const ENTRY = path.join(__dirname, '..', 'dist', 'server', 'entry.mjs');
 const NEXT = 1794529800; // Fri 13 Nov 2026 07:30 Manila
 
 function agent() {
-  const jobs = [], turns = [];
+  const jobs = [], turns = [], runs = [];
   let next = 1;
   const srv = http.createServer((req, res) => {
     let body = '';
@@ -29,6 +30,12 @@ function agent() {
         return res.end(JSON.stringify({ job }));
       }
       if (req.url === '/api/jobs') return res.end(JSON.stringify({ jobs }));
+      const run = /^\/api\/jobs\/(\d+)\/run$/.exec(req.url);
+      if (run && req.method === 'POST') {
+        const job = jobs.find((j) => String(j.id) === run[1]);
+        runs.push(run[1]);
+        return res.end(JSON.stringify({ run: { id: job.id, session: `cron-${job.id}-1`, status: 'ok', reply: `**Reminder:** ${job.prompt.replace(/^remind me to /i, '')}` } }));
+      }
       if (req.url.startsWith('/api/sessions')) return res.end('{"data":[]}');
       if (req.url.startsWith('/v1/chat/completions')) {
         const said = [...b.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
@@ -47,7 +54,7 @@ function agent() {
       res.end('{}');
     });
   });
-  return new Promise((r) => srv.listen(0, '127.0.0.1', () => r({ srv, jobs, turns, url: `http://127.0.0.1:${srv.address().port}` })));
+  return new Promise((r) => srv.listen(0, '127.0.0.1', () => r({ srv, jobs, turns, runs, url: `http://127.0.0.1:${srv.address().port}` })));
 }
 
 async function start(env) {
@@ -77,20 +84,24 @@ test('a weekday reminder said in chat makes one routine, at the asked time, and 
     await p.fill('#input', 'Every weekday at 7:30 am, remind me to count the rice and canned goods stock.');
     await p.press('#input', 'Enter');
     await p.locator('.block', { hasText: 'Routine: count the rice and canned goods stock.' }).waitFor();
-    // the first run: the agent's answer arrives
-    await p.locator('#thread .msg.ai', { hasText: /Reminder:|I've set up/ }).waitFor({ timeout: 60000 });
+    // the first run: the agent's own run of that routine, its result shown as it would come
+    const first = p.locator('#thread .msg.ai', { hasText: 'Reminder:' }).first();
+    await first.waitFor({ timeout: 60000 });
     assert.deepEqual(g.jobs.map((j) => [j.schedule, j.tz]), [['30 7 * * 1-5', 'Asia/Manila']], 'one routine, weekdays at 7:30');
-    assert.equal(g.turns.length, 1);
-    assert.match(g.turns[0], /remind me to count the rice and canned goods stock/, 'the first run still does the task');
+    assert.deepEqual(g.runs, ['1'], 'the routine itself ran once');
+    assert.equal(g.turns.length, 0, 'no chat turn about the routine');
+    assert.equal(await first.locator('b', { hasText: 'Reminder:' }).count(), 1, 'its markdown is drawn');
+    assert.match(await first.textContent(), /Reminder: count the rice and canned goods stock\./);
     const thread = await p.locator('#thread').innerText();
     assert.match(thread, /every weekday at 07:30/);
-    assert.doesNotMatch(thread, /8:00|08:00|daily routine/i, 'nothing says another time');
+    assert.doesNotMatch(thread, /8:00|08:00|daily routine|cannot run/i, 'nothing says another time, or that it cannot run');
 
     // "run it now" afterwards is one more run, not one more routine
     await p.fill('#input', 'run it now'); await p.press('#input', 'Enter');
-    for (let i = 0; i < 100 && g.turns.length < 2; i++) await new Promise((r) => setTimeout(r, 200));
     await p.locator('#thread .msg.ai', { hasText: 'Reminder:' }).nth(1).waitFor({ timeout: 30000 });
+    assert.deepEqual(g.runs, ['1', '1']);
     assert.equal(g.jobs.length, 1, 'run it now made a routine');
+    assert.equal(g.turns.length, 0, 'run it now was not a chat turn');
     assert.deepEqual(errs, []);
   } finally {
     await b.close(); a.p.kill(); g.srv.close(); fs.rmSync(a.data, { recursive: true, force: true });
