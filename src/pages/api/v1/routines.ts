@@ -40,13 +40,19 @@ export const DELETE: APIRoute = async ({ url, request }) => {
   try { await r.remove(id); return json({ ok: true }); } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
 };
 
-// the owner's answer to a routine made while outside content was in the agent's context
+// the owner's answer to a routine made while outside content was in the agent's context, or the
+// owner pausing and resuming one
 export const PATCH: APIRoute = async ({ request }) => {
   if (!boxAllowed(request)) return boxRefused();
   const r = rt(request); if (!r) return json({ error: NONE }, 503);
   let b: any; try { b = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
   const id = String(b?.id ?? "").trim(), action = b?.action;
-  if (!id || (action !== "confirm" && action !== "discard")) return json({ error: "id and action (confirm or discard) are required" }, 400);
+  if (id && (action === "pause" || action === "resume")) {
+    if (!r.setPaused) return json({ error: "This agent cannot pause routines." }, 501);
+    try { return json({ routine: { id, ...(await r.setPaused(id, action === "pause")) } }); }
+    catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+  }
+  if (!id || (action !== "confirm" && action !== "discard")) return json({ error: "id and action (confirm, discard, pause or resume) are required" }, 400);
   if (!r.confirm || !r.discard) return json({ error: "This agent does not hold routines for confirmation." }, 501);
   const tz = zoneOf(b); if (tz instanceof Response) return tz;
   try {

@@ -83,12 +83,14 @@ Routines on events
 
 A routine can run when an email or a file arrives instead of on a schedule. `tests/trigger-words.test.ts`
 checks the plain words for a trigger ("an email arrives from billing@acme.example") and its chip
-("Email from Acme"), and that a trigger the agent would refuse is quoted as it is.
+("Email from Acme"), anyone at a domain ("from anyone at acme.com", "Email from acme.com") and words in
+a subject ("with “invoice” in the subject"), and that a trigger the agent would refuse (an empty,
+wildcard-only or overlong pattern, a contains on an address) is quoted as it is.
 `node --test tests/trigger-routines.cjs` (after `npm run build`) drives the page against a stand-in
 agent: the card that follows the agent's reply reads When / Does / Can (read only) / Limit, waits
 until Turn on, and shows a hostile trigger, name and prompt as text; the Routines list holds
 scheduled and triggered routines with a chip each, the last run and how it went, the latest result
-under its row and Delete; a saved chat's cards and list work again when it is reopened; and the
+under its row, Pause / Resume (the row says paused; a waiting routine cannot be resumed) and Delete; a saved chat's cards and list work again when it is reopened; and the
 agent is told how to make one. `SHOTS_DIR` saves the card and the list, wide and phone.
 
 Old browsers and long answers

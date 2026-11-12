@@ -33,8 +33,17 @@ function agent() {
     req.on('end', () => {
       seen.push({ method: req.method, path: req.url, body: body ? JSON.parse(body) : null });
       res.setHeader('content-type', 'application/json');
-      const m = /^\/api\/jobs\/(\d+)(?:\/(confirm|discard))?$/.exec(req.url);
+      const m = /^\/api\/jobs\/(\d+)(?:\/(confirm|discard|pause|resume))?$/.exec(req.url);
       if (m && req.method === 'DELETE') { jobs = jobs.filter((j) => j.id !== Number(m[1])); return res.end('{"deleted":1}'); }
+      // as the engine: pending ones are refused; resuming counts the next run from now
+      if (m && (m[2] === 'pause' || m[2] === 'resume') && req.method === 'POST') {
+        const id = Number(m[1]), j = jobs.find((x) => x.id === id);
+        if (!j) { res.statusCode = 404; return res.end('{"error":"no routine with that id"}'); }
+        if (j.status === 'pending') { res.statusCode = 409; return res.end('{"error":"this routine is waiting for confirmation: confirm or discard it"}'); }
+        const on = m[2] === 'resume', next = on && !j.trigger ? RUN_AT + 2 * 86400 : null;
+        jobs = jobs.map((x) => (x.id === id ? { ...x, enabled: on, next_run_at: next } : x));
+        return res.end(JSON.stringify({ job: { id, enabled: on, next_run_at: next } }));
+      }
       if (m && m[2] && req.method === 'POST') {
         const id = Number(m[1]);
         if (!jobs.some((j) => j.id === id && j.status === 'pending')) { res.statusCode = 404; return res.end('{"error":"no pending routine with that id"}'); }
@@ -87,6 +96,25 @@ test('the list carries each trigger, and an event run\'s result', async () => {
   assert.equal(by(23).lastResult, undefined, 'no run of its own: another chat titled alike is not its result');
 });
 
+test('pause and resume reach the agent; a waiting routine cannot be resumed', async () => {
+  const patch = (b) => fetch(app.base + '/api/v1/routines', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+  let r = await patch({ id: '24', action: 'pause' });
+  assert.equal(r.status, 200, await r.clone().text());
+  assert.deepEqual((await r.json()).routine, { id: '24', enabled: false, nextRunAt: null });
+  let { routines } = await (await fetch(app.base + '/api/v1/routines')).json();
+  assert.equal(routines.find((x) => x.id === '24').enabled, false);
+  r = await patch({ id: '24', action: 'resume' });
+  assert.equal(r.status, 200);
+  assert.deepEqual((await r.json()).routine, { id: '24', enabled: true, nextRunAt: new Date((RUN_AT + 2 * 86400) * 1000).toISOString() });
+  r = await patch({ id: '21', action: 'resume' });
+  assert.equal(r.status, 502);
+  assert.match((await r.json()).error, /409.*waiting for confirmation/);
+  ({ routines } = await (await fetch(app.base + '/api/v1/routines')).json());
+  assert.equal(routines.find((x) => x.id === '21').pending, true, 'still waiting');
+  assert.equal((await patch({ id: '24', action: 'enable' })).status, 400);
+  assert.equal((await patch({ action: 'pause' })).status, 400);
+});
+
 test('the agent is told to make trigger routines, and that they only read', async () => {
   const before = gw.seen.length;
   const r = await fetch(app.base + '/api/v1/chat', { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -97,6 +125,10 @@ test('the agent is told to make trigger routines, and that they only read', asyn
   const sys = sent.body.messages.find((m) => m.role === 'system').content;
   assert.match(sys, /routine tool\s+takes a trigger, create the routine with a trigger instead of a schedule: mail from=<address>/);
   assert.match(sys, /file folder="<folder name>"/);
+  assert.match(sys, /mail from=@<domain> is anyone at that domain/);
+  assert.match(sys, /subject~<words> is a subject\s+containing those words/);
+  assert.match(sys, /ask for its email domain \(such as\s+acme\.com\) or the address it mails from; never guess a domain/);
+  assert.doesNotMatch(sys, /ask\s+for the address it mails from/, 'no longer insists on one address');
   assert.match(sys, /turn it on in Routines/);
   assert.match(sys, /cannot reply, send, write or delete/);
   assert.match(sys, /no trigger, say routines here run on a schedule only/, 'an agent without triggers is not told to invent one');
@@ -190,6 +222,26 @@ test('in the browser: card wording, escaping, waiting until turned on, list chip
     await all.locator('.row[data-rid="23"]', { hasText: 'Deleted. It will not run again.' }).waitFor();
     assert.ok(g.seen.some((s) => s.method === 'DELETE' && s.path === '/api/jobs/23'));
 
+    // Pause and Resume: the row says paused, with no next run, until resumed from now
+    const pause = (id) => all.locator(`.row[data-rid="${id}"] [data-pause]`);
+    assert.equal(await pause(24).textContent(), 'Pause');
+    await pause(24).click();
+    await all.locator('.row[data-rid="24"] [data-pause]', { hasText: 'Resume' }).waitFor();
+    assert.ok(g.seen.some((s) => s.method === 'POST' && s.path === '/api/jobs/24/pause'));
+    assert.match(await rowText(24), /paused/);
+    assert.doesNotMatch(await rowText(24), /next /, 'a paused routine shows no next run');
+    assert.equal(await all.locator('.row[data-rid="24"] .led.off').count(), 1);
+    await pause(25).click();
+    await all.locator('.row[data-rid="25"] [data-pause]', { hasText: 'Resume' }).waitFor();
+    assert.match(await rowText(25), /paused · read only/, 'a trigger routine pauses too');
+    await shot(all, 'routines-paused.png');
+    await pause(24).click();
+    await all.locator('.row[data-rid="24"] [data-pause]', { hasText: 'Pause' }).waitFor();
+    assert.ok(g.seen.some((s) => s.method === 'POST' && s.path === '/api/jobs/24/resume'));
+    assert.doesNotMatch(await rowText(24), /paused/);
+    assert.match(await rowText(24), /next Thu 3 Jan, 8:00 am/, 'the next run the agent counted from now');
+    assert.equal(await all.locator('.row[data-rid="24"] .led.ok').count(), 1);
+
     // a phone: the list fits, nothing runs off the side
     await p.setViewportSize({ width: 390, height: 844 });
     await all.scrollIntoViewIfNeeded();
@@ -208,6 +260,13 @@ test('in the browser: card wording, escaping, waiting until turned on, list chip
     await again.locator('.row[data-rid="25"] button', { hasText: 'See result' }).click();
     await again.locator('.why[data-result="25"]').waitFor();
     assert.match(await again.locator('.why[data-result="25"]').textContent(), /Invoice 4471 from Acme/);
+    // the saved list shows each routine as it is now: 25 is still paused, 24 runs
+    await again.locator('.row[data-rid="25"] [data-pause]', { hasText: 'Resume' }).waitFor();
+    assert.match((await again.locator('.row[data-rid="25"]').textContent()), /paused/);
+    assert.equal(await again.locator('.row[data-rid="24"] [data-pause]').textContent(), 'Pause');
+    await again.locator('.row[data-rid="25"] [data-pause]').click();
+    await again.locator('.row[data-rid="25"] [data-pause]', { hasText: 'Pause' }).waitFor();
+    assert.ok(g.seen.some((s) => s.method === 'POST' && s.path === '/api/jobs/25/resume'));
     const odd2 = p.locator('.block[data-routine="22"]').first();
     await odd2.locator('button', { hasText: 'Discard' }).click();
     await p.waitForFunction(() => [...document.querySelectorAll('.block[data-routine="22"] .ba')].every((x) => x.textContent.trim().startsWith('Discarded')));
