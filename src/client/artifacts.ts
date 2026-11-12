@@ -1,6 +1,6 @@
 import type { Artifact, ArtifactKind } from "./canvas";
 import { imageArtifact } from "./image-tools";
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -71,7 +71,7 @@ export function artifactFor(f: FeedLike): Artifact {
         if (doc) doc.innerHTML = `<h1>${esc(f.title)}</h1>` + d.text.split(/\n{2,}/).map((p) => `<p>${esc(p)}</p>`).join("");
       }).catch((e: Error) => {
         const doc = h.querySelector(".doc");
-        if (doc) doc.innerHTML = `<p>${esc(f.appLabel)} did not return ${esc(f.title)}: ${esc(e.message)}</p>`;
+        if (doc) doc.innerHTML = `<p>${esc(f.appLabel)} did not return ${esc(f.title)}: ${esc(errText(e))}</p>`;
       });
     } };
   }

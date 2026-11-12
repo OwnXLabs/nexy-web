@@ -1,7 +1,7 @@
 import type { Artifact } from "./canvas";
 import { SPECS, NOT_CONNECTED, parseNetwork } from "../lib/social/networks.ts";
 import type { Draft, Network, Slot, SocialState } from "../lib/social/types.ts";
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -270,7 +270,7 @@ export function socialArtifact(initial: View = "overview"): Artifact {
 
         const save = async (body: unknown) => {
           try { await call("strategy", body); }
-          catch (err) { window.dispatchEvent(new CustomEvent("nexy:toast", { detail: `Not saved: ${(err as Error).message}` })); }
+          catch (err) { window.dispatchEvent(new CustomEvent("nexy:toast", { detail: `Not saved: ${errText(err)}` })); }
           await refresh().catch((err) => console.warn("[nexy] social refresh failed", err));
           draw();
         };
@@ -298,7 +298,7 @@ export function socialArtifact(initial: View = "overview"): Artifact {
               await call("pause", { paused: want });
             } catch (err) {
               window.dispatchEvent(
-                new CustomEvent("nexy:toast", { detail: `Not saved: ${(err as Error).message}` }),
+                new CustomEvent("nexy:toast", { detail: `Not saved: ${errText(err)}` }),
               );
               await refresh().catch((err) => console.warn("[nexy] social refresh failed", err));
             }
@@ -402,7 +402,7 @@ const bub = (el: HTMLElement, html: string) => {
 const fail = (el: HTMLElement, what: string, e: unknown) =>
   bub(
     el,
-    `${esc(what)}: <code>${esc((e as Error).message)}</code>` +
+    `${esc(what)}: <code>${esc(errText(e))}</code>` +
       `<div class="feednote bad" style="margin-top:8px">This all runs on this machine, so this is a local fault.</div>`,
   );
 

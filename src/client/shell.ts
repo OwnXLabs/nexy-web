@@ -5,7 +5,7 @@ import { prefs, openSettings } from "./settings";
 import { setPrivate, isPrivate, endPrivate } from "./private";
 import { isOpen, closeCanvas } from "./canvas";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 import { hasApp, isBeta, localVoice, notHereYet, voiceApi } from "./place";
 import { speechReady, toWav } from "./voice-local";
 
@@ -89,7 +89,8 @@ function revive(html: string): DocumentFragment {
   t.content.querySelectorAll<HTMLElement>("*").forEach((el) => {
     for (const a of [...el.attributes]) if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
   });
-  t.content.querySelectorAll<HTMLButtonElement>("button").forEach((b) => { b.disabled = true; b.title = "From an earlier visit"; });
+  // "Ask again" on an interrupted answer still works: it only sends the question again
+  t.content.querySelectorAll<HTMLButtonElement>("button:not([data-ask-again])").forEach((b) => { b.disabled = true; b.title = "From an earlier visit"; });
   return t.content;
 }
 
@@ -143,7 +144,7 @@ function load(pid: string, id: string): void {
       th.scrollTop = th.scrollHeight;
     }).catch((e: Error) => {
       note.className = "feednote bad";
-      note.textContent = `This chat could not be opened: ${e.message}`;
+      note.textContent = `This chat could not be opened: ${errText(e)}`;
     });
     return;
   }
@@ -160,10 +161,33 @@ export function saveChat(): void {
   if (!c || c.example !== undefined || !th || !th.querySelector('.msg.me:not([data-private="1"])') || (c.saved && !c.loaded)) return;
   const copy = document.createElement("div"); copy.append(th.cloneNode(true));
   copy.querySelectorAll('[data-private="1"],#typing,#emptyState').forEach((n) => n.remove());
+  // A reply still being written is saved as interrupted: if Nexy quits or crashes now, the chat
+  // comes back with the question, what had arrived, and a way to ask again. The unanswered
+  // question stays out of the history, so asking again does not send it twice.
+  const history = c.history.slice();
+  const pending = copy.querySelectorAll<HTMLElement>(".msg[data-pending]");
+  pending.forEach(interrupted);
+  if (pending.length && history.at(-1)?.role === "user") history.pop();
   c.saved = true;
   c.loaded = true;
   persist({ id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,
-    history: c.history.slice(), projectId: c.projectId, ...savedOutputs() });
+    history, projectId: c.projectId, ...savedOutputs() });
+}
+
+function interrupted(m: HTMLElement): void {
+  m.querySelectorAll(".wait,.cur,.macts").forEach((n) => n.remove());
+  const note = document.createElement("div");
+  note.className = "feednote";
+  note.dataset.interrupted = "1";
+  note.textContent = "Nexy closed before this answer finished. ";
+  const again = document.createElement("button");
+  again.type = "button";
+  again.className = "btn small";
+  again.dataset.askAgain = m.dataset.q ?? "";
+  again.textContent = "Ask again";
+  note.append(again);
+  (m.querySelector(".bub") ?? m).append(note);
+  delete m.dataset.pending;
 }
 
 const writes = new Map<string, Promise<void>>();
@@ -180,7 +204,7 @@ function persist(body: { id: string; pid: string; title: string; html: string; h
     const r = await fetch("/api/v1/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? httpMsg(r.status));
     writeFailures.delete(body.id);
-  }).catch((e: Error) => { writeFailures.set(body.id, e); H.toast(`This chat was not saved: ${e.message}`); });
+  }).catch((e: Error) => { writeFailures.set(body.id, e); H.toast(`This chat was not saved: ${errText(e)}`); });
   writes.set(body.id, next);
   void next.then(() => { if (writes.get(body.id) === next) writes.delete(body.id); });
 }
@@ -190,7 +214,7 @@ function resave(pid: string, c: Chat): void {
   if (!c.saved) return;
   const go = () => persist({ id: c.id, pid, title: c.title, html: [...c.nodes.childNodes].map((n) => (n as Element).outerHTML ?? n.textContent ?? "").join(""), history: c.history, projectId: c.projectId, ...inChat(c.id, savedOutputs) });
   if (cur?.cid === c.id) { saveChat(); return; }
-  if (c.loaded) go(); else fetchChat(c).then(go).catch((e: Error) => H.toast(`This chat was not saved: ${e.message}`));
+  if (c.loaded) go(); else fetchChat(c).then(go).catch((e: Error) => H.toast(`This chat was not saved: ${errText(e)}`));
 }
 
 // saved chats, newest first, into the sidebar; the open project shows its latest
@@ -326,7 +350,7 @@ function deleteChat(pid: string, id: string): void {
   if (list.find((c) => c.id === id)?.saved) {
     fetch(`/api/v1/chats?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { "content-type": "application/json" } })
       .then((r) => { if (!r.ok) throw new Error(httpMsg(r.status)); })
-      .catch((e: Error) => H.toast(`The saved copy was not deleted: ${e.message}`));
+      .catch((e: Error) => H.toast(`The saved copy was not deleted: ${errText(e)}`));
   }
   if (wasCurrent) {
     const th = $("#thread");
@@ -584,7 +608,7 @@ async function startRecording(): Promise<boolean> {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
-    H.toast(`The microphone is not available: ${(e as Error).message}`);
+    H.toast(`The microphone is not available: ${errText(e)}`);
     return false;
   }
   chunks = [];
@@ -624,7 +648,7 @@ async function startV(): Promise<void> {
   if (listening) return;
   if (localVoice) {
     try { await speechReady((m) => H.toast(m)); }
-    catch (e) { H.toast(`Speech is not ready: ${(e as Error).message}`); return; }
+    catch (e) { H.toast(`Speech is not ready: ${errText(e)}`); return; }
   }
   if (!(await startRecording())) return;
   window.dispatchEvent(new CustomEvent("nexy:did", { detail: "voice" }));
@@ -641,7 +665,7 @@ async function stopV(): Promise<void> {
     if (t) void H.send(t);
     else H.toast("I heard nothing, so nothing was sent.");
   } catch (e) {
-    H.toast(`Could not transcribe: ${(e as Error).message}`);
+    H.toast(`Could not transcribe: ${errText(e)}`);
   } finally {
     $("#voice")?.classList.remove("open");
     $("#micBtn")?.classList.remove("on");
@@ -738,7 +762,7 @@ async function vmListen(): Promise<void> {
   if (!VM.on || VM.state === "listen") return;
   if (localVoice) {
     try { await speechReady((m) => vmState("think", m)); }
-    catch (e) { vmState("idle", `Speech is not ready: ${(e as Error).message}`); return; }
+    catch (e) { vmState("idle", `Speech is not ready: ${errText(e)}`); return; }
     if (!VM.on) return;
   }
   if (!(await startRecording())) { vmClose(); return; }
@@ -755,7 +779,7 @@ async function vmSend(): Promise<void> {
     vmState("think", "Thinking");
     await H.send(t);
   } catch (e) {
-    vmState("idle", `Could not transcribe: ${(e as Error).message}`);
+    vmState("idle", `Could not transcribe: ${errText(e)}`);
   }
 }
 

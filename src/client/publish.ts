@@ -1,4 +1,5 @@
 import { visibleChat } from "./chat-scope";
+import { errText } from "./http";
 import { wasEdited } from "./edit-loop";
 
 export interface Deployable { chat: string; output: string; title: string; kind: string }
@@ -61,13 +62,13 @@ export function mountPublishing(body: HTMLElement): void {
       catch (e) {
         // Refresh after an ambiguous network failure: a public write may have
         // succeeded even when its response was lost.
-        try { render(await call(target), (e as Error).message, name); }
-        catch { render(data, (e as Error).message, name); }
+        try { render(await call(target), errText(e), name); }
+        catch { render(data, errText(e), name); }
       }
     });
   }
   void hooks.save().then(() => call(target)).then((data) => render(data), (e: Error) => {
-    if (active()) body.innerHTML = `<p role="alert">${esc(e.message)}</p><button class="btn small" type="button" id="deployRetry">Retry</button>`;
+    if (active()) body.innerHTML = `<p role="alert">${esc(errText(e))}</p><button class="btn small" type="button" id="deployRetry">Retry</button>`;
     body.querySelector("#deployRetry")?.addEventListener("click", () => mountPublishing(body));
   });
 }

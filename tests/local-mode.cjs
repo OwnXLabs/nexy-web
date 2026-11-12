@@ -41,10 +41,11 @@ test('a computer without an Own1: missing studios answer plainly, nothing says O
     assert.equal(await page.locator('#micBtn').isVisible(), false, 'no mic without speech');
     for (const sel of ['#projList', '[data-tab="tasks"]', '[data-tab="agents"]']) assert.equal(await page.locator(sel).isVisible(), false, `${sel} hidden without projects`);
 
-    for (const [say, what] of [['generate an image of a flying elephant', 'Making images'], ['build me a website for a ping pong ball business', 'Building websites and apps']]) {
-      await ask(page, say);
-      await page.getByText(`${what} isn't in Nexy on this computer yet`).waitFor({ timeout: 15000 });
-    }
+    // images: switched on in Nexy Home, never "isn't in Nexy" while Home offers it
+    await ask(page, 'generate an image of a flying elephant');
+    await page.getByText('Making images is off. Turn on "Make images on this Mac" in Nexy Home first.', { exact: false }).waitFor({ timeout: 15000 });
+    await ask(page, 'build me a website for a ping pong ball business');
+    await page.getByText("Building websites and apps isn't in Nexy on this computer yet").waitFor({ timeout: 15000 });
     await page.locator('#waveBtn').click();
     await page.getByText("Talking to Nexy isn't in Nexy on this computer yet").first().waitFor({ timeout: 5000 });
     assert.equal(await page.getByText('Make this a project').count(), 0, 'no projects without Own Startup');
@@ -89,6 +90,6 @@ test('a computer with some studios started shows exactly those, and still says t
     assert.equal(await page.locator('html').getAttribute('data-apps'), 'startup build');
     assert.equal((await page.locator('#pmWsName').textContent()).trim(), 'This computer');
     await ask(page, 'generate an image of a flying elephant');
-    await page.getByText("Making images isn't in Nexy on this computer yet").waitFor({ timeout: 15000 });
+    await page.getByText('Making images is off. Turn on "Make images on this Mac" in Nexy Home first.', { exact: false }).waitFor({ timeout: 15000 });
   } finally { await b.close(); s.p.kill(); }
 });

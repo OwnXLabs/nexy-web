@@ -1,6 +1,6 @@
 import { hasApp, here, localVoice, onOwn1, voiceApi } from "./place";
 import { HUB, loadCatalog, loadGrants, pauseConnector, resumeConnector, type CatalogEntry } from "./perm";
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 
 export interface SettingsHooks {
   send(text: string): Promise<void>;
@@ -26,7 +26,7 @@ const $ = <T extends Element = HTMLElement>(s: string, r: ParentNode = document)
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
 const SECTIONS: [string, string][] = [["general", "General"], ["nexy", "Nexy"], ["team", "Team"], ["connections", "Connections"], ["permissions", "Permissions"],
-  ["cloud", "OwnXCloud"], ["data", "Your data"], ["security", "Security and privacy"], ["appearance", "Appearance"], ["workspaces", "Workspaces"], ["about", "About"]];
+  ["cloud", "Nexy Cloud"], ["data", "Your data"], ["security", "Security and privacy"], ["appearance", "Appearance"], ["workspaces", "Workspaces"], ["about", "About"]];
 
 const sw = (on: boolean, id: string) => `<button type="button" class="sw${on ? " on" : ""}" data-sw="${id}" role="switch" aria-checked="${on}"><i></i></button>`;
 const row = (l: string, c: string | null, sub?: string) => `<div class="srow"><div><div class="sl">${l}</div>${sub ? `<div class="ss">${sub}</div>` : ""}</div><div class="sc">${c ?? ""}</div></div>`;
@@ -43,6 +43,8 @@ export function applyPrefs(): void {
 }
 
 const speech = localVoice ? "Speech" : "Own Voice";
+// this machine has its own web search (an Own1's, or one configured on this computer)
+const searchHere = typeof document !== "undefined" && document.documentElement.dataset.search === "1";
 let voices: { id: string; name: string }[] = [];
 async function loadVoices(): Promise<void> {
   if (voices.length || !hasApp("voice")) return;
@@ -94,7 +96,7 @@ async function section(sec: string): Promise<string> {
       return `<h3>Connections</h3>` + tg + `<p class="sp">Outside apps come from this machine's catalogue. Nexy asks before the first use of each one.</p>` + google +
         (cat.length ? cat.map((c) => connRow(c, granted)).join("") : row("Catalogue", not("Empty")));
     } catch (e) {
-      return `<h3>Connections</h3>` + tg + row("Catalogue", not(`Not answering: ${(e as Error).message}`));
+      return `<h3>Connections</h3>` + tg + row("Catalogue", not(`Not answering: ${errText(e)}`));
     }
   }
   if (sec === "data") return dataSection();
@@ -103,13 +105,14 @@ async function section(sec: string): Promise<string> {
     row("Manage the desktop", not("Not available"), "Nexy has no control over the desktop's windows yet") +
     (onOwn1 ? row("Install from the App Store", not("Restricted"), "Installs are switched off on this Own1, by the owner's decision") : "") +
     row("Agents inherit these", null, "An agent never has more than Nexy");
-  if (sec === "cloud") return `<h3>OwnXCloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on ${here}. Everything runs here.</p>` +
+  if (sec === "cloud") return `<h3>Nexy Cloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on ${here}. Everything runs here.</p>` +
     row("Connection", not("Not connected")) + row("Spending", not("Nothing can be spent"), "There is no wallet or payment method on this machine");
   if (sec === "security") return `<h3>Security and privacy</h3>` +
     row("Where your data lives", not(onOwn1 ? "On this Own1" : "On this computer"), "Chats, files, builds and memory stay on this machine") +
     row("Telemetry", not("Off"), "Nothing is sent to OwnX Labs") +
     row("Ultra-private chats", not("In memory only"), "Nothing written to disk, nothing reaches the agent that keeps memory; gone when you leave") +
-    row("Web search", not("Only when you ask"), "Through this machine's own search; the query is the only thing that leaves") +
+    (searchHere ? row("Web search", not("Only when you ask"), "Through this machine's own search; the query is the only thing that leaves")
+      : row("Web search", not("Not set up"), `There is no web search on ${here} yet, so nothing is searched`)) +
     `<div class="sbtns"><button class="btn small" type="button" data-act="feedback">Show my feedback</button><button class="btn small" type="button" data-act="clearfb">Clear my feedback</button><button class="btn small" type="button" data-act="forget">Forget what Nexy remembers</button></div>`;
   if (sec === "appearance") return `<h3>Appearance</h3><h4>Theme</h4><div class="themes">` +
     ([["default", "Default", "the aurora, glass"], ["standard", "Standard", "black, no glass, like the chat apps"], ["cyberpunk", "Cyberpunk", "neon on black"],
@@ -141,8 +144,8 @@ function connRow(c: CatalogEntry, granted: string[] | null): string {
 type EngineList = { engines: { id: string; label: string; note: string }[]; selected: string | null };
 async function engineRow(): Promise<string> {
   const r = await fetch("/api/v1/engines").then(async (x) => (x.ok ? ((await x.json()) as EngineList) : null)).catch((e) => { console.warn("[nexy] engines unavailable", e); return null; });
-  if (!r || !r.engines.length) return row("Agent engine", not("One engine on this machine"));
-  if (r.engines.length === 1) return row("Agent engine", not(r.engines[0].label), r.engines[0].note);
+  // engine names show only where there is a real choice between them
+  if (!r || r.engines.length < 2) return "";
   const cur = r.engines.find((e) => e.id === r.selected) ?? r.engines[0];
   return row("Agent engine", `<select data-engine>${r.engines.map((e) => `<option value="${esc(e.id)}"${e.id === cur.id ? " selected" : ""}>${esc(e.label)}</option>`).join("")}</select>`,
     `${esc(cur.note)}. New chats use it; each chat keeps the history it already has.`);
@@ -195,7 +198,7 @@ async function telegramRow(): Promise<string> {
     t = await r.json();
     if (!r.ok) return row("Telegram", not(t.error ?? `Not answering: ${httpMsg(r.status)}`));
   } catch (e) {
-    return row("Telegram", not(`Not answering: ${(e as Error).message}`));
+    return row("Telegram", not(`Not answering: ${errText(e)}`));
   }
   if (t.connected) return row("Telegram", `<span class="faint">Connected as @${esc(t.bot ?? "?")}</span> <button class="btn small ghost" type="button" data-act="tgoff">Disconnect</button>`,
     `Message the bot to talk to your agent. Only Telegram user ${esc(t.users ?? "")} can command it; in a group, @mention it.`);
@@ -215,7 +218,7 @@ async function googleRow(): Promise<string> {
     g = await r.json();
     if (!r.ok) return row("Google sign-in", not(g.error ?? `Not answering: ${httpMsg(r.status)}`));
   } catch (e) {
-    return row("Google sign-in", not(`Not answering: ${(e as Error).message}`));
+    return row("Google sign-in", not(`Not answering: ${errText(e)}`));
   }
   const pick = `<input type="file" id="gClientPick" accept="application/json,.json" hidden>`;
   if (g.configured) return row("Google sign-in", `<span class="faint">${g.source === "owner" ? `Your OAuth client …${esc(g.clientIdEnd ?? "")}` : "Built in"}</span>` +
@@ -242,7 +245,7 @@ async function act(a: string, n?: string): Promise<void> {
     if (!entry) { H.toast("That app is no longer in this machine's catalogue"); void renderSettings("connections"); return; }
     const out = await (a === "pause" ? pauseConnector(entry) : resumeConnector(entry)).catch((e): { ok: false; note: string } => {
       console.warn(`[nexy] ${a} ${entry.id} failed`, e);
-      return { ok: false, note: `Not changed — ${(e as Error).message}` };
+      return { ok: false, note: `Not changed — ${errText(e)}` };
     });
     H.toast(out.note);
     void renderSettings("connections");
@@ -332,7 +335,7 @@ async function dataRows(): Promise<DataRow[]> {
       const l = await get(path, key);
       return { name, sub, count: l.length, bytes: sized ? sum(l) : null, list: l };
     } catch (e) {
-      return { name, sub: `not answering: ${(e as Error).message}`, count: 0, bytes: null, list: [] };
+      return { name, sub: `not answering: ${errText(e)}`, count: 0, bytes: null, list: [] };
     }
   }));
 }
@@ -349,7 +352,7 @@ async function chatRow(): Promise<DataRow> {
     const l = ((await r.json()) as { chats?: Record<string, unknown>[] }).chats ?? [];
     return { name: "Chats", sub, count: l.length, bytes: null, list: l };
   } catch (e) {
-    return { name: "Chats", sub: `not answering: ${(e as Error).message}`, count: 0, bytes: null, list: [] };
+    return { name: "Chats", sub: `not answering: ${errText(e)}`, count: 0, bytes: null, list: [] };
   }
 }
 

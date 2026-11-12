@@ -1,4 +1,4 @@
-import { httpMsg } from "./http.ts";
+import { httpMsg, errText } from "./http.ts";
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
@@ -355,7 +355,7 @@ export async function playConnect(intent: ConnectIntent, ui: ConnectUI, f: Fetch
     entries = await loadCatalog(f);
   } catch (e) {
     ui.say(
-      `I could not read this machine's connector registry, so I do not know what it can reach: <code>${esc((e as Error).message)}</code>`,
+      `I could not read this machine's connector registry, so I do not know what it can reach: <code>${esc(errText(e))}</code>`,
     );
     return;
   }

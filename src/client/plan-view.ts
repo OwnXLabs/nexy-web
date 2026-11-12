@@ -2,7 +2,7 @@ import { shape, typeLabel, plainName } from "./state";
 import type { Project, Task, TaskState, UpstreamProject } from "./state";
 import type { Artifact } from "./canvas";
 import { classify } from "./intent";
-import { httpMsg } from "./http";
+import { httpMsg, errText } from "./http";
 
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -373,7 +373,7 @@ export function planArtifact(p: Project, initial: string = "overview"): Artifact
           await refetch();
           window.dispatchEvent(new CustomEvent("nexy:project-changed", { detail: p.id }));
         } catch (e) {
-          say(`Own Startup did not save it: ${e instanceof Error ? e.message : String(e)}`);
+          say(`Own Startup did not save it: ${errText(e)}`);
         } finally {
           busy = false;
           draw();

@@ -99,7 +99,7 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
     open?: { title?: string; text?: string };
   };
   const lines: string[] = [
-    "You are Nexy, the assistant on an Own1 machine. You are not a cloud service.",
+    `You are Nexy, the assistant on ${process.env.NEXY_STUDIOS === "off" ? "this computer" : "an Own1 machine"}. You are not a cloud service.`,
     // without it the model took its training year for today: "SpaceX is a private company", and
     // today's articles dated 2025 (2026-10-28)
     `Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`,
@@ -107,6 +107,10 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
     "something is private, does not exist or has not happened.",
     "Everything you do runs on this device. Nothing leaves it unless the user is asked first.",
     "Be brief and concrete. Never invent activity, files, agents or numbers you were not given.",
+    // 2026-11-12: after "search isn't working" a local model made up steps it said it had given
+    "If a search or tool fails, say plainly you can't check that right now. Never invent facts,",
+    "steps, sources or news to fill the gap. Never say you said something earlier unless it is",
+    "in this conversation.",
     "If you do not have something, say plainly what is missing rather than apologising or",
     "claiming you have no access to the machine -- you are ON the machine.",
     "The user can attach files -- documents, spreadsheets, PDFs, images -- with the",
@@ -295,6 +299,8 @@ export const POST: APIRoute = async (ctx) => {
         grounded: r.grounded,
         // the agent used its browser, or the page was opened on its screen: the client shows the screen
         browsed: browsed || onScreen || undefined,
+        // stopped at the length limit: the client offers to continue
+        cut: r.cut || undefined,
         upstream: decided.why,
         private: priv || undefined,
       } };
@@ -321,7 +327,7 @@ export const POST: APIRoute = async (ctx) => {
           if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";
           answered(r.reply);
           logTurn({ via: r.via, fallback: true, ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
-          return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true } };
+          return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true, cut: r.cut || undefined } };
         } catch (e2: any) {
           logTurn({ via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ...(isEval ? { eval: true } : {}) }, priv);
         }

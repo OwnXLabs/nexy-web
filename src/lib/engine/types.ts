@@ -7,6 +7,8 @@ export interface ChatResult {
   reply: string;
   via: string;
   grounded: boolean;
+  // the model stopped at its length limit, not because it had finished
+  cut?: boolean;
 }
 
 export interface MemoryItem { id: string; title: string; source: string; startedAt: number | null; messages: number }
