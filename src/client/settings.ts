@@ -181,6 +181,7 @@ export async function renderSettings(sec = "general"): Promise<void> {
     H.toast(({ default: "Default theme", standard: "Standard theme", cyberpunk: "Cyberpunk theme", win95: "Windows 95 theme", lcars: "LCARS theme", topgun: "Top Gun theme applied" } as Record<string, string>)[P.theme] ?? "Theme applied");
   }));
   body.querySelectorAll<HTMLElement>("[data-act]").forEach((b) => b.addEventListener("click", () => void act(b.dataset.act!, b.dataset.n)));
+  body.querySelectorAll<HTMLInputElement>("#apEmail, #apPass").forEach((i) => i.addEventListener("input", () => apNote("")));
   body.querySelectorAll<HTMLElement>("[data-dexp]").forEach((b) => b.addEventListener("click", () => exportData(b.dataset.dexp!)));
 }
 
@@ -225,7 +226,18 @@ function appPasswordRow(c: CatalogEntry, granted: string[] | null): string {
     `3. Paste it here. Nexy reads your mail, read-only. Work or school accounts may not offer app passwords.</div></div></div>` +
     `<div style="display:flex;gap:6px;flex-wrap:wrap;width:100%"><input id="apEmail" type="email" autocomplete="off" spellcheck="false" placeholder="Your Gmail address" style="${field};flex:1 1 180px">` +
     `<input id="apPass" type="password" autocomplete="off" spellcheck="false" placeholder="App password" style="${field};flex:1 1 180px">` +
-    `<button class="btn small primary" type="button" data-act="apon" data-n="${id}">Connect</button></div></div>`;
+    `<button class="btn small primary" type="button" data-act="apon" data-n="${id}">Connect</button></div>` +
+    `<div id="apNote" class="ss" role="alert" style="width:100%;display:none"></div></div>`;
+}
+
+// Gmail's refusal stays on the card until the owner edits a field or tries again: as a toast it
+// was gone in 3 s, before it could be read (QA 2026-11-12)
+function apNote(text: string): void {
+  const el = $<HTMLElement>("#apNote");
+  if (!el) return;
+  el.textContent = text;
+  // .ss sets its own display, which would show a [hidden] note
+  el.style.display = text ? "" : "none";
 }
 
 // Gmail and Drive sign in with a Google OAuth client (type Desktop app). The owner's own, from
@@ -285,14 +297,14 @@ async function act(a: string, n?: string): Promise<void> {
     }
     const email = $<HTMLInputElement>("#apEmail")?.value.trim() ?? "";
     const pass = $<HTMLInputElement>("#apPass");
-    if (!email || !pass?.value.trim()) { H.toast("Enter your Gmail address and the app password"); return; }
-    H.toast("Checking with Gmail…");
+    if (!email || !pass?.value.trim()) { apNote("Enter your Gmail address and the app password"); return; }
+    apNote("Checking with Gmail…");
     const out = await connectAppPassword(entry, email, pass.value).catch((e): { ok: false; note: string } => {
       console.warn(`[nexy] connect ${entry.id} failed`, e);
       return { ok: false, note: `Not connected — ${errText(e)}` };
     });
-    H.toast(out.note);
-    if (out.ok) { pass.value = ""; void renderSettings("connections"); }
+    if (out.ok) { H.toast(out.note); pass.value = ""; void renderSettings("connections"); }
+    else apNote(out.note);
     return;
   }
   if (a === "gclient") {
