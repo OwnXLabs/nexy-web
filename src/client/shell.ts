@@ -92,8 +92,9 @@ function revive(html: string): DocumentFragment {
   t.content.querySelectorAll<HTMLElement>("*").forEach((el) => {
     for (const a of [...el.attributes]) if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
   });
-  // "Ask again" on an interrupted answer still works: it only sends the question again
-  t.content.querySelectorAll<HTMLButtonElement>("button:not([data-ask-again])").forEach((b) => { b.disabled = true; b.title = "From an earlier visit"; });
+  // "Ask again" on an interrupted answer still works: it only sends the question again; the
+  // phone's "in the work view" only opens the pane
+  t.content.querySelectorAll<HTMLButtonElement>("button:not([data-ask-again]):not([data-open-work])").forEach((b) => { b.disabled = true; b.title = "From an earlier visit"; });
   return t.content;
 }
 

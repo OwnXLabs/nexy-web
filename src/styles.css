@@ -294,6 +294,7 @@ body.canvas-open .canvas{opacity:1;pointer-events:auto}
 .doc{max-width:600px;margin:0 auto;padding:10px 6px 30px;color:rgba(255,255,255,.9);line-height:1.6;font-size:13.5px}
 .doc h1{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0 0 14px}.doc h2{font-size:14px;font-weight:600;margin:20px 0 6px;color:#fff}
 .doc p{margin:0 0 10px}.doc ul{margin:0 0 10px 18px}.doc li{margin:2px 0}.doc hr{border:0;border-top:1px solid var(--line);margin:16px 0}.doc i{color:var(--fg3)}
+.phone-only{display:none}.linkbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 li.task{list-style:none}li.task .tick{display:inline-block;width:1.1em;margin-left:-1.1em;opacity:.85}
 .sheet{overflow:auto;border-radius:10px;border:1px solid var(--line)}
 .sheet table{border-collapse:collapse;width:100%;font-size:12.5px}
@@ -1061,6 +1062,7 @@ body[data-theme=topgun] .gen .gh{font-family:var(--tg-cond);text-transform:upper
   .voice{bottom:90px;padding:8px 12px;max-width:92vw}.voice canvas{width:110px}
   .toast{max-width:92vw;bottom:max(12px,env(safe-area-inset-bottom))}
   .gen{padding:0 20px}
+  .wide-only{display:none}.phone-only{display:inline}
 }
 .mbar{display:none;position:fixed;top:0;left:0;right:0;height:52px;z-index:44;align-items:center;gap:6px;padding:0 8px;background:var(--glass2);backdrop-filter:blur(20px);border-bottom:1px solid var(--line)}
 .mbar .hbtn{width:38px;height:38px}

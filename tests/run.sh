@@ -61,7 +61,8 @@ check "old browsers: nothing in the built client that Android WebView 91 or Safa
 check "old browsers: chat on a phone web view without the newer APIs reaches the model" node --test --test-timeout=180000 tests/old-engine.cjs
 check "answer budget: a reply still being written runs past 90 s, silence is stopped with its words kept and Continue" node --test --test-timeout=240000 tests/answer-budget.cjs
 check "table totals: checked within one table only, unclear shapes left alone" ts tests/table-totals.test.ts
-check "markdown in replies: rendered, no HTML, links only http(s)" ts tests/markdown.test.ts
+check "markdown in replies: rendered, checklists as boxes, no HTML, links only http(s)" ts tests/markdown.test.ts
+check "answer documents: Continue grows the same one under the question's name, the note fits a phone" node --test --test-timeout=180000 tests/answer-documents.cjs
 check "Nexy Cloud is coming soon: never offered as where something works today" ts tests/coming-soon.test.ts
 check "chat prompt: a failed search is said plainly, nothing invented, no made-up past" node --test --test-timeout=180000 tests/prompt-rules.cjs
 check "Gmail with an app password in WebKit: three steps, sent once to the hub, kept nowhere in the browser, pause, resume, disconnect says revoke at Google" node --test --test-timeout=180000 tests/gmail-app-password.cjs
