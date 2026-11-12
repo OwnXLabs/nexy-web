@@ -10,12 +10,12 @@ export const POST: APIRoute = async ({ request }) => {
   let body: any;
   try { body = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
   if (body?.private === true) return json({ error: "private", note: "Web search is off in ultra-private mode: a search would leave this machine." }, 409);
-  if (!searchHere()) return json({ error: "no-search", note: `${NO_SEARCH} I can't look up figures for a chart here.` }, 409);
   const question = String(body?.question ?? "").trim();
   if (!question) return json({ error: "missing question" }, 400);
   // the owner's own mail or files are never looked for on the public web
   const own = connectorAsk(question);
   if (own) return json({ error: "own-app", note: `That is about your own ${own.label}, so I won't search the web for it. Ask me to search your ${own.label} and I'll read it there.` }, 409);
+  if (!searchHere()) return json({ error: "no-search", note: `${NO_SEARCH} I can't look up figures for a chart here.` }, 409);
   try {
     return json(await researchChart(question));
   } catch (e: any) {
