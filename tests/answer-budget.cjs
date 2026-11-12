@@ -25,6 +25,8 @@ function engine({ words, gapMs, silentMs = 0, finish = 'stop' }) {
     req.on('end', async () => {
       if (!req.url.startsWith('/v1/chat/completions')) { res.setHeader('content-type', 'application/json'); return res.end('{"data":[]}'); }
       const b = JSON.parse(body || '{}');
+      // a request that does not stream names the chat; only the answer is counted
+      if (!b.stream) { res.setHeader('content-type', 'application/json'); return res.end(JSON.stringify({ choices: [{ message: { content: 'Shop guide' }, finish_reason: 'stop' }] })); }
       asked.push(b);
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const send = (d) => { if (!res.destroyed) res.write(`data: ${JSON.stringify(d)}\n\n`); };

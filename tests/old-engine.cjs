@@ -44,7 +44,8 @@ function model() {
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
       const b = JSON.parse(body || '{}');
-      asked.push(b);
+      // a request that does not stream names the chat; only answers are counted
+      if (b.stream) asked.push(b);
       if (!b.stream) { res.setHeader('content-type', 'application/json'); return res.end(JSON.stringify({ choices: [{ message: { content: REPLY }, finish_reason: 'stop' }] })); }
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: REPLY }, finish_reason: null }] })}\n\n`);
