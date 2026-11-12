@@ -15,7 +15,7 @@ export function unreachable(e: unknown): boolean {
   const name = (e as Error | undefined)?.name ?? "", msg = String((e as Error | undefined)?.message ?? e);
   return name === "AbortError" || name === "TimeoutError" ||
     (e instanceof TypeError && /fetch|network|load failed|connection/i.test(msg)) ||
-    /aborted|went silent|connection dropped|kept dropping/i.test(msg);
+    /aborted|went silent|connection dropped before|kept dropping/i.test(msg);
 }
 export const away = (): string =>
   `${typeof document !== "undefined" && document.documentElement.dataset.place === "computer" ? "Your computer" : "Your Own1"} isn't answering. Nexy will reconnect when it's back.`;

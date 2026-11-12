@@ -1,5 +1,4 @@
-import { httpMsg } from "./http.ts";
-import { errText } from "./http";
+import { httpMsg, errText } from "./http.ts";
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
