@@ -130,3 +130,42 @@ test('the Routines view shows a pending routine with Confirm and Discard', async
     await b.close(); a2.p.kill(); g2.srv.close(); fs.rmSync(a2.data, { recursive: true, force: true });
   }
 });
+
+test('a card from earlier in the chat, or in a saved chat, never offers a routine already settled', async () => {
+  const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+  const g3 = await agent();
+  const a3 = await start({ NEXY_AGENT_URL: g3.url, NEXY_AGENT_KEY: 'test-key' });
+  const b = await chromium.launch();
+  try {
+    const p = await b.newPage({ viewport: { width: 1400, height: 900 } });
+    const errs = []; p.on('pageerror', (e) => errs.push(String(e)));
+    await p.goto(a3.base + '/');
+    await p.waitForSelector('#input');
+    const deals = p.locator('.block', { hasText: 'Waiting for you: Daily deals' });
+    for (let n = 1; n <= 2; n++) {
+      await p.fill('#input', 'show my routines'); await p.press('#input', 'Enter');
+      await p.waitForFunction((k) => document.querySelectorAll('.block[data-routine="7"]').length === k, n);
+    }
+    // confirmed from the newer card: the older one says so too
+    await deals.last().locator('button', { hasText: 'Confirm' }).click();
+    await p.locator('#thread .m.ai', { hasText: 'Confirmed Daily deals' }).waitFor();
+    assert.equal(await deals.first().locator('button').count(), 0, 'the older card offers nothing');
+    assert.equal((await deals.first().locator('.ba').textContent()).trim(), 'Confirmed');
+    // Old notes is confirmed elsewhere; the saved chat, opened again, says so
+    const r = await p.evaluate(() => fetch('/api/v1/routines', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: '8', action: 'confirm' }) }).then((x) => x.status));
+    assert.equal(r, 200);
+    // another turn saves the chat
+    await p.fill('#input', 'show my routines'); await p.press('#input', 'Enter');
+    await p.waitForFunction(() => document.querySelectorAll('.m.me').length === 3);
+    await p.waitForTimeout(1500);
+    await p.reload();
+    const notes = p.locator('.block', { hasText: 'Waiting for you: Old notes' });
+    await notes.first().waitFor({ timeout: 20000 });
+    await p.waitForFunction(() => ![...document.querySelectorAll('.block[data-routine="8"] .ba')].some((b) => b.querySelector('button')));
+    for (const t of await notes.locator('.ba').allTextContents()) assert.equal(t.trim(), 'Confirmed');
+    assert.equal(await deals.locator('button').count(), 0);
+    assert.deepEqual(errs, []);
+  } finally {
+    await b.close(); a3.p.kill(); g3.srv.close(); fs.rmSync(a3.data, { recursive: true, force: true });
+  }
+});

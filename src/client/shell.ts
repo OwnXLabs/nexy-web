@@ -8,6 +8,7 @@ import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { httpMsg, errText } from "./http";
 import { hasApp, isBeta, localVoice, notHereYet, voiceApi } from "./place";
 import { last } from "./compat";
+import { refreshRoutineCards } from "./memory";
 import { speechReady, tapPcm, toWav, type Pcm } from "./voice-local";
 import { partialScheduler, type Partials } from "./voice-partials";
 
@@ -144,6 +145,7 @@ function load(pid: string, id: string): void {
       H.history.splice(0, H.history.length, ...c.history);
       selected();
       th.scrollTop = th.scrollHeight;
+      cardsNow(th);
     }).catch((e: Error) => {
       note.className = "feednote bad";
       note.textContent = `This chat could not be opened: ${errText(e)}`;
@@ -153,7 +155,11 @@ function load(pid: string, id: string): void {
   th.appendChild(c.nodes);
   H.history.splice(0, H.history.length, ...c.history);
   th.scrollTop = th.scrollHeight;
+  cardsNow(th);
 }
+
+// a routine card in a chat shown again says where that routine stands now
+const cardsNow = (th: HTMLElement) => refreshRoutineCards(th).catch((e: Error) => console.warn("[nexy] routine cards not brought up to date", e));
 
 // after each turn: the thread as shown, and the turns the model sees
 export function saveChat(): void {
