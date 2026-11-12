@@ -15,9 +15,11 @@ const projects = APPS.some((a) => a.id === "startup");
 const beta = process.env.NEXY_BETA === "1";
 // web search: an Own1 has its own; a computer only when one is configured
 const search = !local || !!process.env.NEXY_SEARXNG_URL;
+// the desktop app's version, for problem reports and About
+const version = process.env.NEXY_APP_VERSION || undefined;
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined}>
+<html lang="en" data-place={local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -94,7 +96,7 @@ const search = !local || !!process.env.NEXY_SEARXNG_URL;
         <div id="pickChip" class="pickchip" hidden></div>
         <div class="chips" id="vreview" role="group" aria-label="Check what you said" hidden><span class="muted vhint">Check the words, then send.</span><button type="button" class="chip" id="vsend">Send<span class="kbd">Enter</span></button><button type="button" class="chip" id="vredo" title="Discard this and say it again" aria-label="Redo: discard this and say it again">Redo<span class="kbd">Esc</span></button></div>
         <div class="line">
-          <button type="button" class="wavebtn" id="waveBtn" title="Talk with Nexy"><canvas class="mini" id="miniWave" aria-hidden="true"></canvas></button>
+          <button type="button" class="wavebtn" id="waveBtn" hidden={!apps.split(" ").includes("voice")} title="Talk with Nexy"><canvas class="mini" id="miniWave" aria-hidden="true"></canvas></button>
           <textarea id="input" rows="1" placeholder="Talk to Nexy"></textarea>
           <div class="keys">
             <input type="file" id="filePick" multiple hidden>

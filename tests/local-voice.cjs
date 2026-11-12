@@ -128,8 +128,7 @@ test('without the speech tools the mic stays hidden and the service is absent', 
     await page.locator('#input').waitFor({ timeout: 20000 });
     assert.equal(await page.locator('html').getAttribute('data-voice'), null);
     assert.equal(await page.locator('#micBtn').isVisible(), false);
-    await page.locator('#waveBtn').click();
-    await page.getByText("Talking to Nexy isn't in Nexy on this computer yet").first().waitFor({ timeout: 5000 });
+    assert.equal(await page.locator('#waveBtn').isVisible(), false, 'no Talk with Nexy button without speech');
     assert.equal((await fetch(s.base + '/api/v1/voice/status')).status, 404);
   } finally { await b.close(); s.p.kill(); }
 });

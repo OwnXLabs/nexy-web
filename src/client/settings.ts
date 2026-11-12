@@ -125,8 +125,17 @@ async function section(sec: string): Promise<string> {
     const n = H.projects().length;
     return `<h3>Workspaces</h3>` + row(esc($("#pmWsName")?.textContent?.trim() || (onOwn1 ? "This Own1" : "This computer")), not(`${n} project${n === 1 ? "" : "s"}`)) + row("More workspaces", not("One per machine for now"));
   }
-  return `<h3>About</h3>` + row("Nexy", not(onOwn1 ? "On this Own1" : "On this computer")) + row("The agent", not("On this machine"), "Private chats use the local model directly and are never kept") +
+  return `<h3>About</h3>` + row("Nexy", not(onOwn1 ? "On this Own1" : "On this computer")) + await versionRows() + row("The agent", not("On this machine"), "Private chats use the local model directly and are never kept") +
     row("Speech", not(localVoice ? "On this computer" : hasApp("voice") ? "Own Voice, on this machine" : "Coming in an update")) + row("Web pages", not("Read on this machine"), "No cloud reader");
+}
+
+// the desktop app's version and its last update check; nothing on an Own1, which has neither
+type About = { version?: string; update?: { state: string; version?: string } | null };
+const updateLine = (u: About["update"]): string =>
+  !u ? "Not checked yet" : u.state === "current" ? "Up to date" : u.state === "available" ? `Nexy ${u.version ?? "update"} is ready: install it from Nexy Home` : "Couldn't check just now; Nexy tries again later";
+async function versionRows(): Promise<string> {
+  const a: About = await fetch("/api/v1/about").then((r) => r.json()).catch((e) => { console.warn("[nexy] version unavailable", e); return {}; });
+  return a.version ? row("Version", not(`Nexy ${a.version}`)) + row("Updates", not(updateLine(a.update))) : "";
 }
 
 // a connected app is in use or paused (sign-in kept, Nexy's grant dropped); Disconnect deletes the sign-in

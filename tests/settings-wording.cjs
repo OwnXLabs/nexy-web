@@ -66,3 +66,22 @@ test('a real choice of engines is the one place their names show', { timeout: 60
   assert.match(t.nexy, /Agent engine/);
   assert.match(t.security, /own search/, 'an Own1 has its own search');
 });
+
+// QA 0.2.9 on Windows: About named no version and said nothing of updates
+test('About on a computer: the app version and what its last update check found; an Own1 shows neither', { timeout: 90000 }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-about-'));
+  const status = path.join(dir, 'update-status.json');
+  const app = { NEXY_STUDIOS: 'off', NEXY_APP_VERSION: '0.2.9', NEXY_UPDATE_STATUS: status };
+  let t = await sections(app, ['about']);
+  assert.match(t.about, /Version\s+Nexy 0\.2\.9/);
+  assert.match(t.about, /Updates\s+Not checked yet/);
+  fs.writeFileSync(status, JSON.stringify({ state: 'current', checked: 1 }));
+  t = await sections(app, ['about']);
+  assert.match(t.about, /Updates\s+Up to date/);
+  fs.writeFileSync(status, JSON.stringify({ state: 'available', version: '0.3.0', checked: 2 }));
+  t = await sections(app, ['about']);
+  assert.match(t.about, /Updates\s+Nexy 0\.3\.0 is ready: install it from Nexy Home/);
+  const own1 = await sections({}, ['about']);
+  assert.doesNotMatch(own1.about, /Version|Updates/);
+  fs.rmSync(dir, { recursive: true });
+});

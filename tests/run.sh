@@ -76,6 +76,8 @@ check "chat home: greeting, Get started, model download, computer-only offers" n
 # browser checks against a served build (empty screen dir, throwaway data and reports)
 tmp=$(mktemp -d)
 mkdir -p "$tmp/screen" "$tmp/reports" "$tmp/data"
+# the version the desktop app gives its server: problem reports must carry it
+export NEXY_APP_VERSION=0.0.0-test
 HOST=127.0.0.1 PORT=4389 NEXY_SCREEN_DIR="$tmp/screen" NEXY_DATA_DIR="$tmp/data" \
   node dist/server/entry.mjs >"$tmp/server.log" 2>&1 &
 srv=$!

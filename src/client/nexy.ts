@@ -2597,7 +2597,7 @@ async function boot(): Promise<void> {
   initPrivate({ history, say: (t) => { push("ai", esc(t)); }, toast });
   initLanding({ send: (t) => void send(t), settings: openSettings, toast, talk: () => $("#waveBtn")?.click() });
   installReporter({
-    endpoint: "/api/v1/problem-report", app: "nexy",
+    endpoint: "/api/v1/problem-report", app: "nexy", version: document.documentElement.dataset.version,
     team: isBeta ? "/api/v1/beta-report" : undefined,
     conversation: () => history.map((t) => ({ role: t.role, text: String(t.content) })),
     blocked: () => (isPrivate() ? "Reports are off in an ultra-private chat, so nothing from it is ever kept." : null),

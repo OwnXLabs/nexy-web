@@ -46,8 +46,8 @@ test('a computer without an Own1: missing studios answer plainly, nothing says O
     await page.getByText('Making images is off. Turn on "Make images on this Mac" in Nexy Home first.', { exact: false }).waitFor({ timeout: 15000 });
     await ask(page, 'build me a website for a ping pong ball business');
     await page.getByText("Building websites and apps isn't in Nexy on this computer yet").waitFor({ timeout: 15000 });
-    await page.locator('#waveBtn').click();
-    await page.getByText("Talking to Nexy isn't in Nexy on this computer yet").first().waitFor({ timeout: 5000 });
+    // QA 0.2.9 on Windows: the Talk with Nexy button showed where there is no speech, and did nothing
+    assert.equal(await page.locator('#waveBtn').isVisible(), false, 'no Talk with Nexy button without speech');
     assert.equal(await page.getByText('Make this a project').count(), 0, 'no projects without Own Startup');
 
     await page.locator('#profileBtn').click();
@@ -74,6 +74,7 @@ test('the same page on an Own1 keeps its studios, mic and wording', async () => 
     await page.locator('#input').waitFor({ timeout: 20000 });
     assert.equal((await page.locator('#pmWsName').textContent()).trim(), 'Own1');
     assert.equal(await page.locator('#micBtn').isVisible(), true);
+    assert.equal(await page.locator('#waveBtn').isVisible(), true, 'Talk with Nexy where Own Voice is');
     assert.equal(await page.locator('html').getAttribute('data-place'), 'own1');
     assert.match(await page.locator('html').getAttribute('data-apps'), /\bimages\b.*\bbuild\b/);
   } finally { await b.close(); s.p.kill(); }

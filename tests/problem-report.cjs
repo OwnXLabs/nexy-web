@@ -45,6 +45,8 @@ const chat = { id: 'creport', title: 'Bakery', pid: '_', ts: Date.now(), outputs
       assert.equal(files.length, before + 2, 'a report and its screenshot were written');
       const r = JSON.parse(fs.readFileSync(path.join(DIR, files.filter((f) => f.endsWith('.json')).sort().at(-1)), 'utf8'));
       assert.equal(r.app, 'nexy');
+      // QA 0.2.9: the report named no version; the app's version comes from the server (tests/run.sh sets it)
+      assert.equal(r.context.version, process.env.NEXY_APP_VERSION || '', 'the app version is in the report');
       assert(r.context.errors.some((e) => /test error from nexy/.test(e.msg)), 'recent console error included');
       assert(r.context.requests.some((q) => q.url === '/api/v1/broken' && q.status === 500), 'failed request included');
       assert.equal(r.context.state.chat, chat.id, 'the open chat is named');
