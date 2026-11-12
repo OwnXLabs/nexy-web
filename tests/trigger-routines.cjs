@@ -60,7 +60,7 @@ function agent() {
       if (req.url.startsWith('/api/sessions')) return res.end('{"data":[]}');
       if (req.url.startsWith('/v1/chat/completions')) {
         const said = body ? JSON.parse(body).messages.at(-1).content : '';
-        const content = /invoice email/i.test(said) ? 'I set that up. It is waiting for you to turn it on in Routines.' : 'ok';
+        const content = /invoice email|email arrives/i.test(said) ? 'I set that up. It is waiting for you to turn it on in Routines.' : 'ok';
         return res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content }, finish_reason: 'stop' }] }));
       }
       res.end('{}');
@@ -286,4 +286,26 @@ test('in the browser: card wording, escaping, waiting until turned on, list chip
   } finally {
     await b.close(); a.p.kill(); g.srv.close(); fs.rmSync(a.data, { recursive: true, force: true });
   }
+});
+
+// QA 0.2.10: "invoice number and the amount" read as financial details, so the chat went
+// ultra-private, replied "I can't monitor incoming emails" and made no routine
+test('in the browser: a routine on an email makes its card whatever the task says, money words included', async () => {
+  const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+  const g = await agent();
+  const a = await start({ NEXY_AGENT_URL: g.url, NEXY_AGENT_KEY: 'test-key' });
+  const b = await chromium.launch();
+  try {
+    const p = await (await b.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
+    const errs = []; p.on('pageerror', (e) => errs.push(String(e)));
+    await p.goto(a.base + '/');
+    await p.waitForSelector('#input');
+    const said = 'when an email arrives from billing@acme.example, tell me the invoice number and the amount';
+    await p.fill('#input', said); await p.press('#input', 'Enter');
+    await p.locator('.block[data-routine="21"]').first().waitFor({ timeout: 20000 });
+    assert.equal(await p.locator('#nexyPrivBanner').isVisible(), false, 'not switched to ultra-private');
+    assert.equal(await p.locator('#thread').getByText('switched this chat to ultra-private').count(), 0);
+    assert.ok(g.seen.some((s) => s.path.startsWith('/v1/chat/completions') && s.body.messages.at(-1).content === said), 'the agent, which makes the routine, was asked');
+    assert.deepEqual(errs, []);
+  } finally { await b.close(); a.p.kill(); g.srv.close(); fs.rmSync(a.data, { recursive: true, force: true }); }
 });
