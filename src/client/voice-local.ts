@@ -13,6 +13,45 @@ export function encodeWav(samples: Float32Array, rate: number): Blob {
   return new Blob([b.buffer], { type: "audio/wav" });
 }
 
+/** Mono samples at `to` Hz from `from` Hz, each output the mean of the input span it covers. */
+export function downsample(x: Float32Array, from: number, to: number): Float32Array {
+  if (from === to) return x;
+  const r = from / to, out = new Float32Array(Math.floor(x.length / r));
+  for (let i = 0; i < out.length; i++) {
+    const a = Math.floor(i * r), b = Math.max(a + 1, Math.floor((i + 1) * r));
+    let s = 0;
+    for (let j = a; j < b; j++) s += x[j];
+    out[i] = s / (b - a);
+  }
+  return out;
+}
+
+/** The microphone as raw samples, so the recording so far can be read again while the user talks. */
+export function tapPcm(ac: AudioContext, src: AudioNode) {
+  const parts: Float32Array[] = [];
+  let n = 0;
+  const node = ac.createScriptProcessor(4096, 1, 1);
+  node.onaudioprocess = (e) => { const c = new Float32Array(e.inputBuffer.getChannelData(0)); parts.push(c); n += c.length; };
+  src.connect(node);
+  node.connect(ac.destination); // silent: the output buffer stays zero, but the node only runs when connected
+  return {
+    seconds: () => n / ac.sampleRate,
+    /** The last `sec` seconds (all by default) as a 16 kHz WAV. */
+    wav(sec = Infinity): Blob {
+      const want = Math.min(n, Math.round(sec * ac.sampleRate)), all = new Float32Array(want);
+      let at = want;
+      for (let i = parts.length - 1; i >= 0 && at > 0; i--) {
+        const p = parts[i], k = Math.min(p.length, at);
+        all.set(p.subarray(p.length - k), at - k);
+        at -= k;
+      }
+      return encodeWav(downsample(all, ac.sampleRate, 16000), 16000);
+    },
+    stop() { node.onaudioprocess = null; node.disconnect(); },
+  };
+}
+export type Pcm = ReturnType<typeof tapPcm>;
+
 /** Whatever the browser recorded (webm, mp4), as the WAV speech recognition reads. */
 export async function toWav(blob: Blob): Promise<Blob> {
   const ac = new AudioContext();

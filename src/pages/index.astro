@@ -92,6 +92,7 @@ const search = !local || !!process.env.NEXY_SEARXNG_URL;
       <div class="composer">
         <div class="chips" id="chips"></div>
         <div id="pickChip" class="pickchip" hidden></div>
+        <div class="chips" id="vreview" role="group" aria-label="Check what you said" hidden><span class="muted vhint">Check the words, then send.</span><button type="button" class="chip" id="vsend">Send<span class="kbd">Enter</span></button><button type="button" class="chip" id="vredo" title="Discard this and say it again" aria-label="Redo: discard this and say it again">Redo<span class="kbd">Esc</span></button></div>
         <div class="line">
           <button type="button" class="wavebtn" id="waveBtn" title="Talk with Nexy"><canvas class="mini" id="miniWave" aria-hidden="true"></canvas></button>
           <textarea id="input" rows="1" placeholder="Talk to Nexy"></textarea>
@@ -100,7 +101,7 @@ const search = !local || !!process.env.NEXY_SEARXNG_URL;
             <button type="button" id="privBtn" aria-pressed="false" aria-label="Private chat" title="Ultra-private chat: nothing is saved, no web search, it stays on this device"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="pl">Private</span></button>
             <button type="button" id="attachBtn" title="Attach files"><svg class="i" viewBox="0 0 24 24"><path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.3 3.3 0 0 1 4.7 4.7L9.4 17a1.7 1.7 0 0 1-2.4-2.4L15 6.6"/></svg></button>
             <button type="button" id="voiceMode" title="Voice mode: talk with Nexy" hidden><svg class="i" viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M22 12h-1"/></svg></button>
-            <button type="button" id="micBtn" hidden={!apps.split(" ").includes("voice")} title="Dictate, or hold space"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+            <button type="button" id="micBtn" hidden={!apps.split(" ").includes("voice")} title="Hold to talk, or tap to start and stop" aria-label="Talk: hold to speak"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
             <button type="button" id="sendBtn" disabled aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
           </div>
         </div>
@@ -178,7 +179,7 @@ const search = !local || !!process.env.NEXY_SEARXNG_URL;
     <div class="vm-ctl"><button class="vm-btn" id="vmMic" type="button" title="Talk"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button><button class="btn small" id="vmTap" type="button" hidden>Tap when you are done talking</button></div>
   </div>
 </div>
-<div class="voice" id="voice"><span class="led warn"></span><canvas id="vwave" width="320" height="72"></canvas><span class="muted" id="vtext">Listening…</span><button class="btn small" id="vstop">Done</button></div>
+<div class="voice" id="voice"><span class="led warn"></span><canvas id="vwave" width="320" height="72"></canvas><span class="muted" id="vtext" aria-live="polite">Listening…</span><button class="btn small" id="vstop" aria-label="Done talking">Done</button></div>
 <div class="toast" id="toast"><span class="led"></span><span id="toastT"></span></div>
 
 <script>
