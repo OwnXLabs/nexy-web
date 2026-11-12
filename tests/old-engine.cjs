@@ -35,7 +35,8 @@ const OLD = () => {
   window.__old = gone.flatMap(([o, names]) => names.filter((n) => n in o));
 };
 
-const REPLY = 'Hello from an old phone.';
+// markdown, and HTML that must stay text
+const REPLY = '### Hello from an old phone.\n\nSee [the site](https://example.com/a?b=1) <img src=x onerror="window.__xss=1">';
 function model() {
   const asked = [];
   const srv = http.createServer((req, res) => {
@@ -79,6 +80,16 @@ test('a chat works without the APIs an old phone web view lacks', { timeout: 900
     await page.locator('#input').press('Enter');
     await page.getByText('Hello from an old phone.').waitFor({ timeout: 20000 });
     assert.equal(m.asked.length, 1, 'the message reached the model');
+    // the reply's markdown is rendered in the bubble, its HTML is not
+    const bub = page.locator('.m.ai .bub').last();
+    await bub.locator('h4', { hasText: 'Hello from an old phone.' }).waitFor();
+    const a = bub.locator('a', { hasText: 'the site' });
+    assert.equal(await a.getAttribute('href'), 'https://example.com/a?b=1');
+    assert.equal(await a.getAttribute('target'), '_blank');
+    assert.match(await a.getAttribute('rel'), /noopener/);
+    assert.equal(await bub.locator('img').count(), 0);
+    assert.match(await bub.innerText(), /<img src=x/);
+    assert.equal(await page.evaluate(() => window.__xss), undefined);
     // a second message saves the chat with the first reply in it, then sends again
     await page.locator('#input').fill('Again');
     await page.locator('#input').press('Enter');

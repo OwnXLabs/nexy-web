@@ -1,4 +1,5 @@
 import { siteHost } from "./place";
+import { renderMd } from "./md";
 import { PICK } from "./pick";
 import type { Artifact, ArtifactKind } from "./canvas";
 import { sheetArtifact } from "./sheet-view";
@@ -148,60 +149,8 @@ export function codeArtifact(m: Made & { code: string; lang?: string }): Artifac
   };
 }
 
-const inl = (t: string) =>
-  esc(t)
-    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
-    .replace(/(^|[^*])\*([^*]+?)\*/g, "$1<i>$2</i>")
-    .replace(/`(.+?)`/g, "<code>$1</code>");
-
-function body(ls: string[]): string {
-  const bullet = /^\s*(\d+\. |[-*] )/;
-  let out = "", para: string[] = [], items: string[] = [];
-  const flush = () => {
-    if (para.length) out += `<p>${para.map(inl).join("<br>")}</p>`;
-    if (items.length) out += `<ul>${items.map((l) => `<li>${inl(l.trim().replace(bullet, ""))}</li>`).join("")}</ul>`;
-    para = []; items = [];
-  };
-  for (const l of ls) {
-    if (bullet.test(l)) { if (para.length) flush(); items.push(l); }
-    else { if (items.length) flush(); para.push(l); }
-  }
-  flush();
-  return out;
-}
-
-function blocks(text: string): string {
-  return text
-    .split(/\n\n+/)
-    .map((raw) => {
-      const b = raw.trim();
-      if (!b) return "";
-      if (/^# /.test(b)) {
-        const ls = b.split("\n");
-        return `<h1>${inl(ls[0].slice(2))}</h1>` + body(ls.slice(1));
-      }
-      if (/^#{2,6} /.test(b)) {
-        const ls = b.split("\n");
-        return `<h2>${inl(ls[0].replace(/^#+ /, ""))}</h2>` + body(ls.slice(1));
-      }
-      if (/^---+$/.test(b)) return "<hr>";
-      return body(b.split("\n"));
-    })
-    .join("");
-}
-
-export function mdHtml(md: string): string {
-  return md
-    .split("```")
-    .map((part, i) => {
-      if (i % 2 === 0) return blocks(part);
-      const nl = part.indexOf("\n");
-      const info = nl < 0 ? "" : part.slice(0, nl).trim();
-      const body = nl >= 0 && !/\s/.test(info) ? part.slice(nl + 1) : part;
-      return `<pre class="code">${esc(body.replace(/\n+$/, ""))}</pre>`;
-    })
-    .join("");
-}
+// one renderer for documents and chat bubbles (md.ts)
+export const mdHtml = (md: string): string => renderMd(md, "doc");
 
 export function markdownArtifact(m: Made & { md: string }): Artifact {
   return {

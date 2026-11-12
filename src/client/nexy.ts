@@ -36,6 +36,7 @@ import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./l
 import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
 import { timeoutSignal } from "./compat";
+import { inline, renderMd } from "./md";
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s);
 const $$ = (s: string, r: ParentNode = document) => Array.from(r.querySelectorAll<HTMLElement>(s));
@@ -1376,7 +1377,7 @@ async function addRole(asked: string): Promise<void> {
 function resultHtml(title: string, out: string, show: typeof showArtifact): string {
   if (out && structured(out)) {
     show(markdownArtifact({ title: `${slugOf(title)}.md`, meta: `Own Startup · ${title.slice(0, 40)} · on device`, md: out }));
-    return `<b>${esc(title)}</b> is done. ${bubbleText(firstPart(out).slice(0, 220))}<br><span class="faint">The full result is on the right.</span>`;
+    return `<b>${esc(title)}</b> is done. ${inline(firstPart(out).slice(0, 220))}<br><span class="faint">The full result is on the right.</span>`;
   }
   return out
     ? `<b>${esc(title)}</b><div style="margin-top:6px">${bubbleText(out.slice(0, 1200))}</div>`
@@ -1699,7 +1700,13 @@ async function playBoardEdit(i: { kind: string; title: string; role?: string; st
   }
 }
 
-const bubbleText = (t: string) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+// what the model wrote, as safe markdown: no raw HTML, links only http(s) and opened outside
+const bubbleText = (t: string) => renderMd(t);
+// the typing cursor goes at the end of the last line written, not under it
+const withCursor = (html: string) => {
+  const end = /<\/(?:p|li|h3|h4)>(?:<\/(?:ul|ol|blockquote)>)*$/.exec(html);
+  return end ? `${html.slice(0, end.index)}<span class="cur"></span>${end[0]}` : `${html}<span class="cur"></span>`;
+};
 const structured = (t: string) => t.length > 1500 && (/^#{1,6} /m.test(t) || (t.match(/^\s*(\d+\.|[-*]) /gm) ?? []).length >= 3 || (t.match(/^\s*\|.*\|\s*$/gm) ?? []).length >= 3);
 const firstPart = (t: string) => (t.split(/\n\s*\n/).map((p) => p.trim()).find((p) => p && !/^#{1,6} /.test(p)) ?? t).slice(0, 400);
 const slugOf = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 28) || "answer";
@@ -1713,7 +1720,7 @@ function typeOut(el: HTMLElement, text: string): Promise<void> {
     const tick = () => {
       i += step;
       if (i >= text.length) { el.innerHTML = bubbleText(text); done(); return; }
-      el.innerHTML = `${bubbleText(text.slice(0, i))}<span class="cur"></span>`;
+      el.innerHTML = withCursor(bubbleText(text.slice(0, i)));
       if (th) th.scrollTop = th.scrollHeight;
       setTimeout(tick, 9);
     };
@@ -1878,7 +1885,7 @@ async function playChat(text: string, priv = false): Promise<void> {
         return;
       }
       streamed = true;
-      bub.innerHTML = `${bubbleText(shown)}<span class="cur"></span>`;
+      bub.innerHTML = withCursor(bubbleText(shown));
       if (Date.now() - savedAt > PARTIAL_SAVE_MS) { savedAt = Date.now(); saveChat(); }
       const th = $("#thread"); if (th) th.scrollTop = th.scrollHeight;
     }, (gone) => {
@@ -1912,13 +1919,13 @@ async function playChat(text: string, priv = false): Promise<void> {
       // first paragraph alone lost the price and the paragraph after it (2026-10-28)
       const prose = lifted.prose.split("\n").filter((l) => !l.trim().startsWith("|")).join("\n").replace(/\n{3,}/g, "\n\n").trim();
       holder.querySelector(".bub")!.innerHTML =
-        (prose ? `${bubbleText(prose.length > 2000 ? `${prose.slice(0, 2000)}…` : prose)}<br><br>` : "") + `<span class="faint">${esc(lifted.note)}</span>`;
+        (prose ? `${bubbleText(prose.length > 2000 ? `${prose.slice(0, 2000)}…` : prose)}<br>` : "") + `<span class="faint">${esc(lifted.note)}</span>`;
       offer();
       return;
     }
     if (structured(answer)) {
       showArtifact(markdownArtifact({ title: `${slugOf(text)}.md`, meta: "Nexy · on device", md: answer }));
-      holder.querySelector(".bub")!.innerHTML = `${bubbleText(firstPart(answer))}<br><br><span class="faint">The full answer is on the right.</span>`;
+      holder.querySelector(".bub")!.innerHTML = `${bubbleText(firstPart(answer))}<br><span class="faint">The full answer is on the right.</span>`;
       offer();
       return;
     }
