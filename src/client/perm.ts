@@ -123,6 +123,8 @@ export function matchEntry(entries: CatalogEntry[], service: string): CatalogEnt
   return (
     entries.find((e) => slug(e.id) === want) ??
     entries.find((e) => slug(e.label) === want) ??
+    // "Gmail (app password)" said the way connectIntent leaves it ("gmail (password)")
+    entries.find((e) => slug(serviceOf(e.label)) === want) ??
     entries.find((e) => slug(e.label).startsWith(want) || want.startsWith(slug(e.id)))
   );
 }
@@ -179,7 +181,7 @@ export function consentRows(entry: CatalogEntry): [string, string][] {
     ["Scopes", entry.scopes?.length ? entry.scopes.map(scopeText).join("; ") : "none declared in this machine's catalogue"],
     ["Leaves this machine", reaches ? `requests to ${reaches}` : "nothing — this connector runs on this machine"],
     ["Apps that inherit this", "Nexy only. Connectors are machine-level, permissions are per-app."],
-    ["Sign-in", entry.auth.type === "oauth" ? "OAuth in your browser; the token is stored here at 0600" : entry.auth.type === "api_key" ? "an API key, stored here at 0600" : "none needed"],
+    ["Sign-in", entry.auth.type === "oauth" ? "OAuth in your browser; the token is stored here at 0600" : entry.auth.type === "api_key" ? "an API key, stored here at 0600" : entry.auth.type === "app_password" ? "a Google app password, checked with Gmail, then stored here encrypted" : "none needed"],
     ["Credential now", entry.auth.credentialStored ? `stored${entry.auth.expiresAt ? `, expires ${entry.auth.expiresAt}` : ""}` : "none stored"],
   ];
   if (!entry.enabled) rows.push(["Status", "disabled in the catalogue — it will serve nothing until an operator enables it"]);
@@ -222,6 +224,11 @@ export async function approveConnector(
   f: Fetch = fetch,
 ): Promise<Outcome> {
   const id = entry?.id ?? slug(service);
+
+  // the password is typed into Settings, never into the chat, so it stays out of the conversation
+  if (entry && entry.auth.type === "app_password") {
+    return { ok: false, right: "use Settings", note: `${entry.label} connects in Settings > Connections, where you paste the app password. Nothing was granted and nothing left this machine` };
+  }
 
   if (entry && entry.auth.type === "none") {
     const res = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(id)}`), { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
@@ -300,11 +307,35 @@ export async function resumeConnector(entry: CatalogEntry, f: Fetch = fetch): Pr
   return { ok: true, right: "connected", note: `Resumed ${entry.label}. Nexy can read it again` };
 }
 
+export const APP_PASSWORDS = "https://myaccount.google.com/apppasswords";
+
+/** Connect Gmail with an app password: the hub checks it with Gmail, then keeps it sealed. The
+ * password goes from the form straight to the hub; nothing here keeps it. */
+export async function connectAppPassword(entry: CatalogEntry, email: string, password: string, f: Fetch = fetch): Promise<Outcome> {
+  const res = await f(as(`/app-password/${encodeURIComponent(entry.id)}`), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await readJson(res);
+  if (!res.ok) return { ok: false, right: "not connected", note: String(body?.error ?? `Not connected — ${httpMsg(res.status)}`) };
+  if (!(await grantedNow(entry.id, f))) return { ok: false, right: "not connected", note: `Gmail accepted it, but the registry does not list ${entry.label} for Nexy.` };
+  return { ok: true, right: "connected", note: `Connected ${entry.label}. Nexy can read your mail, read-only` };
+}
+
 export async function revokeConnector(entry: CatalogEntry, f: Fetch = fetch): Promise<Outcome> {
   const id = entry.id;
   const g = await f(as(`/grants/${encodeURIComponent(APP)}/${encodeURIComponent(id)}`), { method: "DELETE", headers: { "content-type": "application/json" } });
   const gBody = await readJson(g);
   if (!g.ok) return { ok: false, right: "still connected", note: `Not revoked — ${gBody?.error ?? httpMsg(g.status)}` };
+
+  if (entry.auth.type === "app_password") {
+    const c = await f(as(`/app-password/${encodeURIComponent(id)}`), { method: "DELETE", headers: { "content-type": "application/json" } });
+    const cBody = await readJson(c);
+    if (!c.ok) return { ok: false, right: "grant revoked", note: `Nexy's grant is revoked, but the app password was not deleted — ${cBody?.error ?? httpMsg(c.status)}` };
+    if (await grantedNow(id, f)) return { ok: false, right: "still connected", note: `The registry still lists ${entry.label} for Nexy. Nothing was revoked.` };
+    return { ok: true, right: "revoked", note: `Disconnected ${entry.label} and deleted the app password from this machine. Also remove it in your Google account at ${APP_PASSWORDS}; Nexy can't do that for you` };
+  }
 
   const c = await f(as(`/oauth/${encodeURIComponent(id)}/revoke`), { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   const cBody = await readJson(c);

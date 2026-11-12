@@ -1,5 +1,5 @@
 import { hasApp, here, localVoice, onOwn1, voiceApi } from "./place";
-import { HUB, loadCatalog, loadGrants, pauseConnector, resumeConnector, type CatalogEntry } from "./perm";
+import { APP_PASSWORDS, HUB, connectAppPassword, loadCatalog, loadGrants, pauseConnector, resumeConnector, revokeConnector, type CatalogEntry } from "./perm";
 import { httpMsg, errText } from "./http";
 
 export interface SettingsHooks {
@@ -94,7 +94,7 @@ async function section(sec: string): Promise<string> {
       // without the grants list, Pause and Resume can't be told apart, so they are not offered
       const granted = await loadGrants().catch((e) => { console.warn("[nexy] grants unavailable", e); return null; });
       return `<h3>Connections</h3>` + tg + `<p class="sp">Outside apps come from this machine's catalogue. Nexy asks before the first use of each one.</p>` + google +
-        (cat.length ? cat.map((c) => connRow(c, granted)).join("") : row("Catalogue", not("Empty")));
+        (cat.length ? cat.map((c) => (c.auth?.type === "app_password" ? appPasswordRow(c, granted) : connRow(c, granted))).join("") : row("Catalogue", not("Empty")));
     } catch (e) {
       return `<h3>Connections</h3>` + tg + row("Catalogue", not(`Not answering: ${errText(e)}`));
     }
@@ -208,6 +208,25 @@ async function telegramRow(): Promise<string> {
     `<button class="btn small primary" type="button" data-act="tgon">Connect</button></div></div>`;
 }
 
+// Gmail with an app password: no Google Cloud project. The password goes from the field straight
+// to the connector hub, which checks it with Gmail and keeps it sealed; this page never stores it.
+function appPasswordRow(c: CatalogEntry, granted: string[] | null): string {
+  const n = esc(c.label), id = esc(c.id);
+  if (c.auth?.credentialStored) {
+    const off = `<button class="btn small ghost" type="button" data-act="apoff" data-n="${id}">Disconnect</button>`;
+    const sub = "Read-only. Disconnect deletes it here; also remove it in your Google account";
+    if (granted && !granted.includes(c.id)) return row(n, `<span class="faint paused">Paused — Nexy can't read it</span> <button class="btn small" type="button" data-act="resume" data-n="${id}">Resume</button> ${off}`, sub);
+    const pause = granted ? ` <button class="btn small ghost" type="button" data-act="pause" data-n="${id}">Pause</button>` : "";
+    return row(n, `<span class="faint connected">Connected</span>${pause} ${off}`, granted ? sub : `${sub}. Nexy's access can't be read right now`);
+  }
+  return `<div class="srow" style="flex-wrap:wrap;gap:8px"><div><div class="sl">${n}</div><div class="ss"><div>1. Turn on 2-Step Verification in your Google account.<br>` +
+    `2. Create an app password at <a href="${APP_PASSWORDS}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">myaccount.google.com/apppasswords</a>.<br>` +
+    `3. Paste it here. Nexy reads your mail, read-only. Work or school accounts may not offer app passwords.</div></div></div>` +
+    `<div style="display:flex;gap:6px;flex-wrap:wrap;width:100%"><input id="apEmail" type="email" autocomplete="off" spellcheck="false" placeholder="Your Gmail address" style="${field};flex:1 1 180px">` +
+    `<input id="apPass" type="password" autocomplete="off" spellcheck="false" placeholder="App password" style="${field};flex:1 1 180px">` +
+    `<button class="btn small primary" type="button" data-act="apon" data-n="${id}">Connect</button></div></div>`;
+}
+
 // Gmail and Drive sign in with a Google OAuth client (type Desktop app). The owner's own, from
 // their Google Cloud project, is kept by the connector hub on this machine; its secret is never shown.
 const GCLIENT = `${HUB.replace(/\/registry$/, "")}/connectors/google`;
@@ -249,6 +268,31 @@ async function act(a: string, n?: string): Promise<void> {
     });
     H.toast(out.note);
     void renderSettings("connections");
+  }
+  if ((a === "apon" || a === "apoff") && n) {
+    const entry = catalog.find((c) => c.id === n);
+    if (!entry) { H.toast("That app is no longer in this machine's catalogue"); void renderSettings("connections"); return; }
+    if (a === "apoff") {
+      if (!confirm(`Disconnect ${entry.label}? Nexy deletes the app password from this machine. Also remove it in your Google account at myaccount.google.com/apppasswords; Nexy can't do that for you.`)) return;
+      const out = await revokeConnector(entry).catch((e): { ok: false; note: string } => {
+        console.warn(`[nexy] disconnect ${entry.id} failed`, e);
+        return { ok: false, note: `Not disconnected — ${errText(e)}` };
+      });
+      H.toast(out.note);
+      void renderSettings("connections");
+      return;
+    }
+    const email = $<HTMLInputElement>("#apEmail")?.value.trim() ?? "";
+    const pass = $<HTMLInputElement>("#apPass");
+    if (!email || !pass?.value.trim()) { H.toast("Enter your Gmail address and the app password"); return; }
+    H.toast("Checking with Gmail…");
+    const out = await connectAppPassword(entry, email, pass.value).catch((e): { ok: false; note: string } => {
+      console.warn(`[nexy] connect ${entry.id} failed`, e);
+      return { ok: false, note: `Not connected — ${errText(e)}` };
+    });
+    H.toast(out.note);
+    if (out.ok) { pass.value = ""; void renderSettings("connections"); }
+    return;
   }
   if (a === "gclient") {
     const input = $<HTMLInputElement>("#gClientPick");
