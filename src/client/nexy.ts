@@ -1786,6 +1786,11 @@ function offerTakeover(holder: HTMLElement, what: string): void {
 const STREAM_IDLE_MS = 40_000;
 // No turn id this long after asking means the machine may be gone: one quick health check says.
 const PROBE_MS = 8_000;
+// The server answers a question at once with the turn's id. No answer at all this long means the
+// request is stuck on its way (2026-11-12: two questions after a restart got no answer at all and
+// ended in "went silent" at 40 s): it is sent again. It carries the question's key, so if the
+// first did arrive the server joins that reply, and the model is still asked once.
+const ASK_MS = 15_000, ASKS = 3;
 async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: (gone: boolean) => void): Promise<T> {
   let id = "";
   let abort = new AbortController(), idle = 0;
@@ -1799,8 +1804,10 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
       (e) => { console.warn("[nexy] the machine did not answer a health check", e); if (!id) { gone = new DOMException(GONE, "AbortError"); abort.abort(gone); } },
     );
   }, PROBE_MS);
-  const alive = () => { clearTimeout(idle); const a = abort; idle = window.setTimeout(() => a.abort(new Error("the reply stream went silent")), STREAM_IDLE_MS); };
-  const attempt = () => { abort.abort(); abort = new AbortController(); alive(); return abort.signal; };
+  // stalled: this attempt was stopped for silence (old browsers drop the abort reason)
+  let stalled = false;
+  const alive = (ms = STREAM_IDLE_MS) => { clearTimeout(idle); const a = abort; idle = window.setTimeout(() => { stalled = true; a.abort(new Error("the reply stream went silent")); }, ms); };
+  const attempt = (ms?: number) => { abort.abort(); abort = new AbortController(); stalled = false; alive(ms); return abort.signal; };
   const read = async (r: Response): Promise<T | null> => {
     const reader = r.body!.getReader();
     const dec = new TextDecoder();
@@ -1827,8 +1834,16 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
     }
   };
   try {
-    let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body, signal: attempt() })
-      .catch((e: unknown) => { throw gone ?? e; });
+    let r: Response | null = null;
+    for (let n = 1; !r; n++) {
+      r = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body, signal: attempt(ASK_MS) })
+        .catch((e: unknown) => {
+          if (gone) throw gone;
+          if (!stalled || n >= ASKS) throw e;
+          console.warn(`[nexy] no answer to the question in ${ASK_MS / 1000} s; sending it again (${n} of ${ASKS - 1})`);
+          return null;
+        });
+    }
     if (!r.ok) {
       const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
       throw new HttpError(r.status, detail || r.statusText);
@@ -1894,8 +1909,9 @@ async function playChat(text: string, priv = false): Promise<void> {
   let kept = "";
   try {
     type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean; broke?: boolean };
-    // tz: routines the agent makes run at this device's local time
-    const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
+    // tz: routines the agent makes run at this device's local time; turnKey: one per question, so
+    // sending it again (streamReply, patient) joins the reply already running for it
+    const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), turnKey: `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`, ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
     let streamed = false;
     const d = await patient(() => streamReply<Reply>(body, (t) => {
