@@ -4,6 +4,7 @@ import { chatScope, visibleChat, inChat } from "./chat-scope";
 import type { ChatOutput } from "../lib/chat-output";
 import { htmlArtifact, gameArtifact } from "./content-view";
 import { imageArtifact } from "./image-tools";
+import { sheetArtifact } from "./sheet-view";
 import { artifactFor } from "./artifacts";
 export type ArtifactKind =
   | "plan" | "image" | "audio" | "html" | "doc" | "table" | "text"
@@ -114,6 +115,8 @@ export function savedOutputs(): { outputs: ChatOutput[]; activeOutput: string } 
 function restored(o: ChatOutput): Artifact {
   const kind = o.kind as ArtifactKind;
   const base = { id: o.id, kind, title: o.title, meta: o.meta, href: o.href };
+  // a sheet keeps its CSV: rebuilt as a page, a reopened chat showed it as raw text (QA 2026-11-12)
+  if (o.source !== undefined && kind === "table") { const a = sheetArtifact({ title: o.title, rows: [], meta: o.meta }); a.source!.set(o.source); return { ...a, id: o.id }; }
   if (o.source !== undefined) return { ...(kind === "game" ? gameArtifact({ ...base, html: o.source }) : htmlArtifact({ ...base, html: o.source })), id: o.id };
   if (kind === "image" && o.href) return imageArtifact({ ...base, src: o.href });
   if (o.href) return { ...artifactFor({ kind, title: o.title, app: o.href.split("/")[3] ?? "nexy", appLabel: o.meta?.split(" · ")[0] ?? "Nexy", ts: 0, href: o.href }), id: o.id, meta: o.meta };

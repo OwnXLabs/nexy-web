@@ -45,11 +45,25 @@ export async function get(owner: string, id: string): Promise<SavedChat | null> 
   catch (e: any) { if (e?.code === "ENOENT") return null; throw e; }
 }
 
-export async function put(owner: string, c: SavedChat): Promise<void> {
-  await fs.mkdir(dirOf(owner), { recursive: true, mode: 0o700 });
-  const tmp = `${fileOf(owner, c.id)}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(c), { mode: 0o600 });
-  await fs.rename(tmp, fileOf(owner, c.id));
+// A save says which version it was made from (`base`: the saved ts, 0 for a new chat).
+// A device holding an older copy is refused, so it cannot overwrite turns another
+// device added since (a phone left open erased the Mac's answer, 2026-11-12).
+export class Conflict extends Error { constructor(readonly current: number) { super("this chat changed on another device"); } }
+const locks = new Map<string, Promise<unknown>>();
+export function put(owner: string, c: SavedChat, base?: number): Promise<void> {
+  const file = fileOf(owner, c.id);
+  const run = (locks.get(file) ?? Promise.resolve()).catch(() => {}).then(async () => {
+    const now = await get(owner, c.id);
+    if (base !== undefined && (now?.ts ?? 0) !== base) throw new Conflict(now?.ts ?? 0);
+    if (now && c.ts <= now.ts) c.ts = now.ts + 1;
+    await fs.mkdir(dirOf(owner), { recursive: true, mode: 0o700 });
+    const tmp = `${file}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(c), { mode: 0o600 });
+    await fs.rename(tmp, file);
+  });
+  locks.set(file, run);
+  void run.finally(() => { if (locks.get(file) === run) locks.delete(file); }).catch(() => {});
+  return run;
 }
 
 // A device's earlier chats (kept under its browser owner) join the signed-in owner once.

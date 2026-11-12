@@ -124,12 +124,16 @@ test('streamed replies survive a dropped connection and never show what the guar
     for (const e of fault.filter((x) => x.ev === 'text')) assert(!/API call|failed after|retries/i.test(e.data.text), `fault shown: ${e.data.text}`);
     assert.equal(fault.find((e) => e.ev === 'done').data.body.choices[0].message.content, 'The fallback answered.');
 
-    // 5. an error at the end of a 200 stream is a failed turn: the partial words are replaced
+    // 5. an error after words were shown: they stand, marked stopped, with Continue in the app.
+    // Starting again from scratch lost them and, with the model itself gone (Ollama killed), kept
+    // the person waiting up to 150 s for nothing (QA 2026-11-12). The fallback is for a turn that showed nothing.
     const mid = await events(await ask(s, 'midfail'));
     const midText = mid.filter((e) => e.ev === 'text').map((e) => e.data.text);
     assert(midText.some((t) => t.startsWith('Half')), 'the partial words were shown');
-    assert.equal(midText.at(-1), '', 'then cleared before the answer that stands');
-    assert.equal(mid.find((e) => e.ev === 'done').data.body.choices[0].message.content, 'The fallback answered.');
+    assert.notEqual(midText.at(-1), '', 'and never cleared');
+    const midDone = mid.find((e) => e.ev === 'done').data.body;
+    assert.match(midDone.choices[0].message.content, /^Half of an answer/);
+    assert.equal(midDone.stopped, true); assert.equal(midDone.broke, true);
 
     // 6. an engine's own failure wording never streams to the person
     const busy = await events(await ask(s, 'busy'));

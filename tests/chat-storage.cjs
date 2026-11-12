@@ -39,3 +39,15 @@ test('a device\'s earlier chats join the signed-in owner once, by copy, without 
  assert.equal(await adopt('o_dev_1','o_xauth_x'),0);
  assert.equal(await adopt('o_xauth_x','o_xauth_x'),0);
 });
+test('a save from an older copy is refused, and the stored chat is untouched',async()=>{
+ const one=clean({...raw,id:'cversions',title:'One'});await put('owner-v',one,0);
+ const ts1=(await get('owner-v','cversions')).ts;
+ await assert.rejects(put('owner-v',clean({...raw,id:'cversions',title:'New again'}),0),{name:'Error'});
+ const two=clean({...raw,id:'cversions',title:'Two'});await put('owner-v',two,ts1);
+ const ts2=(await get('owner-v','cversions')).ts;assert(ts2>ts1,'each save is a newer version');
+ await assert.rejects(put('owner-v',clean({...raw,id:'cversions',title:'Stale'}),ts1));
+ assert.equal((await get('owner-v','cversions')).title,'Two');
+ // two saves from the same version at once: one wins, the other is refused
+ const r=await Promise.allSettled([put('owner-v',clean({...raw,id:'cversions',title:'A'}),ts2),put('owner-v',clean({...raw,id:'cversions',title:'B'}),ts2)]);
+ assert.deepEqual(r.map(x=>x.status).sort(),['fulfilled','rejected']);
+});

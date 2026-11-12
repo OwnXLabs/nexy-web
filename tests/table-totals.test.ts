@@ -35,8 +35,10 @@ const QA = `### Step 2: Calculate the Total Cost per Pack
 test("two tables in one reply: neither total is touched, and nothing is said", () => {
   const l = fromReply(QA, "explain step by step how to")!;
   assert.ok(l, "the tables go to the pane");
-  assert.equal(l.note, "The table is in the pane on the right.");
+  assert.equal(l.note, "The tables are in the pane on the right.");
   assert.doesNotMatch(l.note, /corrected|rows add to/);
+  // two tables are two tables: not joined into one sheet whose total adds both (QA 2026-11-12)
+  assert.equal(l.artifact.kind, "doc");
 });
 
 test("a total under a run of the rows above it is right as written", () => {
@@ -64,5 +66,10 @@ test("unclear shapes are left alone", () => {
 test("a wrong total in the second of two tables is checked against its own rows only", () => {
   const reply = "| A | Cost |\n|---|---|\n| x | 1 |\n| y | 2 |\n| Total | 3 |\n\nThen:\n\n| B | Cost |\n|---|---|\n| p | 10 |\n| q | 20 |\n| Total | 35 |\n";
   const l = fromReply(reply, "costs")!;
-  assert.match(l.note, /corrected 1: Total: the model wrote 35, the rows add to 30\./);
+  assert.match(l.note, /Check this total: Total: the model wrote 35, the rows add to 30\./);
+});
+
+test("one table still opens as a sheet", () => {
+  const l = fromReply("| Item | Cost |\n|---|---|\n| Rent | 100 |\n| Power | 40 |\n", "costs")!;
+  assert.equal(l.artifact.kind, "table");
 });

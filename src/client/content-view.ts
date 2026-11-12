@@ -256,6 +256,16 @@ export function fromReply(reply: string, hint = ""): Lifted | null {
 
   if (!fence) {
     const tables = pipeTables(reply).map(checkTotals);
+    // Two tables are not one sheet: joined, the second header became a row and the sheet's total
+    // added both (QA 2026-11-12). They stay as written, in a document; a wrong total is pointed out.
+    if (tables.length > 1) {
+      const wrong = tables.flatMap((t) => t.fixes);
+      return {
+        artifact: markdownArtifact({ title: `${slug(hint)}.md`, md: reply }),
+        prose: reply,
+        note: wrong.length ? `The tables are in the pane on the right. Check ${wrong.length === 1 ? "this total" : "these totals"}: ${wrong.join("; ")}.` : "The tables are in the pane on the right.",
+      };
+    }
     const rows = tables.flatMap((t) => t.rows);
     if (rows.length < 2) return null;
     const fixes = tables.flatMap((t) => t.fixes);

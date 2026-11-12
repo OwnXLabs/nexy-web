@@ -28,7 +28,7 @@ import { initPrivate, guard, conversation as privateConversation, isPrivate, pri
 import { matchSocial, playSocial } from "./social";
 import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff } from "./place";
 import { renderGate } from "./build-gate";
-import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
+import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine, deviceZone } from "./memory";
 import { initSettings, notify, openSettings } from "./settings";
@@ -1872,8 +1872,10 @@ async function playChat(text: string, priv = false): Promise<void> {
   thread.push({ role: "user", content: text });
   saveChat();
   let savedAt = Date.now();
+  // the last words on screen: if the model dies mid-answer, they stay up with Ask again
+  let kept = "";
   try {
-    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean };
+    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean; broke?: boolean };
     // tz: routines the agent makes run at this device's local time
     const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
@@ -1885,6 +1887,7 @@ async function playChat(text: string, priv = false): Promise<void> {
         return;
       }
       streamed = true;
+      kept = shown;
       bub.innerHTML = withCursor(bubbleText(shown));
       if (Date.now() - savedAt > PARTIAL_SAVE_MS) { savedAt = Date.now(); saveChat(); }
       const th = $("#thread"); if (th) th.scrollTop = th.scrollHeight;
@@ -1905,7 +1908,7 @@ async function playChat(text: string, priv = false): Promise<void> {
       // the model hit its length limit: say so rather than stop mid-sentence
       if (d.cut) holder.querySelector(".bub")!.insertAdjacentHTML("beforeend", `<div class="feednote" data-cut>Answer cut short. <button type="button" class="btn small" data-continue>Continue?</button></div>`);
       // the engine went quiet mid-answer, or ran past the cap: what it wrote stays
-      else if (d.stopped) holder.querySelector(".bub")!.insertAdjacentHTML("beforeend", `<div class="feednote" data-cut>That answer was taking too long, so I stopped it. <button type="button" class="btn small" data-continue>Continue?</button></div>`);
+      else if (d.stopped) holder.querySelector(".bub")!.insertAdjacentHTML("beforeend", `<div class="feednote" data-cut>${d.broke ? "This answer stopped before it finished." : "That answer was taking too long, so I stopped it."} <button type="button" class="btn small" data-continue>Continue?</button></div>`);
     };
     if (answer) noteMs("chat", Date.now() - askedAt);
 
@@ -1934,8 +1937,10 @@ async function playChat(text: string, priv = false): Promise<void> {
     offer();
   } catch (e) {
     thread.pop();
+    console.warn("[nexy] the answer failed", e);
+    // Ollama killed mid-answer lost the words already shown and ended on a raw error (QA 2026-11-12)
     holder.querySelector(".bub")!.innerHTML = unreachable(e) ? esc(away())
-      : `The model on this machine did not answer: <code>${esc((e as Error).message)}</code>`;
+      : `${kept ? bubbleText(kept) : ""}<div class="feednote bad" data-interrupted="1">${kept ? "This answer stopped before it finished." : "The model on this machine did not answer."} <span class="faint">(${esc((e as Error).message)})</span> <button type="button" class="btn small" data-ask-again="${esc(text)}">Ask again</button></div>`;
   } finally {
     browsing?.stop();
     delete holder.dataset.pending;
@@ -2021,7 +2026,7 @@ function feedback(signal: "up" | "down" | "frustration" | "runError" | "rephrase
 
 // Good / not right sit in the reply's action row, drawn like copy and retry.
 // a reply that is a failure: asking people to rate an error reads as a joke
-const FAILURE = /could not|did not answer|did not complete|stopped:|is not answering|isn't answering|went wrong|local fault/i;
+const FAILURE = /could not|did not answer|stopped before it finished|did not complete|stopped:|is not answering|isn't answering|went wrong|local fault/i;
 function rateBar(msg: HTMLElement, prompt: string): void {
   const acts = msg.querySelector<HTMLElement>(".macts");
   if (isPrivate() || EVAL || !acts || acts.querySelector("[data-r]")) return;
@@ -2665,6 +2670,9 @@ async function boot(): Promise<void> {
     .then(() => { if (!$("#chatWrap")?.hidden) did("ask"); })
     .catch((e: Error) => console.warn("[nexy] saved chats unavailable", e));
   welcome();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshChats().catch((e: Error) => console.warn("[nexy] chat list not refreshed", e));
+  });
   const th = $("#thread");
   if (th) new MutationObserver(emptyState).observe(th, { childList: true });
   setTimeout(() => $<HTMLTextAreaElement>("#input")?.focus(), 200);

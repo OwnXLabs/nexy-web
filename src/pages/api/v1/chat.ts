@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { visible } from "../../../lib/stream-guard";
 import { owner, remember, upstreamFor } from "./private/_session";
 import { owner as signedOwner } from "../../../lib/owner";
 
@@ -253,11 +254,12 @@ export const POST: APIRoute = async (ctx) => {
   const research = !connectorAsk(String(said ?? "")) && wantsResearch(String(said ?? ""), history);
   const startedAt = Date.now();
   // stopped while still writing: what it wrote is kept, and the person is offered to continue
-  const stoppedTurn = (b: Budget, via: string) => {
+  // `broke`: the model died mid-answer (Ollama killed), rather than running past its budget
+  const stoppedTurn = (b: Budget, via: string, broke = false) => {
     const reply = guard(dropInlineImages(b.text, false));
     answered(reply);
     logTurn({ via, stopped: b.stopped, ms: Date.now() - startedAt, replyChars: reply.length, ...(isEval ? { eval: true } : {}) }, priv);
-    return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via, grounded: false, stopped: true, private: priv || undefined } };
+    return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via, grounded: false, stopped: true, broke: broke || undefined, private: priv || undefined } };
   };
   const run = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
     // asked to open a site: open it on the agent's screen first and hand the agent the page, so
@@ -321,6 +323,10 @@ export const POST: APIRoute = async (ctx) => {
     } catch (e: any) {
       logTurn({ via: eng.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
       if (b.stopped && b.text.trim()) return stoppedTurn(b, eng.id);
+      // Words already on screen stay there: asking again from scratch lost them and kept the
+      // person waiting minutes while a restarted model loaded (QA 2026-11-12)
+      // (only words the person saw: an engine's own failure, worded as a reply, is never shown)
+      if (visible(b.text).trim()) return stoppedTurn(b, eng.id, true);
       // The agent adds memory and tools; the model alone can still answer. A broken agent
       // must not mean a broken chat.
       const timedOut = b.stopped !== null || e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message ?? ""));
@@ -346,7 +352,7 @@ export const POST: APIRoute = async (ctx) => {
           return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true, cut: r.cut || undefined } };
         } catch (e2: any) {
           logTurn({ via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ...(isEval ? { eval: true } : {}) }, priv);
-          if (b2.stopped && b2.text.trim()) return stoppedTurn(b2, localEngine.id);
+          if (b2.stopped ? b2.text.trim() : visible(b2.text).trim()) return stoppedTurn(b2, localEngine.id, !b2.stopped);
         } finally { b2.end(); }
       }
       // details stay in the log: an engine error can carry file paths and internal names

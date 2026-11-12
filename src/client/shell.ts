@@ -38,7 +38,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
 let H: ShellHooks;
 
-interface Chat { id: string; title: string; nodes: DocumentFragment; history: ShellHooks["history"]; saved?: boolean; loaded?: boolean; example?: ExampleOpen | null; first?: string; named?: boolean; naming?: boolean; projectId?: string; loading?: Promise<void> }
+interface Chat { id: string; title: string; nodes: DocumentFragment; history: ShellHooks["history"]; saved?: boolean; loaded?: boolean; example?: ExampleOpen | null; first?: string; named?: boolean; naming?: boolean; projectId?: string; loading?: Promise<void>; ts?: number; sig?: string }
 const EX = "_examples";
 const chats = new Map<string, Chat[]>();
 const retired = new Map<string, Chat>();
@@ -112,6 +112,8 @@ async function readChat(c: Chat): Promise<void> {
   c.nodes = revive(d.chat.html);
   c.history.splice(0, c.history.length, ...d.chat.history);
   c.projectId = d.chat.projectId;
+  c.ts = (d.chat as { ts?: number }).ts;
+  c.sig = sigOf({ title: c.title, projectId: c.projectId, ...d.chat });
   // Older chats did not save output IDs. Recover only explicit URLs in their own
   // transcript, never a title/time match against the machine-wide history.
   const outputs = d.chat.outputs ?? [];
@@ -161,6 +163,29 @@ function load(pid: string, id: string): void {
 // a routine card in a chat shown again says where that routine stands now
 const cardsNow = (th: HTMLElement) => refreshRoutineCards(th).catch((e: Error) => console.warn("[nexy] routine cards not brought up to date", e));
 
+// Another device saved this chat after this one read it. Nothing here is written over
+// it: the chat is read again when opened, and an open chat offers the newer copy.
+function staleChat(c: Chat): void {
+  c.loaded = false; c.ts = undefined; c.sig = undefined;
+  H.toast("This chat changed on another device, so this copy was not saved over it.");
+  const th = $("#thread");
+  if (cur?.cid !== c.id || !th || th.querySelector("[data-stale]")) return;
+  const note = document.createElement("div");
+  note.className = "feednote";
+  note.dataset.stale = "1";
+  note.textContent = "This chat changed on another device. ";
+  const show = document.createElement("button");
+  show.type = "button"; show.className = "btn small"; show.textContent = "Show latest";
+  show.addEventListener("click", () => {
+    if (cur?.cid !== c.id) return;
+    th.replaceChildren(); c.nodes = document.createDocumentFragment();
+    load(cur.pid, c.id);
+  });
+  note.append(show);
+  th.append(note);
+  th.scrollTop = th.scrollHeight;
+}
+
 // after each turn: the thread as shown, and the turns the model sees
 export function saveChat(): void {
   if (H.isPrivate() || chatDeleted()) return;
@@ -168,7 +193,7 @@ export function saveChat(): void {
   const th = chatThread();
   if (!c || c.example !== undefined || !th || !th.querySelector('.msg.me:not([data-private="1"])') || (c.saved && !c.loaded)) return;
   const copy = document.createElement("div"); copy.append(th.cloneNode(true));
-  copy.querySelectorAll('[data-private="1"],#typing,#emptyState').forEach((n) => n.remove());
+  copy.querySelectorAll('[data-private="1"],#typing,#emptyState,[data-stale]').forEach((n) => n.remove());
   // A reply still being written is saved as interrupted: if Nexy quits or crashes now, the chat
   // comes back with the question, what had arrived, and a way to ask again. The unanswered
   // question stays out of the history, so asking again does not send it twice.
@@ -178,7 +203,7 @@ export function saveChat(): void {
   if (pending.length && last(history)?.role === "user") history.pop();
   c.saved = true;
   c.loaded = true;
-  persist({ id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,
+  persist(c, { id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,
     history, projectId: c.projectId, ...savedOutputs() });
 }
 
@@ -206,13 +231,31 @@ export async function flushChat(): Promise<void> {
   await writes.get(id);
   if (writeFailures.has(id)) throw writeFailures.get(id);
 }
-function persist(body: { id: string; pid: string; title: string; html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string }): void {
+type Body = { id: string; pid: string; title: string; html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string };
+// What a save would change: the words on screen, the turns, the name, the outputs.
+// Markup details (a disabled button, a spinner) are not changes.
+function sigOf(b: Pick<Body, "title" | "html" | "history" | "outputs" | "activeOutput" | "projectId">): string {
+  return JSON.stringify([b.title, b.projectId ?? "", b.history, revive(b.html).textContent ?? "", b.outputs ?? [], b.activeOutput ?? ""]);
+}
+class Stale extends Error {}
+function persist(c: Chat, body: Body): void {
+  const sig = sigOf(body);
+  // A device that only looked at a chat has nothing to save, and must not save its old copy.
+  if (sig === c.sig && c.ts !== undefined) return;
   // Serialize writes per chat: an earlier request must not overwrite a completed job.
+  // The version is read when the request goes, after the previous write has answered.
   const next = (writes.get(body.id) ?? Promise.resolve()).then(async () => {
-    const r = await fetch("/api/v1/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? httpMsg(r.status));
+    const r = await fetch("/api/v1/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, base: c.ts ?? 0 }) });
+    const d = await r.json().catch(() => ({})) as { error?: string; ts?: number };
+    if (r.status === 409) throw new Stale(d.error ?? "this chat changed on another device");
+    if (!r.ok) throw new Error(d.error ?? httpMsg(r.status));
+    c.ts = d.ts; c.sig = sig;
     writeFailures.delete(body.id);
-  }).catch((e: Error) => { writeFailures.set(body.id, e); H.toast(`This chat was not saved: ${errText(e)}`); });
+  }).catch((e: Error) => {
+    writeFailures.set(body.id, e);
+    if (e instanceof Stale) staleChat(c);
+    else H.toast(`This chat was not saved: ${errText(e)}`);
+  });
   writes.set(body.id, next);
   void next.then(() => { if (writes.get(body.id) === next) writes.delete(body.id); });
 }
@@ -220,7 +263,7 @@ function persist(body: { id: string; pid: string; title: string; html: string; h
 // resave a chat that is not on screen (rename, move)
 function resave(pid: string, c: Chat): void {
   if (!c.saved) return;
-  const go = () => persist({ id: c.id, pid, title: c.title, html: [...c.nodes.childNodes].map((n) => (n as Element).outerHTML ?? n.textContent ?? "").join(""), history: c.history, projectId: c.projectId, ...inChat(c.id, savedOutputs) });
+  const go = () => persist(c, { id: c.id, pid, title: c.title, html: [...c.nodes.childNodes].map((n) => (n as Element).outerHTML ?? n.textContent ?? "").join(""), history: c.history, projectId: c.projectId, ...inChat(c.id, savedOutputs) });
   if (cur?.cid === c.id) { saveChat(); return; }
   if (c.loaded) go(); else fetchChat(c).then(go).catch((e: Error) => H.toast(`This chat was not saved: ${errText(e)}`));
 }
@@ -246,6 +289,26 @@ export async function restoreChats(pending?: Promise<Response>): Promise<void> {
     H.history.splice(0, H.history.length);
     chats.set(pid, (chats.get(pid) ?? []).filter((x) => x.saved || x.id !== cur?.cid));
     load(pid, first.id);
+  }
+  H.renderSide();
+}
+
+// Back on screen (a phone woken, a tab switched to): chats made or changed on another device
+// show up, and one changed there opens fresh rather than from the copy held here.
+let refreshedAt = 0;
+export async function refreshChats(): Promise<void> {
+  if (Date.now() - refreshedAt < 5_000) return;
+  refreshedAt = Date.now();
+  const r = await fetch("/api/v1/chats");
+  const d = await r.json() as { chats?: { id: string; pid: string; title: string; ts: number }[]; error?: string };
+  if (!r.ok) throw new Error(d.error ?? httpMsg(r.status));
+  for (const m of [...(d.chats ?? [])].reverse()) {
+    const list = chats.get(m.pid) ?? [];
+    const c = list.find((x) => x.id === m.id);
+    if (!c) { list.unshift({ id: m.id, title: m.title, nodes: document.createDocumentFragment(), history: [], saved: true }); chats.set(m.pid, list); continue; }
+    if (cur?.cid === c.id || writes.has(c.id)) continue;
+    c.title = m.title;
+    if (c.loaded && c.ts !== undefined && m.ts > c.ts) { c.loaded = false; c.ts = undefined; c.sig = undefined; }
   }
   H.renderSide();
 }

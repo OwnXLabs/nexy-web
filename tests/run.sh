@@ -48,6 +48,8 @@ check "routine approval: pending routines wait for Confirm or Discard, clean con
 check "routine times: the device's zone reaches the agent, UTC fallback, local times in the view" node --test --test-timeout=180000 tests/routine-tz.cjs
 check "beta reports: preview is what is sent, secrets removed, private sends nothing, no badge off beta" node --test --test-timeout=180000 tests/beta-report.cjs
 check "a computer that stops answering: plain words, no countdown, never the browser's wording" node --test --test-timeout=180000 tests/computer-away.cjs
+check "two devices on one chat: an older copy never saves over newer turns" node --test --test-timeout=180000 tests/chat-two-devices.cjs
+check "the model dies mid-answer: words kept, Continue" node --test --test-timeout=180000 tests/model-dies.cjs
 check "killed mid-answer: question and partial answer kept, marked interrupted, asked again once" node --test --test-timeout=180000 tests/interrupted-chat.cjs
 check "long answers: room for 4096 tokens, a cut reply says so and continues" node --test --test-timeout=180000 tests/long-answers.cjs
 check "old browsers: nothing in the built client that Android WebView 91 or Safari 15 lacks" ts tests/old-browsers.test.ts

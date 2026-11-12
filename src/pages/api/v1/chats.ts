@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { clean, example, exampleAsset, examples, get, list, put, remove } from "../../../lib/chats";
+import { clean, Conflict, example, exampleAsset, examples, get, list, put, remove } from "../../../lib/chats";
 import { owner } from "../../../lib/owner";
 
 export const prerender = false;
@@ -30,8 +30,12 @@ export const POST: APIRoute = async (ctx) => {
   try { body = await ctx.request.json(); } catch { return json({ error: "body must be JSON" }, 400); }
   const c = clean(body);
   if (!c) return json({ error: "not a chat (bad id, project or size)" }, 400);
-  try { await put(who, c); return json({ ok: true, ts: c.ts }); }
-  catch (e) { return json({ error: `the chat could not be saved: ${(e as Error).message}` }, 500); }
+  const b = (body as { base?: unknown }).base;
+  try { await put(who, c, typeof b === "number" && Number.isFinite(b) ? b : 0); return json({ ok: true, ts: c.ts }); }
+  catch (e) {
+    if (e instanceof Conflict) return json({ error: e.message, ts: e.current }, 409);
+    return json({ error: `the chat could not be saved: ${(e as Error).message}` }, 500);
+  }
 };
 
 export const DELETE: APIRoute = async (ctx) => {
