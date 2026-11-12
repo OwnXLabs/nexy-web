@@ -76,7 +76,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           ? "agent gateway busy: the model is serving other requests"
           : `agent gateway upstream failed: ${fault.slice(0, 120)}`);
       }
-      return { reply, via: name, grounded: true };
+      return { reply, via: name, grounded: true, cut: body?.choices?.[0]?.finish_reason === "length" };
     },
 
     async browsed(session, since) {

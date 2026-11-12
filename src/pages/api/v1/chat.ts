@@ -295,6 +295,8 @@ export const POST: APIRoute = async (ctx) => {
         grounded: r.grounded,
         // the agent used its browser, or the page was opened on its screen: the client shows the screen
         browsed: browsed || onScreen || undefined,
+        // stopped at the length limit: the client offers to continue
+        cut: r.cut || undefined,
         upstream: decided.why,
         private: priv || undefined,
       } };
@@ -321,7 +323,7 @@ export const POST: APIRoute = async (ctx) => {
           if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";
           answered(r.reply);
           logTurn({ via: r.via, fallback: true, ms: Date.now() - startedAt, ...(isEval ? { eval: true } : {}) }, priv);
-          return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true } };
+          return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true, cut: r.cut || undefined } };
         } catch (e2: any) {
           logTurn({ via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ...(isEval ? { eval: true } : {}) }, priv);
         }

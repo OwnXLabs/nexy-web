@@ -1856,7 +1856,7 @@ async function playChat(text: string, priv = false): Promise<void> {
   saveChat();
   let savedAt = Date.now();
   try {
-    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean };
+    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean };
     // tz: routines the agent makes run at this device's local time
     const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
@@ -1883,7 +1883,11 @@ async function playChat(text: string, priv = false): Promise<void> {
     const m = d.choices?.[0]?.message;
     // the agent asks for the person (a password, a code, a CAPTCHA) with a marker it ends the reply on
     const { answer, ask } = takeoverAsk([m?.content, m?.reasoning_content].filter(Boolean).join("\n\n").trim());
-    const offer = () => { if (ask && !priv) offerTakeover(holder, ask); };
+    const offer = () => {
+      if (ask && !priv) offerTakeover(holder, ask);
+      // the model hit its length limit: say so rather than stop mid-sentence
+      if (d.cut) holder.querySelector(".bub")!.insertAdjacentHTML("beforeend", `<div class="feednote" data-cut>Answer cut short. <button type="button" class="btn small" data-continue>Continue?</button></div>`);
+    };
     if (answer) noteMs("chat", Date.now() - askedAt);
 
     if (!answer) throw new Error(d.error ?? "the model returned an empty message");
@@ -2398,8 +2402,11 @@ function wireComposer(): void {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(inp.value); }
   });
   btn?.addEventListener("click", () => void send(inp.value));
-  // "Ask again" under an answer that Nexy closed before it finished (saveChat in shell.ts)
+  // "Continue?" under an answer cut at the length limit; "Ask again" under one Nexy closed
+  // before it finished (saveChat in shell.ts)
   document.addEventListener("click", (e) => {
+    const more = (e.target as Element | null)?.closest<HTMLButtonElement>("#thread [data-continue]");
+    if (more) { more.remove(); void send("Continue from where you stopped."); return; }
     const again = (e.target as Element | null)?.closest<HTMLButtonElement>("#thread [data-ask-again]");
     if (!again) return;
     const q = again.dataset.askAgain ?? "";
