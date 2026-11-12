@@ -44,5 +44,6 @@ test("the prompt carries the names, the fix and the file", () => {
   assert.match(p, /did not pass a check: it left out the name/);
   assert.match(p, /Save it as index\.html\.$/);
   assert.match(promptFor("make me a pong game"), /start screen/);
+  assert.match(p, /Never invent an address, phone number[^.]*years in business, awards[^.]*claims; [^.]*\[Your address\]/, "no made-up facts");
   assert.doesNotMatch(promptFor("build me a website for a ping pong ball business"), /start screen/);
 });

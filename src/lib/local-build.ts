@@ -107,6 +107,8 @@ export function promptFor(brief: string, fix = ""): string {
     brief.trim().replace(/[.!?]*$/, "."),
     `Make it about exactly this${n.length ? `, with ${n.map((x) => `"${x}"`).join(" and ")} written as given` : ""}: real content for it, no placeholder companies, people, testimonials or lorem ipsum.`,
     "Give it what a real one has, filled in, and keep the layout simple and responsive so no text overlaps.",
+    // 0.2.8 gave a store an address ("Barangay Commonwealth") and "over 15 years" of history
+    "Use only facts the brief gives. Never invent an address, phone number, email, opening hours, prices, years in business, awards, reviews or claims; where a real one would show them, write a plain placeholder such as [Your address] or [Year founded].",
     ...(GAME.test(brief) ? ["Draw the start screen right away and show which keys to press."] : []),
     ...(fix ? [`Your last version did not pass a check: ${fix}. Fix that this time.`] : []),
     "Save it as index.html.",
