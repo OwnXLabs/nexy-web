@@ -3,10 +3,11 @@ import { hasStudio } from "./place";
 import { pickFor } from "./pick";
 import { chatScope, visibleChat, inChat } from "./chat-scope";
 import type { ChatOutput } from "../lib/chat-output";
-import { htmlArtifact, gameArtifact } from "./content-view";
+import { htmlArtifact, gameArtifact, markdownArtifact } from "./content-view";
 import { imageArtifact } from "./image-tools";
 import { sheetArtifact } from "./sheet-view";
 import { artifactFor } from "./artifacts";
+import { errText, httpMsg } from "./http";
 export type ArtifactKind =
   | "plan" | "image" | "audio" | "html" | "doc" | "table" | "text"
   | "code" | "diagram" | "game" | "screen";
@@ -24,25 +25,8 @@ export interface Artifact {
   source?: { get(): string; set(html: string): void };
 }
 
-const OWNER: Record<ArtifactKind, { label: string; app: string | null }> = {
-  image: { label: "Open in Studio", app: "images" },
-  audio: { label: "Open in Studio", app: "beat" },
-  html: { label: "Open in Browser", app: "qiki" },
-  plan: { label: "Open in Projects", app: "startup" },
-  doc: { label: "Open in Docs", app: "docs" },
-  table: { label: "Open in Analytics", app: null },
-  text: { label: "Open", app: null },
-  code: { label: "Open in Code", app: null },
-  diagram: { label: "Open in Flow", app: null },
-  game: { label: "Open in Play", app: null },
-  screen: { label: "Open", app: null },
-};
-
-// only the studios this machine has: a computer or Nexy Cloud has no app sites to hand work to
-const APP_URL: Record<string, string> = Object.fromEntries(
-  ["images", "beat", "qiki", "startup", "docs"].filter(hasStudio).map((a) => [a, `https://${a}.${location.hostname.replace(/^nexy\./, "")}/`]),
-);
-
+// the Docs app; it opens one document from ?doc=<id>
+const DOCS_URL = `https://docs.${location.hostname.replace(/^nexy\./, "")}/`;
 import { trackOpen, openEditable } from "./edit-loop";
 import { startFx } from "./genfx";
 import { plainName } from "./state";
@@ -119,6 +103,7 @@ function restored(o: ChatOutput): Artifact {
   const base = { id: o.id, kind, title: o.title, meta: o.meta, href: o.href };
   // a sheet keeps its CSV: rebuilt as a page, a reopened chat showed it as raw text (QA 2026-11-12)
   if (o.source !== undefined && kind === "table") { const a = sheetArtifact({ title: o.title, rows: [], meta: o.meta }); a.source!.set(o.source); return { ...a, id: o.id }; }
+  if (o.source !== undefined && kind === "doc") return { ...markdownArtifact({ title: o.title, meta: o.meta, md: o.source }), id: o.id };
   if (o.source !== undefined) return { ...(kind === "game" ? gameArtifact({ ...base, html: o.source }) : htmlArtifact({ ...base, html: o.source })), id: o.id };
   if (kind === "image" && o.href) return imageArtifact({ ...base, src: o.href });
   if (o.href) return { ...artifactFor({ kind, title: o.title, app: o.href.split("/")[3] ?? "nexy", appLabel: o.meta?.split(" · ")[0] ?? "Nexy", ts: 0, href: o.href }), id: o.id, meta: o.meta };
@@ -434,40 +419,11 @@ function paint(): void {
 
   const openBtn = $("#cvOpenApp");
   if (openBtn) {
-    const owner = OWNER[a.kind];
+    const how = opener(a);
     const txt = openBtn.querySelector(".txt");
-    if (txt) txt.textContent = a.gen ? "Open" : owner.label;
-    // the agent's screen is a live view: nothing to open, edit, share or download
-    openBtn.style.display = a.id.startsWith("deck:") || a.kind === "screen" ? "none" : "";
-    openBtn.onclick = () => {
-      // the page as it is on the right, edits included; Own Build's preview is the original
-      const page = a.kind === "html" || a.kind === "game" ? a.source?.get() : undefined;
-      if (page?.trim()) {
-        const attr = page.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-        const shell = `<!doctype html><meta charset="utf-8"><title>${esc(a.title ?? "Preview")}</title><style>html,body,iframe{margin:0;border:0;width:100%;height:100%;display:block}</style><iframe sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads" srcdoc="${attr}"></iframe>`;
-        const url = URL.createObjectURL(new Blob([shell], { type: "text/html" }));
-        window.open(url, "_blank", "noopener");
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        return;
-      }
-      if (a.href && (a.kind === "game" || a.kind === "html")) {
-        window.open(new URL(a.href, location.href).href, "_blank", "noopener");
-        return;
-      }
-      const base = owner.app ? APP_URL[owner.app] : null;
-      if (!base) {
-        say(`No app on this machine owns a ${a.kind} yet, so there is nowhere to hand it to.`);
-        return;
-      }
-      const deep = a.href && /^https?:/.test(a.href);
-      window.open(deep ? a.href! : base, "_blank", "noopener");
-      if (!deep) {
-        say(
-          `Opened ${owner.label.replace(/^Open in /, "")}. It cannot jump straight to ` +
-          `"${a.title}" yet — the apps do not take an artifact id in the URL.`,
-        );
-      }
-    };
+    if (txt) txt.textContent = how?.label ?? "Open";
+    openBtn.style.display = how ? "" : "none";
+    openBtn.onclick = how ? how.go : null;
   }
 
   for (const id of ["#cvEdit", "#cvShare"]) {
@@ -494,7 +450,7 @@ function paint(): void {
       if (src?.trim()) {
         const ext = /<html|<!doctype/i.test(src) ? "html" : a.kind === "doc" ? "md" : a.kind === "table" ? "csv" : "txt";
         const url = URL.createObjectURL(new Blob([src], { type: ext === "html" ? "text/html" : "text/plain" }));
-        save(url, `${name}.${ext}`);
+        save(url, name.toLowerCase().endsWith(`.${ext}`) ? name : `${name}.${ext}`);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         return;
       }
@@ -525,6 +481,89 @@ function paint(): void {
       body.appendChild(note);
     }
   }
+}
+
+const newTab = (url: string) => window.open(url, "_blank", "noopener");
+
+// Own Docs opens one document from `?doc=<id>` when its health lists "doc-link"
+let docLink: boolean | undefined;
+let docLinkAsked = false;
+function checkDocLink(): void {
+  if (docLinkAsked) return;
+  docLinkAsked = true;
+  // a 503 still carries the body: read it, not r.ok
+  fetch("/api/apps/docs/api/v1/health").then((r) => r.json()).then(
+    (h: { features?: unknown }) => { docLink = Array.isArray(h?.features) && h.features.includes("doc-link"); },
+    (e) => { console.warn("[nexy] Own Docs health:", e); docLink = false; },
+  ).then(() => { if (docLink && current()?.kind === "doc" && isOpen()) paint(); });
+}
+
+// the Own Docs id of each chat document, so a second click does not upload it again
+const docIds = new Map<string, { md: string; id: Promise<number> }>();
+async function uploadDoc(a: Artifact, md: string): Promise<number> {
+  const had = docIds.get(a.id);
+  if (had?.md === md) return had.id;
+  const id = (async () => {
+    const name = /\.md$/i.test(a.title) ? a.title : `${a.title}.md`;
+    const r = await fetch(`/api/apps/docs/api/v1/documents?${new URLSearchParams({ filename: name })}`, {
+      method: "POST", headers: { "content-type": "text/markdown" }, body: md,
+    });
+    const d = await r.json().catch((e) => { console.warn("[nexy] Own Docs upload:", e); return {}; }) as { accepted?: { docId?: unknown; error?: string }[]; error?: string };
+    const got = d.accepted?.[0];
+    if (typeof got?.docId !== "number") throw new Error(got?.error ?? d.error ?? httpMsg(r.status));
+    return got.docId;
+  })();
+  docIds.set(a.id, { md, id });
+  id.catch(() => { if (docIds.get(a.id)?.id === id) docIds.delete(a.id); });
+  return id;
+}
+// indexing runs after the upload; the viewer says so if it is still going after 20 s
+async function ready(id: number): Promise<void> {
+  for (const end = Date.now() + 20_000; Date.now() < end; await new Promise((ok) => setTimeout(ok, 700))) {
+    const d = await fetch(`/api/apps/docs/api/v1/document?id=${id}`).then((r) => r.json())
+      .catch((e) => { console.warn("[nexy] Own Docs document:", e); return null; }) as { doc?: { status?: string } } | null;
+    if (d?.doc?.status === "ready" || d?.doc?.status === "error") return;
+  }
+}
+
+function opener(a: Artifact): { label: string; go: () => void } | null {
+  // a live view or a job still running has nothing to open
+  if (a.gen || a.kind === "screen" || a.id.startsWith("deck:")) return null;
+  // the page as it is on the right, edits included; Own Build's preview is the original
+  const page = a.kind === "html" || a.kind === "game" ? a.source?.get() : undefined;
+  if (page?.trim()) return { label: "Open in a new tab", go: () => {
+    const p = a.source?.get() ?? page;
+    const attr = p.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+    const shell = `<!doctype html><meta charset="utf-8"><title>${esc(a.title ?? "Preview")}</title><style>html,body,iframe{margin:0;border:0;width:100%;height:100%;display:block}</style><iframe sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads" srcdoc="${attr}"></iframe>`;
+    const url = URL.createObjectURL(new Blob([shell], { type: "text/html" }));
+    newTab(url);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } };
+  if (a.href && (a.kind === "html" || a.kind === "game" || /^https?:/.test(a.href))) {
+    const href = a.href;
+    return { label: "Open in a new tab", go: () => { newTab(new URL(href, location.href).href); } };
+  }
+  if (a.kind !== "doc" || !hasStudio("docs") || a.ephemeral) return null;
+  checkDocLink();
+  if (!docLink) return null;
+  // already in Own Docs (an attached file), or written in chat and uploaded on the first click
+  const held = a.href?.startsWith("/api/apps/docs/api/v1/document?") ? Number(new URL(a.href, location.origin).searchParams.get("id")) : NaN;
+  const md = a.snapshot?.().source;
+  if (!Number.isFinite(held) && !md?.trim()) return null;
+  return { label: "Open in Docs", go: () => {
+    if (Number.isFinite(held)) { newTab(`${DOCS_URL}?doc=${held}`); return; }
+    // opened now, while the click still counts, so the browser does not block it
+    const tab = window.open("", "_blank");
+    if (tab) tab.opener = null;
+    uploadDoc(a, md!).then(async (id) => {
+      await ready(id);
+      const url = `${DOCS_URL}?doc=${id}`;
+      if (tab && !tab.closed) tab.location.href = url; else newTab(url);
+    }, (e) => {
+      tab?.close();
+      say(`${plainName(a.title)} could not be put in Own Docs: ${errText(e)}. It is still here.`);
+    });
+  } };
 }
 
 function wireHeader(): void {

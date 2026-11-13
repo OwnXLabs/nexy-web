@@ -128,3 +128,14 @@ regex lookbehind, `:has()`, range media queries and others; `NEXY_DIST` scans an
 checks that a reply still being written runs past 90 s (it streams for 150 s), that an engine
 silent past `NEXY_AGENT_BUDGET_MS` is stopped with its words kept, and that a length stop offers
 Continue. About 2.5 minutes, the three side by side.
+
+Work pane Open button
+=====================
+
+`tests/open-in.cjs` (in `tests/run.sh`) restores a chat holding every kind of output and checks
+that Open shows only when the click opens that exact item: a page or game in a new tab, a
+document in Own Docs as `?doc=<id>`. A stand-in Own Docs advertises `"features": ["doc-link"]`
+in its health; without it, no Open in Docs shows. A document written in chat is uploaded once,
+however many times Open is clicked, and the tab opens after indexing. A refused upload is said
+plainly and the document stays. Every visible work-pane button is clicked and none may lead to
+a "cannot" or "not yet" message.

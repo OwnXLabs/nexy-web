@@ -159,6 +159,8 @@ export function markdownArtifact(m: Made & { md: string }): Artifact {
     title: m.title,
     meta: m.meta,
     href: m.href,
+    // the Markdown itself is saved: Download and Open in Docs need it after a reload
+    snapshot: () => ({ source: m.md }),
     render(host) {
       if (!m.md.trim()) {
         host.innerHTML = nothing("document", "Own Docs is the app that holds documents on this machine.");

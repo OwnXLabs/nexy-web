@@ -36,9 +36,8 @@ function unfetchable(f: FeedLike, medium: string): (host: HTMLElement) => void {
       `<div class="pad"><div class="empty" style="text-align:left">` +
       `<b>${esc(f.title)}</b><br><span class="faint">` +
       `${esc(f.appLabel)} holds this ${esc(medium)}, made ${esc(when(f.ts))}. ` +
-      `It cannot be shown here yet: the app lists what it has but does not serve the file ` +
-      `over a URL, so there is nothing for this pane to load. Use the button above to open ` +
-      `${esc(f.appLabel)}.</span></div></div>`;
+      `${esc(f.appLabel)} lists it but does not send the file, so it cannot be shown here. ` +
+      `Open ${esc(f.appLabel)} to see it.</span></div></div>`;
   };
 }
 
