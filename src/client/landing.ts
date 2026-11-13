@@ -1,7 +1,7 @@
 // The chat home, after the v23 landing design: the greeting with three suggestions, the
 // Get started list, the model download chip and the first-visit pill. Only what works on this
 // machine is offered; what isn't here is left out or explained.
-import { hasApp, here, onOwn1 } from "./place";
+import { hasApp, here, inCloud, onOwn1 } from "./place";
 import { prefs } from "./settings";
 
 export interface LandingHooks {
@@ -83,7 +83,7 @@ function hello(): string {
     ...(hasApp("hub") ? ["work with your apps"] : []),
   ]);
   const tail = model.ready ? "What should we start with?" : `I’m still downloading ${esc(model.model ?? "the model")}, but you can give me a job now.`;
-  return `Hi${n ? ` ${esc(n)}` : ""}. I ${can}${onOwn1 ? "" : ", privately on this computer"}. ${tail}`;
+  return `Hi${n ? ` ${esc(n)}` : ""}. I ${can}${onOwn1 || inCloud ? "" : ", privately on this computer"}. ${tail}`;
 }
 
 /** The home greeting in an empty chat with no project open. */
@@ -116,12 +116,14 @@ function items(): Item[] {
   if (hasApp("voice")) out.push({ k: "voice", t: "Talk instead of typing", act: "Try it now", run: () => H.talk(),
     tip: `<b>Just talk</b>${isPhone() ? "Hold the mic button and speak. Let go, check the words, then Send." : 'Hold <span class="gs-key">Space</span> anywhere and speak. Let go, check the words, then press Enter.'}` });
   // a computer's Nexy reaches a phone through the app's "Add your phone…" (a QR code over the mesh)
-  if (!onOwn1) out.push({ k: "phone", t: "Get Nexy on your phone", act: "Got it", run: () => did("phone"),
+  if (!onOwn1 && !inCloud) out.push({ k: "phone", t: "Get Nexy on your phone", act: "Got it", run: () => did("phone"),
     tip: "<b>Approve from anywhere</b>In the <b>Nexy</b> menu at the top of the screen, choose <b>Add your phone…</b>, then scan the code with Nexy on your phone. It is this same Nexy, with your chats." });
   else out.push(loop
     ? { k: "phone", t: "Get Nexy on your phone", tip: "<b>Approve from anywhere</b>Open your Own1’s Nexy address in your phone’s browser. It is this same Nexy, with your chats and approvals." }
     : { k: "phone", t: "Get Nexy on your phone", act: "Copy link", run: () => void copyLink(),
       tip: `<b>Approve from anywhere</b>Open <span class="gs-key">${esc(location.host)}</span> in your phone’s browser. It is this same Nexy, with your chats and approvals.` });
+  // Nexy Cloud connects no apps and links nothing yet
+  if (inCloud) return out;
   out.push({ k: "apps", t: "Connect an app", act: "Choose an app", run: () => H.settings("connections"),
     tip: hasApp("hub") && !onOwn1 ? "<b>Work where you work</b>Gmail and Google Drive, read-only, each one only after you approve it in your browser. Its sign-in stays on this computer."
       : hasApp("hub") ? "<b>Work where you work</b>Telegram, Gmail, GitHub, Notion… each one gets only the access it needs, and you can see exactly what."

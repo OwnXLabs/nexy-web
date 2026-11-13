@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { promises as fs } from "node:fs";
-import { identityOwner } from "../../../lib/owner";
+import { boxOwner } from "../../../lib/owner";
 
 export const prerender = false;
 
@@ -40,7 +40,7 @@ export const GET: APIRoute = async ({ request }) => {
   if (!password) return json({ available: false });
   // local development opts in to watching without a demo session; nowhere else may a failed check open it
   const local = process.env.NEXY_SCREEN_LOCAL === "1" && (await session(request)) === "unknown";
-  if (!local && !identityOwner(request) && (await session(request)) !== "yes") return json({ available: true, watch: false, reason: "Sign in to the demo to watch the agent's screen." });
+  if (!local && !boxOwner(request) && (await session(request)) !== "yes") return json({ available: true, watch: false, reason: "Sign in to the demo to watch the agent's screen." });
   return json({ available: true, watch: true, control: true, driving: await driving(), password, path: "/screen/ws" });
 };
 
@@ -50,7 +50,7 @@ export const GET: APIRoute = async ({ request }) => {
 export const POST: APIRoute = async ({ request }) => {
   let body: any;
   try { body = JSON.parse(await request.text()); } catch (e) { return json({ error: `bad json: ${(e as Error).message}` }, 400); }
-  if (!identityOwner(request) && (await session(request)) !== "yes") return json({ error: "Only the person signed in to the demo can use the agent's screen." }, 403);
+  if (!boxOwner(request) && (await session(request)) !== "yes") return json({ error: "Only the person signed in to the demo can use the agent's screen." }, 403);
   if (body?.take === true) {
     const full = await secret("full");
     if (!full) return json({ error: "The agent's screen cannot be controlled on this machine." }, 503);

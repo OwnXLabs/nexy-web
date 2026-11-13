@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { randomUUID } from "node:crypto";
 import { visible } from "../../../lib/stream-guard";
 import { owner, remember, upstreamFor } from "./private/_session";
-import { owner as signedOwner } from "../../../lib/owner";
+import { gateUser, owner as signedOwner } from "../../../lib/owner";
 
 function logTurn(fields: Record<string, unknown>, isPrivate: boolean): void {
   if (isPrivate) return;
@@ -39,6 +39,22 @@ import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
 
 export const prerender = false;
+
+// Where Nexy runs: an Own1 (the default), a computer (NEXY_STUDIOS=off) or Nexy Cloud (NEXY_PLACE=cloud)
+const CLOUD = process.env.NEXY_PLACE === "cloud";
+// NEXY_SCREEN=none: no agent browser, so nothing opens on a screen and no step is handed over
+const SCREEN = process.env.NEXY_SCREEN !== "none";
+const NO_HANDOVER = /\s*\[\[take-control:[^\]\n]*(?:\]\]|\s*$)/gi;
+const WHERE = CLOUD
+  ? [
+    "You are Nexy, the assistant in Nexy Cloud, hosted by OwnX on servers it operates.",
+    "Everything you do runs on this server. Web searches go out through its private search engine;",
+    "nothing else leaves it unless the user is asked first.",
+  ]
+  : [
+    `You are Nexy, the assistant on ${process.env.NEXY_STUDIOS === "off" ? "this computer" : "an Own1 machine"}. You are not a cloud service.`,
+    "Everything you do runs on this device. Nothing leaves it unless the user is asked first.",
+  ];
 
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), {
@@ -106,20 +122,20 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
     open?: { title?: string; text?: string };
   };
   const lines: string[] = [
-    `You are Nexy, the assistant on ${process.env.NEXY_STUDIOS === "off" ? "this computer" : "an Own1 machine"}. You are not a cloud service.`,
+    WHERE[0],
     // without it the model took its training year for today: "SpaceX is a private company", and
     // today's articles dated 2025 (2026-10-28)
     `Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`,
     "What you know from training stops well before today: never say from memory that",
     "something is private, does not exist or has not happened.",
-    "Everything you do runs on this device. Nothing leaves it unless the user is asked first.",
+    ...WHERE.slice(1),
     "Be brief and concrete. Never invent activity, files, agents or numbers you were not given.",
     // 2026-11-12: after "search isn't working" a local model made up steps it said it had given
     "If a search or tool fails, say plainly you can't check that right now. Never invent facts,",
     "steps, sources or news to fill the gap. Never say you said something earlier unless it is",
     "in this conversation.",
     "If you do not have something, say plainly what is missing rather than apologising or",
-    "claiming you have no access to the machine -- you are ON the machine.",
+    CLOUD ? "claiming you have no access to the server -- you run ON it." : "claiming you have no access to the machine -- you are ON the machine.",
     "The user can attach files -- documents, spreadsheets, PDFs, images -- with the",
     "paperclip or by dropping them into the chat, and you read them here. Never say",
     "you cannot read files.",
@@ -131,7 +147,7 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
     "With nothing attached yet, they can also say \"use sample data\" to try it on a",
     "clearly fictional set of business records.",
   );
-  if (!priv) lines.push(
+  if (!priv && SCREEN) lines.push(
     "",
     "When a page in your browser needs the person (signing in, a code, a CAPTCHA, a payment),",
     "never ask for a password or code in chat. Say what they need to do and end the reply with",
@@ -148,13 +164,16 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
   } else {
     lines.push(
       "",
-      "They watch your browser live, beside the chat. To show them a page, open it in your",
-      "browser. Never paste screenshots, images or base64 into a reply.",
+      ...(SCREEN ? [
+        "They watch your browser live, beside the chat. To show them a page, open it in your",
+        "browser. Never paste screenshots, images or base64 into a reply.",
+      ] : ["Never paste screenshots, images or base64 into a reply."]),
       "For prices, news, companies, people or anything that changes, look it up before answering.",
       // 2026-10-28: with every search engine rate-limited, the agent searched 60+ times, then
       // answered from memory that SpaceX "has never IPO'd"; its own browser showed the price
       "If two searches come back empty or fail, stop searching: say search is not working right",
-      "now, do not fill in current facts from memory, and offer to open a site in your browser.",
+      SCREEN ? "now, do not fill in current facts from memory, and offer to open a site in your browser."
+        : "now, and do not fill in current facts from memory.",
     );
   }
 
@@ -242,6 +261,8 @@ export const POST: APIRoute = async (ctx) => {
 
   const priv = body?.private === true;
   const picker = signedOwner(ctx);
+  // the person a gate signed in: their own engine where they have one, and their own sessions in it
+  const user = gateUser(ctx.request);
   // the same question sent again (its first request got no answer in time): join that turn
   const key = typeof body?.turnKey === "string" && /^[A-Za-z0-9-]{8,64}$/.test(body.turnKey) ? body.turnKey : "";
   const again = body?.stream === true ? rejoin(picker, key) : null;
@@ -262,9 +283,9 @@ export const POST: APIRoute = async (ctx) => {
       remember(who, { role: "assistant", content: text, ts: Date.now() }, priv);
   };
 
-  const decided = upstreamFor(engineFor(false, false, picker).id === "gateway", priv);
+  const decided = upstreamFor(engineFor(false, false, picker, user).id === "gateway", priv);
   const isEval = wantsEval(body?.eval === true);
-  const eng = engineFor(priv, isEval, picker);
+  const eng = engineFor(priv, isEval, picker, user);
   // one agent session per chat, so its browser keeps the page between turns. The chat id comes
   // from the browser and is guessable, so the key also binds the caller and their demo sign-in:
   // nobody can name another visitor's chat and load its history.
@@ -285,7 +306,8 @@ export const POST: APIRoute = async (ctx) => {
   // stopped while still writing: what it wrote is kept, and the person is offered to continue
   // `broke`: the model died mid-answer (Ollama killed), rather than running past its budget
   const stoppedTurn = (b: Budget, via: string, broke = false) => {
-    const reply = guard(dropInlineImages(b.text, false));
+    const cut = guard(dropInlineImages(b.text, false));
+    const reply = SCREEN ? cut : cut.replace(NO_HANDOVER, "").trim();
     answered(reply);
     log({ result: "stopped", via, stopped: b.stopped, ms: Date.now() - startedAt, replyChars: reply.length });
     return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via, grounded: false, stopped: true, broke: broke || undefined, private: priv || undefined } };
@@ -293,8 +315,8 @@ export const POST: APIRoute = async (ctx) => {
   const run = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
     // asked to open a site: open it on the agent's screen first and hand the agent the page, so
     // the person watches it there even when the model would have searched instead
-    let browse = priv ? "" : browserTurn(String(said ?? ""));
-    const page = !priv && eng !== localEngine ? pageToOpen(String(said ?? "")) : null;
+    let browse = priv || !SCREEN ? "" : browserTurn(String(said ?? ""));
+    const page = !priv && SCREEN && eng !== localEngine ? pageToOpen(String(said ?? "")) : null;
     let onScreen = false, pageRead = false;
     // An ultra-private chat reaches nothing off the machine, so no connected app either. A question
     // about the owner's own app that was not read is answered here, plainly: it never reaches a
@@ -333,14 +355,16 @@ export const POST: APIRoute = async (ctx) => {
         heard,
         // attached files, mail, an open or fetched page: the agent then holds new routines for the owner
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
-        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}) },
+        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}) },
       );
-      const browsed = !!agentSession && !!use.browsed && await use.browsed(agentSession, startedAt).catch((e) => {
+      const browsed = SCREEN && !!agentSession && !!use.browsed && await use.browsed(agentSession, startedAt).catch((e) => {
         console.warn("[nexy] could not read the agent's tool use", (e as Error).message);
         return false;
       });
       r.reply = dropInlineImages(r.reply, browsed);
       r.reply = guard(r.reply);
+      // a small model still asks for a hand-over now and then: with no screen there is nothing to take
+      if (!SCREEN) r.reply = r.reply.replace(NO_HANDOVER, "").trim() || "That step needs a browser, and there isn't one here yet.";
       answered(r.reply);
       log({
         result: "answered",

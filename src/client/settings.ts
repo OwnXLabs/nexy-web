@@ -1,4 +1,7 @@
-import { hasApp, here, localVoice, onOwn1, voiceApi } from "./place";
+import { hasApp, here, inCloud, localVoice, onOwn1, voiceApi } from "./place";
+
+// where this Nexy and its data are, said plainly
+const onHere = onOwn1 ? "On this Own1" : inCloud ? "On Nexy Cloud's server" : "On this computer";
 import { APP_PASSWORDS, HUB, connectAppPassword, loadCatalog, loadGrants, pauseConnector, resumeConnector, revokeConnector, type CatalogEntry } from "./perm";
 import { httpMsg, errText } from "./http";
 
@@ -108,11 +111,11 @@ async function section(sec: string): Promise<string> {
   if (sec === "cloud") return `<h3>Nexy Cloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on ${here}. Everything runs here.</p>` +
     row("Connection", not("Not connected")) + row("Spending", not("Nothing can be spent"), "There is no wallet or payment method on this machine");
   if (sec === "security") return `<h3>Security and privacy</h3>` +
-    row("Where your data lives", not(onOwn1 ? "On this Own1" : "On this computer"), "Chats, files, builds and memory stay on this machine") +
-    row("Telemetry", not("Off"), "Nothing is sent to OwnX Labs") +
+    row("Where your data lives", not(onHere), inCloud ? "Chats and files stay on this server, which OwnX runs" : "Chats, files, builds and memory stay on this machine") +
+    row("Telemetry", not("Off"), inCloud ? "Nothing is sent anywhere beyond this server" : "Nothing is sent to OwnX Labs") +
     row("Ultra-private chats", not("In memory only"), "Nothing written to disk, nothing reaches the agent that keeps memory; gone when you leave") +
     (searchHere ? row("Web search", not("Only when you ask"), // the search runs here but asks the search engines directly (privacy engineering doc, §3.5)
-      `Through this machine's own search, never through OwnX. The search engines it asks see your query and ${onOwn1 ? "this Own1's" : "this computer's"} IP address, and so do pages Nexy opens`)
+      `Through this machine's own search, never through OwnX. The search engines it asks see your query and ${onOwn1 ? "this Own1's" : inCloud ? "Nexy Cloud's" : "this computer's"} IP address, and so do pages Nexy opens`)
       : row("Web search", not("Not set up"), `There is no web search on ${here} yet, so nothing is searched`)) +
     `<div class="sbtns"><button class="btn small" type="button" data-act="feedback">Show my feedback</button><button class="btn small" type="button" data-act="clearfb">Clear my feedback</button><button class="btn small" type="button" data-act="forget">Forget what Nexy remembers</button></div>`;
   if (sec === "appearance") return `<h3>Appearance</h3><h4>Theme</h4><div class="themes">` +
@@ -123,9 +126,9 @@ async function section(sec: string): Promise<string> {
     row("Reduce transparency", sw(P.reduce, "reduce")) + row("Text size", sel("size", [["compact", "Compact"], ["standard", "Standard"], ["medium", "Medium"], ["large", "Large"]], P.size));
   if (sec === "workspaces") {
     const n = H.projects().length;
-    return `<h3>Workspaces</h3>` + row(esc($("#pmWsName")?.textContent?.trim() || (onOwn1 ? "This Own1" : "This computer")), not(`${n} project${n === 1 ? "" : "s"}`)) + row("More workspaces", not("One per machine for now"));
+    return `<h3>Workspaces</h3>` + row(esc($("#pmWsName")?.textContent?.trim() || (onOwn1 ? "This Own1" : inCloud ? "Nexy Cloud" : "This computer")), not(`${n} project${n === 1 ? "" : "s"}`)) + row("More workspaces", not("One per machine for now"));
   }
-  return `<h3>About</h3>` + row("Nexy", not(onOwn1 ? "On this Own1" : "On this computer")) + await versionRows() + row("The agent", not("On this machine"), "Private chats use the local model directly and are never kept") +
+  return `<h3>About</h3>` + row("Nexy", not(onHere)) + await versionRows() + row("The agent", not("On this machine"), "Private chats use the local model directly and are never kept") +
     row("Speech", not(localVoice ? "On this computer" : hasApp("voice") ? "Own Voice, on this machine" : "Coming in an update")) + row("Web pages", not("Read on this machine"), "No cloud reader");
 }
 

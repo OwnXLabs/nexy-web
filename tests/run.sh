@@ -35,6 +35,8 @@ check "chat streams, resumes, hides engine faults" node --test --test-timeout=18
 check "network faults: latency, drops, silence" node --test --test-timeout=180000 tests/network-faults.cjs
 check "a hanging gateway and a lost question: every turn logged start to end, a question sent again joins its reply" node --test --test-timeout=180000 tests/gateway-stall.cjs
 check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
+check "Nexy Cloud: the gate names each person, their own engine and key, no box features, Nexy Cloud wording, no agent screen" node --test --test-timeout=180000 tests/cloud-mode.cjs
+check "Nexy Cloud wording in the page and in who Nexy says it is" ts tests/cloud-place.test.ts
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
 check "a computer without an Own1: no studio it lacks, no Own1 wording" node --test --test-timeout=180000 tests/local-mode.cjs
 check "building on this computer: names, subject, no outside files" ts tests/local-build.test.ts

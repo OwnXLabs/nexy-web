@@ -17,7 +17,8 @@ export function unreachable(e: unknown): boolean {
     (e instanceof TypeError && /fetch|network|load failed|connection/i.test(msg)) ||
     /aborted|went silent|connection dropped before|kept dropping/i.test(msg);
 }
+const AWAY: Record<string, string> = { computer: "Your computer", cloud: "Nexy Cloud" };
 export const away = (): string =>
-  `${typeof document !== "undefined" && document.documentElement.dataset.place === "computer" ? "Your computer" : "Your Own1"} isn't answering. Nexy will reconnect when it's back.`;
+  `${(typeof document !== "undefined" && AWAY[document.documentElement.dataset.place ?? ""]) || "Your Own1"} isn't answering. Nexy will reconnect when it's back.`;
 // what to show for a failed request: plain wording for a machine that can't be reached
 export const errText = (e: unknown): string => (unreachable(e) ? away() : String((e as Error | undefined)?.message ?? e));

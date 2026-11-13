@@ -36,6 +36,12 @@ NEXY_DATA_DIR=./data node dist/server/entry.mjs
 | `NEXY_HOSTS` | Names served besides loopback, comma separated (e.g. `nexy.example.com,my.example.com`; no port means any port). Any other `Host` gets `421`, which stops DNS rebinding. Loopback (`127.0.0.1`, `localhost`, `[::1]`) passes only on `PORT` |
 | `NEXY_SOCKET` | With `node dist/server/serve.mjs`: listen on this unix socket (mode 0660, group `NEXY_SOCKET_GROUP` if set; the service must be a member) instead of TCP, so only that group (e.g. nginx) can connect. Use it whenever `NEXY_TRUST_XNODE_AUTH=1`; on TCP that logs a warning |
 | `NEXY_CHAT_STORAGE_MB` | Saved chats per owner (default 512). A save past it gets `507` |
+| `NEXY_STUDIOS` | `off` on a machine without the Own studios (the Nexy app, Nexy Cloud): chat only, and the page offers nothing it lacks |
+| `NEXY_PLACE` | `cloud` for Nexy Cloud: the page, the prompt and Nexy's own identity say Nexy Cloud, hosted by OwnX |
+| `NEXY_SCREEN` | `none` where there is no agent browser: nothing is opened on a screen and no step is handed over |
+| `NEXY_TRUST_GATE_USER` | `1` behind Nexy Cloud's gate, which names each signed-in person in `x-nexy-user`: each one's chats and engine pick are their own, sent on to the engine as `x-nexy-user`, and none of them gets the box's own features. Use it only with `NEXY_SOCKET` and the gate as the socket's only client |
+| `NEXY_ENGINES`, `NEXY_ENGINE_<ID>_URL`, `_KEY` or `_KEY_FILE` | More agent engines, each picked per owner in Settings, each with its own key. `_LABEL` and `_NOTE` name one in Settings |
+| `NEXY_ENGINE_<ID>_USER_URLS`, `_USER_KEYS` | Behind the gate: a person's own copy of an engine (`u01=http://…,u02=…`) and its key (`u01:<key>,…`). Anyone without both uses the shared one |
 
 **Limits:** request bodies are capped at 1 MB (`413`), with larger caps only where a route takes more: studio uploads 48 MB, voice 26 MB, saved chats 16 MB, chat 8 MB, page edits 6 MB, problem reports 4 MB, beta reports 3 MB (`src/lib/gate.ts`). Problem reports stop at 500 per folder.
 

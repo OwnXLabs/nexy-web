@@ -1,4 +1,5 @@
 import { isPrivate } from "./private";
+import { hasStudio } from "./place";
 import { pickFor } from "./pick";
 import { chatScope, visibleChat, inChat } from "./chat-scope";
 import type { ChatOutput } from "../lib/chat-output";
@@ -37,8 +38,9 @@ const OWNER: Record<ArtifactKind, { label: string; app: string | null }> = {
   screen: { label: "Open", app: null },
 };
 
+// only the studios this machine has: a computer or Nexy Cloud has no app sites to hand work to
 const APP_URL: Record<string, string> = Object.fromEntries(
-  ["images", "beat", "qiki", "startup", "docs"].map((a) => [a, `https://${a}.${location.hostname.replace(/^nexy\./, "")}/`]),
+  ["images", "beat", "qiki", "startup", "docs"].filter(hasStudio).map((a) => [a, `https://${a}.${location.hostname.replace(/^nexy\./, "")}/`]),
 );
 
 import { trackOpen, openEditable } from "./edit-loop";

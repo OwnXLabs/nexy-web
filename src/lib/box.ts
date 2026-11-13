@@ -1,4 +1,4 @@
-import { identityOwner } from "./owner";
+import { boxOwner } from "./owner";
 
 // Whole-box features (the agent's memory across every chat, its scheduled routines) belong to the
 // box's owner, not to whoever reached the page. Off unless the deployment says who the owner is:
@@ -7,7 +7,8 @@ import { identityOwner } from "./owner";
 export function boxAllowed(request: Request): boolean {
   const mode = process.env.NEXY_BOX_FEATURES;
   if (mode === "open") return true;
-  if (mode === "owner") return identityOwner(request) !== null;
+  // a gate user is one of many people, never the owner
+  if (mode === "owner") return boxOwner(request) !== null;
   return false;
 }
 
