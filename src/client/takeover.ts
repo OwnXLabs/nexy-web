@@ -1,11 +1,15 @@
 // The agent asks the person for one step (a password, a code, a CAPTCHA) by ending its reply with
 // [[take-control: what they need to do]]. The marker never reaches the screen: the reply shows
 // without it and the step becomes a Take control button.
+import { dropPseudoCalls } from "../lib/pseudo-calls.ts";
+
 // a reply cut off mid-marker ends without the closing brackets; it is still the marker
 const MARK = /\[\[take-control:\s*([^\]\n]+)(?:\]\]|\s*$)/i;
 const ALL = /\s*\[\[take-control:[^\]\n]*(?:\]\]|\s*$)/gi;
 
-export function takeoverAsk(said: string): { answer: string; ask?: string } {
+export function takeoverAsk(raw: string): { answer: string; ask?: string } {
+  // any other tool call written as text goes, so a reply of only that is no answer
+  const said = dropPseudoCalls(raw);
   // an empty marker still means the agent needs the person, just without saying for what
   const marked = /\[\[take-control:/i.test(said);
   const step = MARK.exec(said)?.[1]?.trim().slice(0, 200);

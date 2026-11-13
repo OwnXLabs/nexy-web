@@ -45,12 +45,14 @@ function hub() {
 }
 
 // the agent (it has web search) and the model alone: every request is counted
-function engine(reply) {
+function engine(first) {
   const got = [];
+  const e = { got, reply: first };
   const srv = http.createServer(async (req, res) => {
     let raw = ''; for await (const c of req) raw += c;
     if (!req.url.endsWith('/chat/completions')) { res.writeHead(404).end('{}'); return; }
     const b = JSON.parse(raw || '{}');
+    const reply = e.reply;
     got.push({ system: String(b.messages?.find((m) => m.role === 'system')?.content ?? ''), user: String(b.messages?.at(-1)?.content ?? '') });
     if (b.stream) {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -61,7 +63,7 @@ function engine(reply) {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ choices: [{ message: { content: reply }, finish_reason: 'stop' }] }));
   });
-  return listen(srv).then((url) => ({ got, url, close: () => srv.close() }));
+  return listen(srv).then((url) => Object.assign(e, { url, close: () => srv.close() }));
 }
 
 async function start(env) {
@@ -224,4 +226,41 @@ test('in the browser: follow-ups read the mail in the regular chat; an email rou
     assert.equal(h.st.calls.length, calls + 5, 'no mailbox read for a routine');
     assert.deepEqual(errors, []);
   } finally { await b.close(); }
+});
+
+// QA 0.2.11: "open it" ran gmail_read, then the model answered nothing, "[[open-url: …]]" or
+// 'open_url("…")' 3 times in 4. The email itself is the answer; no model is asked.
+test('"open it" after a mail search shows the email in full, with no model or agent', { timeout: 60000 }, async () => {
+  h.st.mode = 'granted';
+  const calls = h.st.calls.length, modelBefore = model.got.length, agentBefore = agent.got.length;
+  const r = await chat(s, 'open it', {}, READ);
+  assert.equal(r.status, 200);
+  assert.deepEqual(h.st.calls.slice(calls).map((c) => c.name), ['gmail_search', 'gmail_read']);
+  assert.match(r.body.choices[0].message.content, /Subject: Invoice 4471 for October\nFrom: Acme Billing <billing@acme\.example>\n\nFULL-BODY: Amount due \$1,200 by 30 Nov\./);
+  assert.equal(model.got.length, modelBefore, 'no model');
+  assert.equal(agent.got.length, agentBefore, 'no agent');
+});
+
+test('in the browser: "open it" shows the email; a tool call written as text never shows', { timeout: 120000 }, async () => {
+  h.st.mode = 'granted';
+  const b = await webkit.launch();
+  try {
+    const page = await b.newPage({ viewport: { width: 1280, height: 800 } });
+    const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(s.base + '/');
+    await page.waitForSelector('#input');
+    const say = async (text, n, want) => {
+      await page.fill('#input', text); await page.press('#input', 'Enter');
+      await page.waitForFunction(([k, w]) => document.querySelectorAll('#thread .m.ai .bub')[k]?.textContent.includes(w), [n, want], { timeout: 30000 });
+      return page.locator('#thread .m.ai .bub').nth(n).textContent();
+    };
+    await say('search my email for Acme Billing', 0, 'The model alone answered.');
+    assert.match(await say('open it', 1, 'by 30 Nov.'), /^Here is that email in full:Subject: Invoice 4471 for OctoberFrom: Acme Billing <billing@acme\.example>FULL-BODY: Amount due \$1,200 by 30 Nov\.$/);
+    agent.reply = 'Here is the inbox.\n\n[[open-url: https://mail.google.com/mail/u/0/?search_query=Invoice%204471]]\nopen_url("https://mail.google.com/mail/u/0/")';
+    await say('what is the capital of France?', 2, 'Here is the inbox.');
+    await page.waitForFunction(() => !document.querySelector('#thread .m.ai[data-pending]'), null, { timeout: 30000 });
+    const shown = await page.locator('#thread .m.ai .bub').nth(2).textContent();
+    assert.doesNotMatch(shown, /open-url|open_url|mail\.google\.com/);
+    assert.deepEqual(errors, []);
+  } finally { await b.close(); agent.reply = 'I set that up. It is waiting for you to turn it on in Routines.'; }
 });

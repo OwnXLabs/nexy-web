@@ -2,6 +2,7 @@
 // is escaped first and only these tags are made: headings, paragraphs, lists, block quotes, tables,
 // code, emphasis, checklist boxes and http(s) links that open outside. No raw HTML, no other link schemes.
 // Output has no newlines outside <pre>: chat bubbles keep white-space: pre-wrap.
+import { dropPseudoCalls } from "../lib/pseudo-calls.ts";
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
@@ -81,7 +82,8 @@ function lines(ls: string[], heads: Heads): string {
 
 /** Markdown to safe HTML. */
 export function renderMd(md: string, heads: Heads = "chat"): string {
-  return md
+  // a tool call written as text is never shown in chat
+  return (heads === "chat" ? dropPseudoCalls(md) : md)
     .split("```")
     .map((part, i) => {
       if (i % 2 === 0) return lines(part.split(/\r?\n/), heads);

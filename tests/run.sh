@@ -68,7 +68,7 @@ check "answer documents: Continue grows the same one under the question's name, 
 check "an untouched New chat leaves the list when another chat is opened" node --test --test-timeout=180000 tests/empty-new-chat.cjs
 check "Nexy Cloud is coming soon: never offered as where something works today" ts tests/coming-soon.test.ts
 check "chat prompt: a failed search is said plainly, nothing invented, no made-up past" node --test --test-timeout=180000 tests/prompt-rules.cjs
-check "the owner's own mail never searched on the web: paused, missing or failing Gmail said plainly with no agent or model, the invoice starter and its follow-ups read it, ultra-private keeps it off" node --test --test-timeout=180000 tests/mail-privacy.cjs
+check "the owner's own mail never searched on the web: paused, missing or failing Gmail said plainly with no agent or model, the invoice starter and its follow-ups read it, 'open it' shows the email, ultra-private keeps it off" node --test --test-timeout=180000 tests/mail-privacy.cjs
 check "Gmail with an app password in WebKit: three steps, sent once to the hub, kept nowhere in the browser, pause, resume, disconnect says revoke at Google, a refusal stays on the card" node --test --test-timeout=180000 tests/gmail-app-password.cjs
 check "settings in WebKit: engine names only with a real choice, search only where there is one, panel hides the chat" node --test --test-timeout=180000 tests/settings-wording.cjs
 check "phone in the Android app: the last message ends above the floating Nexy button" node --test --test-timeout=180000 tests/phone-layout.cjs

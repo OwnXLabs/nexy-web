@@ -103,6 +103,8 @@ app is read, the plain reply when it is paused, not connected or failing, and th
 of a connected app is not switched to ultra-private. A follow-up about mail this chat just read
 ("the Invoice 4471 email", "the full text", "open it") is a mail read too: the best match is opened
 in full with gmail_read where the hub has it; the same words in a chat that read no mail are not.
+"Open it" alone is answered with the email itself, with no model, and a tool call a model writes as
+text ("[[open-url: …]]", 'open_url("…")') is never shown in chat.
 A follow-up and a routine on an email ("when an email arrives from X, tell me the invoice number")
 are checked before sensitive words switch the chat to ultra-private. `node --test tests/mail-privacy.cjs` (after
 `npm run build`) serves the build against a stand-in hub, agent and model: with Gmail paused,

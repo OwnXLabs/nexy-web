@@ -2,7 +2,8 @@
 // Pure, so the browser uses it too: an explicit ask of a connected app is not switched to
 // ultra-private, which turns connected apps off.
 // full: read the whole message (gmail_read) where the hub has it, not only the search rows
-export interface ConnectorAsk { id: "gmail" | "drive"; ids: readonly string[]; label: string; tool: string; readTool: string; args: { query: string }; full?: boolean }
+// open: only that is asked ("open it"), so the message itself is the answer
+export interface ConnectorAsk { id: "gmail" | "drive"; ids: readonly string[]; label: string; tool: string; readTool: string; args: { query: string }; full?: boolean; open?: boolean }
 export interface AskTurn { role: string; content: string }
 
 const APPS = [
@@ -20,6 +21,8 @@ const FILLER = /\b(?:please|can|could|would|will|you|search|find|look|through|up
 // a follow-up about mail just read: "that Acme email", "the Invoice 4471 email", "the full text", "open it"
 const REFERS = /\b(?:th(?:at|is|e)\s+(?:[\p{L}\p{N}'’&-]+\s+){0,6}e-?mails?|(?:that|this|the)\s+(?:message|one)|full\s+(?:text|message|e-?mail|body|thing)|whole\s+(?:text|message|e-?mail|thing)|(?:open|read)\s+(?:me\s+)?(?:it|that|this)\b|what\s+(?:does|did)\s+(?:it|that|this)\s+say)/iu;
 const FULL = /\b(?:full|whole|entire|complete)\s+(?:text|message|e-?mail|body|thing)\b/i;
+// "open it", "read that one", "show me that email": nothing asked but the message
+const OPEN = /^\s*(?:please\s+)?(?:open|read|show)\s+(?:me\s+)?(?:it|that|this|th(?:at|is|e)\s+(?:one|e-?mail|message))(?:\s+(?:up|again|now|please))*\s*[.!?]*\s*$/i;
 // words of a follow-up that name no email
 const FOLLOW = /\b(?:full|whole|entire|complete|text|body|contents?|exact|words?|now|please|again|thing)\b/gi;
 
@@ -49,7 +52,7 @@ export function connectorAsk(text: string, history: readonly AskTurn[] = []): Co
     if (prior || !REFERS.test(u)) break;
   }
   if (prior?.id !== "gmail") return null;
-  return askOf(APPS[0], words(s, APPS[0]) || prior.args.query, true);
+  return { ...askOf(APPS[0], words(s, APPS[0]) || prior.args.query, true), ...(OPEN.test(s) ? { open: true } : {}) };
 }
 
 // "when an email arrives from X, <task>": a routine on that event, whatever the task asks for
