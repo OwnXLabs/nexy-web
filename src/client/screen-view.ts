@@ -9,6 +9,7 @@ const RFB = rfbClass<typeof RFBModule>(RFBModule);
 import type { Artifact } from "./canvas";
 import { isPrivate } from "./private";
 import { httpMsg, errText } from "./http";
+import { boxHere } from "./place";
 
 interface Screen { available: boolean; watch?: boolean; control?: boolean; driving?: boolean; reason?: string; password?: string; path?: string; error?: string }
 
@@ -150,7 +151,7 @@ async function mount(host: HTMLElement): Promise<void> {
           f.className = "screen-handback";
           f.style.cssText = "position:absolute;top:44px;right:10px;z-index:4;width:min(340px,calc(100% - 20px));padding:12px;border-radius:12px;background:rgba(18,18,24,.96);color:#e4e4e7;font-size:12px;display:grid;gap:8px";
           f.innerHTML = `<label>What did you do? <span style="opacity:.6">(optional; Nexy reads it when it carries on. Never a password.)</span><textarea name="note" rows="3" style="width:100%;margin-top:4px;resize:vertical" placeholder="e.g. Signed in, then the export is under Settings, Data"></textarea></label>`
-            + `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="remember"> Remember this as a routine</label>`
+            + (boxHere ? `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="remember"> Remember this as a routine</label>` : "")
             + `<div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn small" data-cancel>Keep control</button><button type="submit" class="btn small">Hand back</button></div>`;
           f.querySelector("[data-cancel]")!.addEventListener("click", () => f.remove());
           f.addEventListener("submit", async (ev) => {

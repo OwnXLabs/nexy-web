@@ -81,12 +81,15 @@ check "settings in WebKit: engine names only with a real choice, search only whe
 check "phone in the Android app: the last message ends above the floating Nexy button" node --test --test-timeout=180000 tests/phone-layout.cjs
 check "before routing: a foreign Host gets 421, an oversized body 413, full chat storage 507, NEXY_SOCKET answers on the socket only" node --test --test-timeout=120000 tests/request-gate.cjs
 check "chat home: greeting, Get started, model download, computer-only offers" node --test --test-timeout=180000 tests/landing.cjs
+check "box features: shown only where the server allows them, no button leads to a refusal, a routine ask said plainly" node --test --test-timeout=180000 tests/box-features.cjs
+check "what counts as a routine ask" ts tests/routine-ask.test.ts
 # browser checks against a served build (empty screen dir, throwaway data and reports)
 tmp=$(mktemp -d)
 mkdir -p "$tmp/screen" "$tmp/reports" "$tmp/data"
 # the version the desktop app gives its server: problem reports must carry it
 export NEXY_APP_VERSION=0.0.0-test
-HOST=127.0.0.1 PORT=4389 NEXY_SCREEN_DIR="$tmp/screen" NEXY_DATA_DIR="$tmp/data" \
+# a single-user install: routines and memory are offered (tests/box-features.cjs covers them off)
+NEXY_BOX_FEATURES=open HOST=127.0.0.1 PORT=4389 NEXY_SCREEN_DIR="$tmp/screen" NEXY_DATA_DIR="$tmp/data" \
   node dist/server/entry.mjs >"$tmp/server.log" 2>&1 &
 srv=$!
 trap 'kill $srv 2>/dev/null; rm -rf "$tmp"' EXIT

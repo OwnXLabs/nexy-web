@@ -37,6 +37,8 @@ import { connectorAsk, connectorTurn } from "../../../lib/connectors";
 import { byId } from "../../../lib/apps";
 import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
+import { boxAllowed } from "../../../lib/box";
+import { ROUTINES_ELSEWHERE, routineAsk } from "../../../lib/routine-ask";
 
 export const prerender = false;
 
@@ -113,7 +115,8 @@ function hasOutside(body: any): boolean {
 }
 
 // agent: the turn goes to an agent with tools (routines among them), not the model alone
-function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval = false, agent = false): string {
+// routines: this visitor may have them (src/lib/box.ts)
+function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval = false, agent = false, routines = true): string {
   const c = (ctx ?? {}) as {
     projects?: { name: string; tasks: number; done: number }[];
     apps?: string[];
@@ -178,7 +181,7 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
   }
 
   // "when an invoice email arrives from Acme, summarise it" is a routine on an event, not a schedule
-  if (agent && !priv) lines.push(
+  if (agent && !priv && routines) lines.push(
     "",
     "When they want something done each time an email or a file arrives, and your routine tool",
     "takes a trigger, create the routine with a trigger instead of a schedule: mail from=<address>",
@@ -275,6 +278,7 @@ export const POST: APIRoute = async (ctx) => {
   try { tz = ownerZone(body?.tz); }
   catch (e) { if (!(e instanceof RangeError)) throw e; console.warn(`[nexy] chat: no time zone sent on: ${e.message}`); }
   const who = owner(ctx);
+  const box = boxAllowed(ctx.request);
   const said = messages[messages.length - 1]?.content;
   if (typeof said === "string" && said)
     remember(who, { role: "user", content: said, ts: Date.now() }, priv);
@@ -321,14 +325,18 @@ export const POST: APIRoute = async (ctx) => {
     // An ultra-private chat reaches nothing off the machine, so no connected app either. A question
     // about the owner's own app that was not read is answered here, plainly: it never reaches a
     // model or an agent that could search the web for it instead.
-    const conn = priv ? null : await connectorTurn(String(said ?? ""), byId("hub")?.base, history);
-    const plain = conn && conn.outcome !== "read" ? conn.reply
+    // routines are the box owner's: a visitor's ask never reaches an agent that could make one
+    const noRoutine = !box && routineAsk(String(said ?? ""));
+    const conn = priv || noRoutine ? null : await connectorTurn(String(said ?? ""), byId("hub")?.base, history);
+    const plain = noRoutine ? ROUTINES_ELSEWHERE
+      : conn && conn.outcome !== "read" ? conn.reply
       : priv && asksApp ? `This chat is ultra-private, so connected apps like ${asksApp.label} are off. Ask in a regular chat and I'll search it.`
       : null;
     if (plain !== null) {
       answered(plain);
-      log({ result: "answered", via: "connector", ms: Date.now() - startedAt, replyChars: plain.length, connector: asksApp?.id, connectorOutcome: conn?.outcome ?? "private" });
-      return { status: 200, body: { choices: [{ message: { role: "assistant", content: plain } }], via: "connector", grounded: false, private: priv || undefined } };
+      const via = noRoutine ? "box" : "connector";
+      log({ result: "answered", via, ms: Date.now() - startedAt, replyChars: plain.length, ...(noRoutine ? {} : { connector: asksApp?.id, connectorOutcome: conn?.outcome ?? "private" }) });
+      return { status: 200, body: { choices: [{ message: { role: "assistant", content: plain } }], via, grounded: false, private: priv || undefined } };
     }
     const connPrompt = conn?.outcome === "read" ? conn.prompt : "";
     // A turn that read the owner's mail is answered by the model alone, with no tools: an email could
@@ -347,7 +355,7 @@ export const POST: APIRoute = async (ctx) => {
       const r = await use.chat(
         String(said ?? ""),
         history,
-        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine) + browse + connPrompt,
+        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine, box) + browse + connPrompt,
         // silent past its budget, the agent gives way to the model alone (below): a stuck agent
         // turn must not leave the person waiting minutes for nothing
         b.signal,
