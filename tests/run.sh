@@ -29,6 +29,7 @@ ts() { node --experimental-strip-types --no-warnings --test --test-timeout=12000
 check "swarm: plan, parallel pieces across devices, stitch, cleaning" ts tests/swarm.test.ts
 check "swarm: progress replays after a dropped connection, owner only" ts tests/swarm-api.test.ts
 check "swarm: progress rows name the device and escape server text" ts tests/swarm-view.test.ts
+check "the screen viewer loads its class from noVNC (Astro 7 bundling)" ts tests/rfb-class.test.ts
 check "swarm: website request in the browser, built across a fake Own 1 and Gaming PC" node --test --test-timeout=180000 tests/swarm-browser.cjs
 check "chat streams, resumes, hides engine faults" node --test --test-timeout=180000 tests/chat-stream.cjs
 check "network faults: latency, drops, silence" node --test --test-timeout=180000 tests/network-faults.cjs
