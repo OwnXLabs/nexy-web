@@ -96,15 +96,28 @@ test('saved chats stop at the owner\'s storage cap; a smaller save still goes th
   assert.equal((await save('cgateone', 10_000, cookie, JSON.parse(first.text).ts)).status, 200);
 });
 
-test('with NEXY_SOCKET the server answers on the socket (0660) and not over TCP', async () => {
+test('with NEXY_SOCKET the server answers on the socket (0660, its group) and not over TCP', async () => {
   const port = await freePort(), sock = join(tmp(), 'web.sock');
-  const s = await start('serve.mjs', { HOST: '127.0.0.1', PORT: String(port), NEXY_SOCKET: sock, NEXY_TRUST_XNODE_AUTH: '1' });
+  const gid = process.getgroups().find((g) => g !== process.getgid()) ?? process.getgid();
+  const s = await start('serve.mjs', { HOST: '127.0.0.1', PORT: String(port), NEXY_SOCKET: sock, NEXY_SOCKET_GROUP: String(gid), NEXY_TRUST_XNODE_AUTH: '1' });
   const r = await req({ socketPath: sock, host: 'nexy.example.test', headers: {} });
   assert.equal(r.status, 421, 'the Host check applies on the socket too');
   assert.equal((await req({ socketPath: sock, host: `127.0.0.1:${port}` })).status, 200);
   assert.equal(statSync(sock).mode & 0o777, 0o660);
+  assert.equal(statSync(sock).gid, gid, 'the socket belongs to NEXY_SOCKET_GROUP');
   await assert.rejects(req({ port }), { code: 'ECONNREFUSED' });
   assert.doesNotMatch(s.log(), /WARNING/);
+});
+
+test('a socket group the server cannot use stops it at start', async () => {
+  const sock = join(tmp(), 'web.sock');
+  const p = spawn(process.execPath, [join(DIST, 'serve.mjs')], { env: { ...process.env, NEXY_SOCKET: sock, NEXY_SOCKET_GROUP: 'no-such-group-nexy', NEXY_DATA_DIR: tmp() }, stdio: ['ignore', 'pipe', 'pipe'] });
+  procs.push(p);
+  let log = ''; p.stderr.on('data', (d) => { log += d; });
+  const code = await new Promise((r) => p.on('exit', r));
+  assert.equal(code, 1);
+  assert.match(log, /no group no-such-group-nexy/);
+  assert.equal(require('node:fs').existsSync(sock), false);
 });
 
 test('trusting the identity header on TCP warns loudly at start', async () => {

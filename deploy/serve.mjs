@@ -1,4 +1,5 @@
-// Starts Nexy on a unix socket (NEXY_SOCKET, mode 0660) or, without one, on HOST:PORT.
+// Starts Nexy on a unix socket (NEXY_SOCKET, mode 0660, group NEXY_SOCKET_GROUP if set) or, without
+// one, on HOST:PORT.
 // Copied to dist/server/serve.mjs at build; run it in place of entry.mjs.
 // A socket lets the host decide who may connect (its group, e.g. nginx): on loopback TCP any local
 // process can reach Nexy and send the identity header that NEXY_TRUST_XNODE_AUTH trusts.
@@ -6,6 +7,13 @@ import fs from "node:fs";
 import http from "node:http";
 
 const sock = process.env.NEXY_SOCKET;
+// a group name or number; the service must be a member (SupplementaryGroups)
+const groupId = (g) => {
+  if (/^\d+$/.test(g)) return Number(g);
+  const line = fs.readFileSync("/etc/group", "utf8").split("\n").find((l) => l.split(":")[0] === g);
+  if (!line) throw new Error(`no group ${g}`);
+  return Number(line.split(":")[2]);
+};
 if (process.env.NEXY_TRUST_XNODE_AUTH === "1" && !sock)
   console.warn("[nexy] WARNING: NEXY_TRUST_XNODE_AUTH=1 on TCP. Any local process can claim to be the owner; set NEXY_SOCKET.");
 
@@ -22,7 +30,15 @@ if (sock) {
   const mask = process.umask(0o117); // created 0660, never briefly wider
   server.listen(sock, () => {
     process.umask(mask);
-    fs.chmodSync(sock, 0o660);
+    try {
+      if (process.env.NEXY_SOCKET_GROUP) fs.chownSync(sock, process.getuid(), groupId(process.env.NEXY_SOCKET_GROUP));
+      fs.chmodSync(sock, 0o660);
+    } catch (e) {
+      // a socket nginx can't open would only fail later, request by request
+      console.error(`[nexy] ${sock}: ${e.message}`);
+      fs.rmSync(sock, { force: true });
+      process.exit(1);
+    }
     console.log(`[nexy] listening on ${sock}`);
   });
   for (const s of ["SIGTERM", "SIGINT"]) process.on(s, () => { fs.rmSync(sock, { force: true }); process.exit(0); });
