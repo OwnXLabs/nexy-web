@@ -1,6 +1,8 @@
 import { httpMsg, errText } from "./http";
 import { renderMd } from "./md";
 import { triggerChip, triggerText } from "./triggers";
+import { boxHere } from "./place";
+import { MEMORY_ELSEWHERE, ROUTINES_ELSEWHERE } from "../lib/routine-ask.ts";
 export type MemCmd =
   | { kind: "memShow" } | { kind: "memForget" }
   | { kind: "routineMake"; cron: string; local: string; human: string; prompt: string; name: string }
@@ -139,6 +141,8 @@ function blockEl(title: string, right: string, rows: string, foot = "", cls = ""
 const row = (k: string, v: string, off = false) => `<div class="row"><span class="led${off ? " off" : " ok"}"></span><span>${esc(k)}</span><span class="v">${esc(v)}</span></div>`;
 
 export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
+  // the server refuses these to this visitor: said plainly, never a card that fails
+  if (!boxHere) { ui.push("ai", cmd.kind === "memShow" || cmd.kind === "memForget" ? MEMORY_ELSEWHERE : ROUTINES_ELSEWHERE); return; }
   try {
     if (cmd.kind === "memShow") {
       const { items } = await call("/api/v1/memory");
@@ -337,6 +341,7 @@ function wireRow(root: ParentNode, r: any): void {
  * here. Only routines not already on a card in this chat.
  */
 export async function showWaitingRoutines(ui: { block(el: HTMLElement): void; push(who: "ai", html: string): HTMLElement }, root: () => ParentNode): Promise<void> {
+  if (!boxHere) return;
   const { routines } = await call("/api/v1/routines");
   for (const r of (routines as any[]).filter((x) => x.pending)) {
     if (root().querySelector(`[data-routine="${CSS.escape(String(r.id))}"]`)) continue;
@@ -394,6 +399,12 @@ export async function refreshRoutineCards(root: ParentNode): Promise<void> {
   const cards = [...root.querySelectorAll<HTMLElement>("[data-routine]")].filter((c) => c.querySelector("[data-confirm]"));
   const rows = [...root.querySelectorAll<HTMLElement>(".row[data-rid]")].filter((c) => c.querySelector("[data-delete]"));
   if (!cards.length && !rows.length) return;
+  // no routines for this visitor: a saved card keeps its words, without buttons that would fail
+  if (!boxHere) {
+    for (const c of cards) c.querySelector(".ba")!.textContent = "Routines need your own Nexy";
+    for (const c of rows) { c.querySelector(".rb")?.remove(); c.querySelector(".led")!.className = "led off"; }
+    return;
+  }
   const { routines } = await call("/api/v1/routines");
   const byId = (id: string | undefined) => (routines as any[]).find((x) => String(x.id) === id);
   for (const c of cards) {

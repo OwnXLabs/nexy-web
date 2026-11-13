@@ -4,11 +4,16 @@ import "../styles.css";
 import { APPS } from "../lib/apps";
 import { localVoice } from "../lib/voice";
 import { builderAvailable } from "../lib/local-build";
+import { boxAllowed, pickAllowed } from "../lib/box";
 // a computer without an Own1 runs chat only, plus speech when it has it; the page hides what isn't here
 const local = process.env.NEXY_STUDIOS === "off";
 // Nexy Cloud: hosted, chat only (with NEXY_STUDIOS=off), named as such
 const cloud = process.env.NEXY_PLACE === "cloud";
-const voice = local && localVoice();
+// whole-box features for this request (src/lib/box.ts): the page shows only what the server allows
+const box = boxAllowed(Astro.request);
+const engines = pickAllowed(Astro.request);
+// speech on this computer is a box feature too (api/v1/voice)
+const voice = local && box && localVoice();
 // building on this computer: the engine's builder, with or without the Own Build studio
 const builder = local && await builderAvailable();
 const ids = APPS.map((a) => a.id);
@@ -21,7 +26,7 @@ const search = !local || !!process.env.NEXY_SEARXNG_URL;
 const version = process.env.NEXY_APP_VERSION || undefined;
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version}>
+<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

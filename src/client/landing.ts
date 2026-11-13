@@ -1,7 +1,7 @@
 // The chat home, after the v23 landing design: the greeting with three suggestions, the
 // Get started list, the model download chip and the first-visit pill. Only what works on this
 // machine is offered; what isn't here is left out or explained.
-import { hasApp, here, inCloud, onOwn1 } from "./place";
+import { boxHere, hasApp, here, inCloud, onOwn1 } from "./place";
 import { prefs } from "./settings";
 
 export interface LandingHooks {
@@ -66,11 +66,13 @@ function paintChip(): void {
 
 // ---- greeting and suggestions ----
 function suggestions(): [string, string][] {
+  // a routine starter only where routines are allowed
+  const brief: [string, string] = [I.sun, boxHere ? "Give me a news brief every morning" : "Give me today's news brief"];
   return [
     hasApp("build") ? [I.globe, "Build a landing page for my bakery"] : [I.pen, "Write the story for my bakery's website"],
     [I.chart, "Research my top 5 competitors"],
-    !hasApp("hub") ? [I.sun, "Give me a news brief every morning"]
-      : onOwn1 ? [I.send, "Send me a summary on Telegram every morning"] : [I.send, "Find the latest invoice in my email"],
+    !hasApp("hub") ? brief
+      : onOwn1 ? (boxHere ? [I.send, "Send me a summary on Telegram every morning"] : brief) : [I.send, "Find the latest invoice in my email"],
   ];
 }
 

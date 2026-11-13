@@ -1,11 +1,9 @@
 import type { APIRoute } from "astro";
 import { ENGINES, chosen, pick } from "../../../lib/engine";
-import { identityOwner, owner } from "../../../lib/owner";
-import { boxAllowed, boxRefused } from "../../../lib/box";
+import { owner } from "../../../lib/owner";
+import { boxRefused, pickAllowed as allowed } from "../../../lib/box";
 
 export const prerender = false;
-// a pick is one owner's own, so anyone signed in may make theirs; the box's features stay the owner's
-const allowed = (r: Request) => boxAllowed(r) || identityOwner(r) !== null;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
 // the agent engines on this machine, and which one this owner's chats use
