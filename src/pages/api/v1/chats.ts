@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { clean, Conflict, example, exampleAsset, examples, get, list, put, remove } from "../../../lib/chats";
+import { clean, Conflict, StorageFull, example, exampleAsset, examples, get, list, put, remove } from "../../../lib/chats";
 import { owner } from "../../../lib/owner";
 
 export const prerender = false;
@@ -34,6 +34,7 @@ export const POST: APIRoute = async (ctx) => {
   try { await put(who, c, typeof b === "number" && Number.isFinite(b) ? b : 0); return json({ ok: true, ts: c.ts }); }
   catch (e) {
     if (e instanceof Conflict) return json({ error: e.message, ts: e.current }, 409);
+    if (e instanceof StorageFull) return json({ error: e.message }, 507);
     return json({ error: `the chat could not be saved: ${(e as Error).message}` }, 500);
   }
 };

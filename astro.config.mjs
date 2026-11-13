@@ -1,9 +1,25 @@
 import { defineConfig } from "astro/config";
 import node from "@astrojs/node";
+import { copyFileSync } from "node:fs";
+import { LARGEST_CAP } from "./src/lib/gate.ts";
+
+// dist/server/serve.mjs: the start script that can listen on a unix socket (deploy/serve.mjs)
+const serve = () => {
+  let out;
+  return {
+    name: "nexy-serve",
+    hooks: {
+      "astro:config:done": ({ config }) => { out = config.build.server; },
+      "astro:build:done": () => copyFileSync(new URL("./deploy/serve.mjs", import.meta.url), new URL("serve.mjs", out)),
+    },
+  };
+};
 
 export default defineConfig({
   output: "server",
-  adapter: node({ mode: "standalone" }),
+  // per-route caps are in src/lib/gate.ts; this bounds any body the middleware has not counted yet
+  adapter: node({ mode: "standalone", bodySizeLimit: LARGEST_CAP }),
+  integrations: [serve()],
   // keep v5's HTML-aware whitespace handling (v7 defaults to "jsx")
   compressHTML: true,
   vite: {

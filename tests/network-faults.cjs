@@ -124,7 +124,8 @@ describe('a streamed reply on a bad network', () => {
     gw = await gateway((q) => (q.includes('think') ? [...PARTS.slice(0, 15), 50_000, ...PARTS.slice(15)] : PARTS));
     fallback = await gateway(() => ['The fallback answered.']);
     port = await freePort();
-    env = { NEXY_DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-faults-')), NEXY_ENGINE: 'gateway', NEXY_AGENT_URL: gw.url, NEXY_AGENT_KEY: 'k', NEXY_LLM_URL: fallback.url };
+    // the browser reaches the server through the fault proxy, on another loopback port
+    env = { NEXY_HOSTS: '127.0.0.1', NEXY_DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-faults-')), NEXY_ENGINE: 'gateway', NEXY_AGENT_URL: gw.url, NEXY_AGENT_KEY: 'k', NEXY_LLM_URL: fallback.url };
     server = await start(port, env);
     proxy = await faultProxy(port);
     browser = await chromium.launch();

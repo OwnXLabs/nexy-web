@@ -49,6 +49,21 @@ export async function get(owner: string, id: string): Promise<SavedChat | null> 
 // A device holding an older copy is refused, so it cannot overwrite turns another
 // device added since (a phone left open erased the Mac's answer, 2026-11-12).
 export class Conflict extends Error { constructor(readonly current: number) { super("this chat changed on another device"); } }
+// Saved chats per owner stop at NEXY_CHAT_STORAGE_MB (default 512): a save that grows past it is
+// refused; one that shrinks a chat always goes through, so a full owner can still tidy up.
+export class StorageFull extends Error { constructor() { super("Your saved chats are full. Delete some older chats, then try again."); } }
+const storageCap = () => (Number(process.env.NEXY_CHAT_STORAGE_MB) || 512) * 1024 * 1024;
+async function sizes(owner: string, file: string): Promise<{ total: number; mine: number }> {
+  const names = await fs.readdir(dirOf(owner)).catch((e) => { if (e.code !== "ENOENT") throw e; return [] as string[]; });
+  let total = 0, mine = 0;
+  for (const f of names.filter((x) => x.endsWith(".json"))) {
+    const full = path.join(dirOf(owner), f);
+    const n = await fs.stat(full).then((s) => s.size, (e) => { if (e.code !== "ENOENT") throw e; return 0; });
+    total += n;
+    if (full === file) mine = n;
+  }
+  return { total, mine };
+}
 const locks = new Map<string, Promise<unknown>>();
 export function put(owner: string, c: SavedChat, base?: number): Promise<void> {
   const file = fileOf(owner, c.id);
@@ -56,9 +71,12 @@ export function put(owner: string, c: SavedChat, base?: number): Promise<void> {
     const now = await get(owner, c.id);
     if (base !== undefined && (now?.ts ?? 0) !== base) throw new Conflict(now?.ts ?? 0);
     if (now && c.ts <= now.ts) c.ts = now.ts + 1;
+    const text = JSON.stringify(c);
+    const { total, mine } = await sizes(owner, file), size = Buffer.byteLength(text);
+    if (size > mine && total - mine + size > storageCap()) throw new StorageFull();
     await fs.mkdir(dirOf(owner), { recursive: true, mode: 0o700 });
     const tmp = `${file}.${process.pid}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(c), { mode: 0o600 });
+    await fs.writeFile(tmp, text, { mode: 0o600 });
     await fs.rename(tmp, file);
   });
   locks.set(file, run);

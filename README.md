@@ -33,6 +33,11 @@ NEXY_DATA_DIR=./data node dist/server/entry.mjs
 | `NEXY_APP_VERSION` | App version shown in beta reports |
 | `NEXY_MODEL_STATUS` | Optional file the host app writes while it downloads the model (`{"model", "completed", "total"}`); the chat home shows the download and holds jobs until it is done |
 | `HOST`, `PORT` | Listen address (default `0.0.0.0:4321`; bind to loopback unless it sits behind an authenticating proxy) |
+| `NEXY_HOSTS` | Names served besides loopback, comma separated (e.g. `nexy.example.com,my.example.com`; no port means any port). Any other `Host` gets `421`, which stops DNS rebinding. Loopback (`127.0.0.1`, `localhost`, `[::1]`) passes only on `PORT` |
+| `NEXY_SOCKET` | With `node dist/server/serve.mjs`: listen on this unix socket (mode 0660) instead of TCP, so only its group (e.g. nginx) can connect. Use it whenever `NEXY_TRUST_XNODE_AUTH=1`; on TCP that logs a warning |
+| `NEXY_CHAT_STORAGE_MB` | Saved chats per owner (default 512). A save past it gets `507` |
+
+**Limits:** request bodies are capped at 1 MB (`413`), with larger caps only where a route takes more: studio uploads 48 MB, voice 26 MB, saved chats 16 MB, chat 8 MB, page edits 6 MB, problem reports 4 MB, beta reports 3 MB (`src/lib/gate.ts`). Problem reports stop at 500 per folder.
 
 **Security:** nexy-web has no sign-in of its own. Run it on loopback, or behind an authenticating proxy (Own1's xnode-auth, Nexy Cloud's gate, or the Nexy app's local gate).
 

@@ -16,6 +16,9 @@ const fresh = () =>
 // them across devices. Only enable where an xnode-auth block guards every path: without
 // one, Xnode-Auth-User is just a header anyone can send.
 const TRUST_XNODE_AUTH = process.env.NEXY_TRUST_XNODE_AUTH === "1";
+// started straight from entry.mjs (serve.mjs warns itself; the app's launcher sets the header at its own door)
+if (TRUST_XNODE_AUTH && !process.env.NEXY_SOCKET && process.env.ASTRO_NODE_AUTOSTART !== "disabled")
+  console.warn("[nexy] WARNING: NEXY_TRUST_XNODE_AUTH=1 on TCP. Any local process can claim to be the owner; start dist/server/serve.mjs with NEXY_SOCKET.");
 
 export function identityOwner(request: Request): string | null {
   const identity = TRUST_XNODE_AUTH ? request.headers.get("xnode-auth-user") : null;
