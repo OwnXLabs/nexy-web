@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const RANGE = /\((?:width|height)\s*[<>]=?\s*[^)]*\)/;
+// only inside an @media/@container prelude, so JS bounds checks like `if (width <= 0)` never match
+const RANGE = /@(?:media|container)[^{;]*\((?:(?:width|height)\s*[<>]|[^){]*[<>]=?\s*(?:width|height)\b)/;
 
 function* files(d) {
   for (const n of readdirSync(d)) {
@@ -25,8 +26,8 @@ export function rangeHits(dir) {
 }
 
 test("the pattern catches spaced and unspaced range syntax", () => {
-  for (const s of ["(width <= 30rem)", "(width<=30rem)", "(height > 10px)", "(width >= 40em)"]) assert.match(s, RANGE);
-  assert.doesNotMatch("(max-width: 30rem)", RANGE);
+  for (const s of ["@media (width <= 30rem)", "@media (width<=980px)", "@container s (height >= 40rem)", "@container (width>=20em)", "@media (20rem <= width <= 30rem)", "@media screen and (width < 40em)"]) assert.match(s, RANGE);
+  for (const s of ["@media (max-width: 30rem)", "@container s (min-height: 2rem)", "if (width <= 0 || height <= 0 || idat.length === 0) return null;", "@media (max-width:1px){a{}}x=function(){if(width<=0)return}"]) assert.doesNotMatch(s, RANGE);
 });
 
 test("built output has no CSS range syntax", () => {
