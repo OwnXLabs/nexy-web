@@ -38,6 +38,7 @@ import { httpMsg, errText, unreachable, away } from "./http";
 import { timeoutSignal } from "./compat";
 import { inline, renderMd } from "./md";
 import { connectorAsk } from "../lib/connector-ask.ts";
+import { readLocally } from "../lib/file-text.ts";
 import { slugOf } from "./doc-title";
 
 // "on the right" is true only where the pane sits beside the chat. On a phone the pane covers the
@@ -765,6 +766,8 @@ async function attachedDocs(priv: boolean): Promise<{ filename: string; text: st
   const out: { filename: string; text: string }[] = [];
   for (const a of mine) {
     try {
+      // read on this computer: its text is all there is
+      if (a.id.startsWith("here:")) { out.push({ filename: a.filename, text: a.local ?? "" }); continue; }
       const url = (conv?: string) => `/api/apps/docs/api/v1/document?id=${encodeURIComponent(a.id)}${conv ? `&conv=${encodeURIComponent(conv)}` : ""}`;
       const d = await api<{ text?: string }>(url(a.conv)).catch((e) => (a.conv ? api<{ text?: string }>(url()) : Promise.reject(e)));
       out.push({ filename: a.filename, text: d.text?.trim() || a.local || "(still being read; no text yet)" });
@@ -801,10 +804,40 @@ async function attachSample(said = "Use sample data"): Promise<void> {
   await attachFiles(SAMPLE_FILES.map(([n, t]) => new File([t], n, { type: n.endsWith(".csv") ? "text/csv" : "text/plain" })));
 }
 
+// no Own Docs here (a computer without an Own1): the file is read in this page and goes with the chat
+async function attachHere(files: File[]): Promise<void> {
+  const localTurn = turnState();
+  const { push, conversation, saveChat } = captureWork();
+  const done: string[] = [];
+  const failed: string[] = [];
+  for (const f of files) {
+    try {
+      const r = await readLocally(f.name, f.type, new Uint8Array(await f.arrayBuffer()));
+      if (r.kind === "image") { failed.push(`${f.name}: images can't be read here yet`); continue; }
+      if (r.kind === "unreadable") { failed.push(`${f.name}: ${r.why}`); continue; }
+      localTurn.attached.push({ id: `here:${Date.now()}:${f.name}`, filename: f.name, eph: isPrivate(), local: r.text });
+      done.push(f.name);
+    } catch (e) {
+      failed.push(`${f.name}: couldn't be read (${errText(e)})`);
+    }
+  }
+  const parts: string[] = [];
+  if (done.length) {
+    const t = conversation(isPrivate());
+    t.push({ role: "user", content: `I attached ${done.join(", ")}.` });
+    t.push({ role: "assistant", content: `Got ${done.length === 1 ? "it" : "them"}: ${done.join(", ")}. I can read ${done.length === 1 ? "it" : "them"} now.` });
+    parts.push(`Read ${esc(done.join(", "))} on ${here}. Ask me about ${done.length === 1 ? "it" : "them"}.`);
+  }
+  if (failed.length) parts.push(`<div class="feednote bad"${done.length ? ' style="margin-top:8px"' : ""}>${esc(failed.join(" · "))}</div>`);
+  push("ai", parts.join(""));
+  saveChat();
+}
+
 async function attachFiles(files: File[]): Promise<void> {
   const localTurn = turnState();
   const { push, pushBlock, conversation, saveChat, showArtifact } = captureWork();
   if (!files.length) return;
+  if (!hasStudio("docs")) return attachHere(files);
 
   const tooBig = files.filter((f) => f.size > ATTACH_MAX_BYTES);
   if (tooBig.length) {

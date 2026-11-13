@@ -42,6 +42,8 @@ check "building on this computer: engine builder, checks, one retry, plain no; O
 check "speech on this computer: model fetch, transcripts, spoken replies" ts tests/voice.test.ts
 check "hold to talk: live words one read at a time, skipped when busy, slow computers fall back" ts tests/voice-partials.test.ts
 check "connected apps in chat: lookups and follow-ups recognised, only the words to find searched, granted tool read as data, missing or failing said plainly, an ask of one or a mail routine not switched to ultra-private" ts tests/connectors.test.ts
+check "files read on this computer: text, Markdown, CSV, a PDF's text layer; images and others said plainly" ts tests/file-text.test.ts
+check "attaching without Own Docs: read here and sent with the question, images refused, an Own1 still uses Own Docs" node --test --test-timeout=180000 tests/local-attach.cjs
 check "document titles: cut on a word, without the request's own words" ts tests/doc-title.test.ts
 check "eval mode only on a server started for evals; a request alone cannot switch it on" ts tests/eval-gate.test.ts
 check "speech on this computer in the browser, missing speech still gated, Own1 unchanged" node --test --test-timeout=180000 tests/local-voice.cjs
