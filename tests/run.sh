@@ -69,6 +69,7 @@ check "answer budget: a reply still being written runs past 90 s, silence is sto
 check "table totals: checked within one table only, unclear shapes left alone" ts tests/table-totals.test.ts
 check "markdown in replies: rendered, checklists as boxes, no HTML, links only http(s)" ts tests/markdown.test.ts
 check "answer documents: Continue grows the same one under the question's name, the note fits a phone" node --test --test-timeout=180000 tests/answer-documents.cjs
+check "work pane Open: shown only when it opens that exact item; a chat document goes to Own Docs once and opens as ?doc=<id>; no button leads to a dead end" node --test --test-timeout=300000 tests/open-in.cjs
 check "an untouched New chat leaves the list when another chat is opened" node --test --test-timeout=180000 tests/empty-new-chat.cjs
 check "Nexy Cloud is coming soon: never offered as where something works today" ts tests/coming-soon.test.ts
 check "chat prompt: a failed search is said plainly, nothing invented, no made-up past" node --test --test-timeout=180000 tests/prompt-rules.cjs
