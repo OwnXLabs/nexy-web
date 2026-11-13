@@ -356,6 +356,48 @@ test("a follow-up about mail just read is a full read of it; without that mail i
   assert.equal(connectorAsk("search my email for Acme Billing")?.full, undefined);
 });
 
+// QA 0.2.15: "find the email about the weekly report" got "I don't have access to your email inbox", 3 of 3
+test("one email named by what it is about is a mail search, read exactly like \"search my email for\"", async () => {
+  const cases: [string, string | null][] = [
+    ["find the email about the weekly report", "weekly report"],
+    ["Find my email from Dana", "Dana"],
+    ["the email about the weekly report", "weekly report"],
+    ["any emails about the weekly report?", "weekly report"],
+    ["can you find the email from Sam about lunch", "Sam lunch"],
+    ["where's the email about the lease renewal?", "lease renewal"],
+    // not a lookup
+    ["write the email about the weekly report", null],
+    ["send the email about the weekly report to Sam", null],
+    ["what should the email about the weekly report say?", null],
+    ["find a good subject line", null],
+    ["When the email about the weekly report arrives, summarise it", null],
+  ];
+  for (const [said, query] of cases) {
+    const a = connectorAsk(said);
+    assert.equal(a?.args.query ?? null, query, said);
+    if (a) assert.equal(a.id, "gmail", said);
+  }
+  // still nothing to open without mail read in this chat
+  assert.equal(connectorAsk("open it"), null);
+  assert.equal(connectorAsk("open it", [{ role: "user", content: "find the budget in my Google Drive" }]), null);
+  // and it is followed up like any mail search
+  assert.equal(connectorAsk("open it", [{ role: "user", content: "find the email about the weekly report" }])?.open, true);
+  // granted, paused, not connected: the same outcome as "search my email for"
+  for (const [opts, outcome] of [[{ oauth: true, imap: false, imapGranted: false }, "read"], [{ oauth: false, imap: true, imapGranted: false }, "paused"], [{ oauth: false, imap: false, imapGranted: false }, "not-connected"]] as const) {
+    for (const said of ["find the email about the weekly report", "search my email for weekly report"]) {
+      const h = await imapHub(opts);
+      try {
+        assert.equal((await connectorTurn(said, h.base))?.outcome, outcome, `${said} ${outcome}`);
+        const calls = h.got.filter((g) => g.path === "/mcp" && g.body?.method === "tools/call").map((g) => g.body.params.arguments);
+        assert.deepEqual(calls, outcome === "read" ? [{ query: "weekly report" }] : [], `${said} ${outcome}`);
+      } finally { h.close(); }
+    }
+  }
+  // a mail ask: not switched to ultra-private
+  const { autoPrivate } = await import("../src/client/private.ts");
+  assert.equal(autoPrivate("find the email about my bank statement"), null);
+});
+
 test("a full read opens the best match with gmail_read, by the id the search gave; no gmail_read: the search alone", async () => {
   const h = await hub(["gmail_search", "gmail_read"], (name, args) => ({ content: [{ type: "text", text: name === "gmail_search"
     ? `1 message(s) for "${args.query}":\n- Invoice 4471 for October | from Acme Billing | Mon, 3 Nov 2026 | id 18f2a9c0d\n  Your invoice…`

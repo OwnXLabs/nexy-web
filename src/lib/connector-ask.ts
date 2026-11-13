@@ -10,6 +10,8 @@ const APPS = [
   { id: "gmail", ids: ["gmail", "gmail-imap"], label: "Gmail", tool: "gmail_search", readTool: "gmail_read", re: /\b(?:in\s+|from\s+|on\s+|through\s+)?(?:my\s+)?(?:g-?mail|inbox|e-?mails?|mail(?:box)?)\b/gi, mine: /\b(?:my\s+(?:(?:latest|newest|last|recent|new|unread)\s+)?(?:g-?mail|inbox|e-?mails?|mail(?:box)?)|g-?mail|(?:any|new|unread)\s+e-?mails?)\b/i },
   { id: "drive", ids: ["drive"], label: "Google Drive", tool: "drive_search", readTool: "drive_read", re: /\b(?:in\s+|from\s+|on\s+|through\s+)?(?:my\s+)?(?:google\s+)?drive\b/gi, mine: /\b(?:my\s+(?:google\s+)?drive|google\s+drive)\b/i },
 ] as const;
+// "find the email about X", "the email from Sam": one email, named by what it is about
+const THE_MAIL = /^\s*(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+)?(?:(?:find|search\s+for|look\s+for|look\s+up|get|show|pull\s+up|check|read|open|where(?:'s|\s+is|\s+are))\s+(?:me\s+)?(?:(?:the|that|an?|any)\s+)?|(?:the|that|an?|any)\s+)e-?mails?\s+(?:about|from|regarding|re|mentioning|titled|called|named|with|on)\b/i;
 // asking to write, send or (dis)connect is not reading; a lookup says so
 const LOOKUP = /\b(?:search|find|look|check|show|list|read|summari[sz]e|any|anything|latest|newest|recent|unread|is there|are there|what(?:'s|s| is| are)?\s+(?:in|new|on)|do i have|did i get|have i got)\b/i;
 const NOT_READING = /^\s*(?:please\s+)?(?:write|draft|compose|send|reply|forward|connect|disconnect|link|unlink|revoke|remove|delete)\b/i;
@@ -32,6 +34,7 @@ const askOf = (app: (typeof APPS)[number], query: string, full: boolean): Connec
   ({ id: app.id, ids: app.ids, label: app.label, tool: app.tool, readTool: app.readTool, args: { query }, ...(full ? { full } : {}) });
 
 function firstAsk(s: string): ConnectorAsk | null {
+  if (THE_MAIL.test(s)) return askOf(APPS[0], words(s, APPS[0]), FULL.test(s));
   if (!LOOKUP.test(s)) return null;
   const app = APPS.find((a) => a.mine.test(s));
   return app ? askOf(app, words(s, app), FULL.test(s)) : null;
