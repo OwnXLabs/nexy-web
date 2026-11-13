@@ -23,6 +23,7 @@ check() { # name, command…
 echo "Building…"
 npm run build >/tmp/nexy-web-build.log 2>&1 || { echo "FAIL  build (see /tmp/nexy-web-build.log)"; exit 1; }
 echo "PASS  build"
+check "built CSS has no range syntax (Safari before 16.4)" node --test tests/css-range.test.mjs
 
 ts() { node --experimental-strip-types --no-warnings --test --test-timeout=120000 "$@"; }
 check "swarm: plan, parallel pieces across devices, stitch, cleaning" ts tests/swarm.test.ts
