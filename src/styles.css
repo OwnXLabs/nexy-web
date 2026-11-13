@@ -77,6 +77,7 @@ body.canvas-open .stage{--cw:var(--cwv,560px)}
 .proj .prog{margin-left:auto;width:34px;height:2px;background:rgba(255,255,255,.18);border-radius:2px;overflow:hidden;flex:none}
 .proj .prog i{display:block;height:100%;background:#fff}
 .chat{display:block;height:28px;line-height:28px;padding:0 8px 0 40px;border-radius:8px;color:var(--fg3);font-size:12.5px;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#projList .empty{font-size:12.5px;line-height:1.45;color:var(--fg3);padding:4px 8px 4px 40px;text-shadow:none}
 .chat:hover{color:#fff;background:rgba(255,255,255,.05)}
 .chat.active{color:#fff}
 .conn{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:8px;color:var(--fg2);font-size:12.5px;width:100%}
