@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { identityOwner, owner } from "../../../lib/owner";
+import { boxOwner, owner } from "../../../lib/owner";
 import { boxDeps, busy, page, sse, start } from "../../../lib/swarm-runs";
 
 export const prerender = false;
@@ -12,7 +12,7 @@ export const POST: APIRoute = async (ctx) => {
   const deps = boxDeps();
   if (!deps) return json({ error: "building across devices isn't set up on this Own 1 yet" }, 404);
   // only a signed-in Own 1 user: the build runs on the owner's devices
-  if (!identityOwner(ctx.request)) return json({ error: "sign in to your Own 1 first" }, 401);
+  if (!boxOwner(ctx.request)) return json({ error: "sign in to your Own 1 first" }, 401);
   const who = owner(ctx);
   const body = await ctx.request.json().catch(() => null);
   const prompt = String(body?.prompt ?? "").trim().slice(0, 2000);

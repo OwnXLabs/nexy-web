@@ -20,16 +20,39 @@ const TRUST_XNODE_AUTH = process.env.NEXY_TRUST_XNODE_AUTH === "1";
 if (TRUST_XNODE_AUTH && !process.env.NEXY_SOCKET && process.env.ASTRO_NODE_AUTOSTART !== "disabled")
   console.warn("[nexy] WARNING: NEXY_TRUST_XNODE_AUTH=1 on TCP. Any local process can claim to be the owner; start dist/server/serve.mjs with NEXY_SOCKET.");
 
-export function identityOwner(request: Request): string | null {
+// Behind Nexy Cloud's gate each person signs in with their own code, and the gate names them in
+// x-nexy-user, dropping any copy a visitor sends. Only enable where that gate is the sole caller
+// (NEXY_SOCKET): each person's data is their own, and none of them is the box's owner.
+const TRUST_GATE_USER = process.env.NEXY_TRUST_GATE_USER === "1";
+if (TRUST_GATE_USER && !process.env.NEXY_SOCKET && process.env.ASTRO_NODE_AUTOSTART !== "disabled")
+  console.warn("[nexy] WARNING: NEXY_TRUST_GATE_USER=1 on TCP. Any local process can name a user; start dist/server/serve.mjs with NEXY_SOCKET.");
+
+const hashed = (kind: string, id: string) => `o_${kind}_${createHash("sha256").update(id).digest("hex").slice(0, 16)}`;
+
+// the person the gate signed in, as the gate names them ("u01"); null without a trusted gate
+export function gateUser(request: Request): string | null {
+  const u = TRUST_GATE_USER ? request.headers.get("x-nexy-user") : null;
+  return u && /^[A-Za-z0-9_-]{1,32}$/.test(u) ? u : null;
+}
+
+// the box's owner, signed in through xnode-auth: whole-box features are theirs alone
+export function boxOwner(request: Request): string | null {
   const identity = TRUST_XNODE_AUTH ? request.headers.get("xnode-auth-user") : null;
-  return identity ? `o_xauth_${createHash("sha256").update(identity).digest("hex").slice(0, 16)}` : null;
+  return identity ? hashed("xauth", identity) : null;
+}
+
+// whoever is signed in, the box's owner or a gate's user: whose chats and picks these are
+export function identityOwner(request: Request): string | null {
+  const u = gateUser(request);
+  return u ? hashed("gate", u) : boxOwner(request);
 }
 
 export function owner(ctx: APIContext): string {
   const signedIn = identityOwner(ctx.request);
   const existing = ctx.cookies.get(COOKIE)?.value;
   if (signedIn) {
-    if (fromCookie(existing) && existing !== signedIn)
+    // a gate's user may be on a shared browser: what it made before sign-in stays with the browser
+    if (fromCookie(existing) && existing !== signedIn && !gateUser(ctx.request))
       adopt(existing, signedIn).catch((e) => console.warn(`[nexy] adopting chats failed: ${(e as Error).message}`));
     return signedIn;
   }

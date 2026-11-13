@@ -50,6 +50,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           // without it the gateway derives the session from the system prompt, which changes every
           // turn, so each turn opened a fresh browser on about:blank. It needs the key to be honoured.
           ...(KEY && session ? { "X-Hermes-Session-Id": `nexy-${session}` } : {}),
+          ...(opts?.user ? { "x-nexy-user": opts.user } : {}),
         },
         // vouch for the system message only when the caller says it holds nothing from outside
         body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}), ...(opts?.tz ? { tz: opts.tz } : {}) }),

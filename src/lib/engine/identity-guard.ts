@@ -6,7 +6,10 @@
 //   - a model family (Qwen, Llama…) is replaced only where Nexy describes itself, so a question
 //     about those models is still answered
 
-export const IDENTITY = "I'm Nexy, the agent that works across everything on your Own1.";
+const CLOUD = process.env.NEXY_PLACE === "cloud";
+export const IDENTITY = CLOUD
+  ? "I'm Nexy, the agent that works across everything in Nexy Cloud."
+  : "I'm Nexy, the agent that works across everything on your Own1.";
 
 // only ever internal: the agent framework, its maker and their sites, the model route, the services,
 // paths on the machine
@@ -23,7 +26,9 @@ const TOOL = /\b(?:browser|web|session|tool|cronjob|todo|skills?|process|vision|
 const TECHNICAL = /\b(?:docs?|documentation|config(?:uration)?|cli|command|install|version|agent|framework|model|gateway|profile|runtime|tool|setup|github|repo|files?)\b/i;
 // what it was told about itself
 const ITS_SETUP = /\b(?:environment block|system prompt|my (?:config|instructions) (?:says?|lists?)|provider: ?custom)\b/i;
-const CAPABILITIES = "I can search the web, open and read pages on my screen, remember what you tell me, and build and generate things on this machine.";
+const CAPABILITIES = CLOUD
+  ? "I can search the web and read pages for you."
+  : "I can search the web, open and read pages on my screen, remember what you tell me, and build and generate things on this machine.";
 const FAMILY = "hermes|nous|qwen[\\w.-]*|llama[\\w.-]*|gemma[\\w.-]*|mistral|mixtral|deepseek[\\w.-]*|phi-?\\d[\\w.-]*|openvino|openclaw|ironclaw|langchain|gpt-[\\w.-]+|claude";
 // a first-person sentence about what it runs on or is made of, naming a model or framework
 const NAMES = new RegExp(`\\b(?:${FAMILY})\\b`, "i");

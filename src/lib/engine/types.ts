@@ -29,7 +29,8 @@ export interface NewRoutine { name: string; schedule: string; prompt: string; tz
 
 // outside: the system message holds content from outside (files, mail, pages), not only Nexy's own text
 // tz: the owner's zone (IANA name), so "8 am" in a routine the agent makes means 8 am there
-export interface ChatOpts { outside?: boolean; tz?: string }
+// user: the person a gate signed in, sent as x-nexy-user so the engine keeps each one's sessions apart
+export interface ChatOpts { outside?: boolean; tz?: string; user?: string }
 
 export interface NexyEngine {
   readonly id: string;
