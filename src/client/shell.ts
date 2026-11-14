@@ -9,7 +9,7 @@ import { httpMsg, errText } from "./http";
 import { hasApp, isBeta, localVoice, notHereYet, voiceApi } from "./place";
 import { last } from "./compat";
 import { refreshRoutineCards } from "./memory";
-import { speechReady, tapPcm, toWav, type Pcm } from "./voice-local";
+import { speechFetch, speechReady, tapPcm, toWav, type Pcm } from "./voice-local";
 import { partialScheduler, type Partials } from "./voice-partials";
 
 export interface ShellHooks {
@@ -741,7 +741,7 @@ async function stopAndTranscribe(): Promise<string> {
   if (p && p.seconds() > 0) blob = p.wav();
   else if (!blob.size) return "";
   else if (localVoice) blob = await toWav(blob);
-  const res = await fetch(voiceApi("stt"), { method: "POST", headers: { "content-type": blob.type }, body: blob });
+  const res = await speechFetch(voiceApi("stt"), { method: "POST", headers: { "content-type": blob.type }, body: blob });
   const d = (await res.json().catch((e) => { console.warn("[nexy] speech reply unreadable", e); return {}; })) as { text?: string; error?: string };
   if (!res.ok) throw new Error(d.error ?? httpMsg(res.status));
   return (d.text ?? "").trim();
@@ -776,7 +776,7 @@ async function liveWords(): Promise<string | null> {
   const p = pcm;
   if (!p || p.seconds() < 0.6) return null;
   const cut = p.seconds() > LIVE_WINDOW_S;
-  const res = await fetch(`${voiceApi("stt")}?live=1`, { method: "POST", headers: { "content-type": "audio/wav" }, body: p.wav(LIVE_WINDOW_S) });
+  const res = await speechFetch(`${voiceApi("stt")}?live=1`, { method: "POST", headers: { "content-type": "audio/wav" }, body: p.wav(LIVE_WINDOW_S) });
   if (res.status === 409) return null; // a speech job is running; next turn
   const d = (await res.json()) as { text?: string; error?: string };
   if (!res.ok) throw new Error(d.error ?? httpMsg(res.status));
@@ -796,6 +796,7 @@ function endReview(): void {
 }
 
 async function startV(): Promise<boolean> {
+  if (isPrivate()) return false;
   if (!hasApp("voice")) { H.toast(notHereYet("Talking to Nexy")); return false; }
   if (listening || vphase === "finish") return false;
   endReview();
@@ -836,6 +837,7 @@ async function stopV(): Promise<void> {
   try { t = await stopAndTranscribe(); }
   catch (e) { closeV(); setComposer(vbase); H.toast(`Could not transcribe: ${errText(e)}`); return; }
   closeV();
+  if (isPrivate()) { setComposer(vbase); return; } // turned private meanwhile: dropped
   if (!t) { setComposer(vbase); H.toast("Didn't catch that. Hold to try again."); return; }
   setComposer(withBase(t));
   vphase = "review";
@@ -947,7 +949,7 @@ function vmClose(): void {
   vmState("idle", "");
 }
 async function vmListen(): Promise<void> {
-  if (!VM.on || VM.state === "listen") return;
+  if (!VM.on || VM.state === "listen" || isPrivate()) return;
   if (localVoice) {
     try { await speechReady((m) => vmState("think", m)); }
     catch (e) { vmState("idle", `Speech is not ready: ${errText(e)}`); return; }
@@ -964,6 +966,7 @@ async function vmSend(): Promise<void> {
     const t = await stopAndTranscribe();
     const y = $("#vmYou"); if (y) y.textContent = t;
     if (!t) { vmState("idle", "I heard nothing. Tap to try again."); return; }
+    if (isPrivate()) return; // turned private meanwhile: dropped
     vmState("think", "Thinking");
     await H.send(t);
   } catch (e) {
@@ -971,13 +974,23 @@ async function vmSend(): Promise<void> {
   }
 }
 
+// Speech goes through temporary files on disk, so an ultra-private chat has none: its controls are
+// hidden (styles.css, html[data-private]) and a recording or reply under way is dropped.
+function speechOffWhilePrivate(): void {
+  if (!isPrivate()) return;
+  if (VM.on) vmClose();
+  VM.audio?.pause();
+  cancelV();
+  endReview();
+}
+
 export async function onReply(text: string): Promise<void> {
-  if (!text.trim() || (!VM.on && !prefs().speakAlways) || !hasApp("voice")) return;
+  if (!text.trim() || (!VM.on && !prefs().speakAlways) || !hasApp("voice") || isPrivate()) return;
   const n = $("#vmNexy"); if (n && VM.on) n.textContent = text;
   if (VM.on) vmState("speak", "Speaking");
   try {
     const clean = text.replace(/\*\*/g, "").replace(/\s+/g, " ").slice(0, 600);
-    const res = await fetch(voiceApi("tts"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: clean, voice_id: prefs().voice }) });
+    const res = await speechFetch(voiceApi("tts"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: clean, voice_id: prefs().voice }) });
     if (!res.ok) throw new Error(httpMsg(res.status));
     const url = URL.createObjectURL(await res.blob());
     VM.audio = new Audio(url);
@@ -1033,7 +1046,7 @@ export function initShell(hooks: ShellHooks): void {
       return;
     }
     if (typing) return;
-    if (e.code === "Space" && !e.repeat && prefs().wakeKey && !VM.on) {
+    if (e.code === "Space" && !e.repeat && prefs().wakeKey && !VM.on && !isPrivate()) {
       e.preventDefault();
       if (listening) { if (!spaceHeld) void stopV(); return; } // started by a tap or Redo: Space ends it
       spaceHeld = true;
@@ -1085,7 +1098,7 @@ export function initShell(hooks: ShellHooks): void {
   }, true);
   $("#sendBtn")?.addEventListener("click", endReview);
   // speech runs in Own Voice or on this computer; without either, Nexy says so instead of failing
-  const talk = () => hasApp("voice") ? vmOpen() : H.toast(notHereYet("Talking to Nexy"));
+  const talk = () => isPrivate() ? undefined : hasApp("voice") ? vmOpen() : H.toast(notHereYet("Talking to Nexy"));
   $("#waveBtn")?.addEventListener("click", talk);
   $("#voiceMode")?.addEventListener("click", talk);
   $("#vmClose")?.addEventListener("click", vmClose);
@@ -1093,6 +1106,7 @@ export function initShell(hooks: ShellHooks): void {
   $("#vmTap")?.addEventListener("click", tapOrSend);
   $("#vmMic")?.addEventListener("click", tapOrSend);
   $("#input")?.addEventListener("input", () => { typeE = 1; });
+  addEventListener("nexy:private", speechOffWhilePrivate);
   sizeMini();
   addEventListener("resize", sizeMini);
   requestAnimationFrame(drawMini);

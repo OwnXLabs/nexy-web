@@ -2463,7 +2463,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     for (; el; el = el.nextElementSibling) if (el.classList.contains("ai")) last = el as HTMLElement;
     if (last) rateBar(last, text);
     localTurn.lastTurn = { prompt: text, el: last, at: Date.now() };
-    if (last && visible()) void onReply(last.querySelector(".bub")?.textContent ?? "");
+    if (last && visible()) { if (!nowPrivate) void onReply(last.querySelector(".bub")?.textContent ?? ""); }
     // finished in a chat the person has left: say so where they are now
     else if (last) toast(`Done in another chat: “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`);
     saveChat();

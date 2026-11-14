@@ -51,6 +51,8 @@ check "document titles: cut on a word, without the request's own words" ts tests
 check "eval mode only on a server started for evals; a request alone cannot switch it on" ts tests/eval-gate.test.ts
 check "speech on this computer in the browser, missing speech still gated, Own1 unchanged" node --test --test-timeout=180000 tests/local-voice.cjs
 check "hold to talk in Chromium and WebKit: words while held, checked before Send, Redo, Esc, quick tap, phone" node --test --test-timeout=180000 tests/voice-review.cjs
+check "ultra-private speech: every speech request refused while private" ts tests/private-speech.test.ts
+check "ultra-private on a computer: mic, Talk and voice tip hidden, no reply spoken, no speech call, a recording under way dropped, all back after" node --test --test-timeout=180000 tests/private-voice.cjs
 check "status codes never reach the screen: httpMsg words in src/client" ts tests/status-codes.test.ts
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
 check "routine approval: pending routines wait for Confirm or Discard, clean context vouched for" node --test --test-timeout=180000 tests/routine-approval.cjs

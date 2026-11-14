@@ -196,6 +196,7 @@ const el = (id: string) => document.getElementById(id);
 
 function paint(): void {
   if (typeof document === "undefined") return;
+  document.documentElement.toggleAttribute("data-private", priv); // hides speech (styles.css)
   const banner = el("nexyPrivBanner");
   if (banner) banner.hidden = !priv;
   const lock = el("privBtn");
