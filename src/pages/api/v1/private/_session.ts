@@ -28,6 +28,9 @@ export const list = (who: string): Turn[] => [...(held.get(who) ?? [])];
 
 export const count = (who: string): number => held.get(who)?.length ?? 0;
 
+// an ultra-private session is open for this owner until it is forgotten
+export const privateOpen = (who: string): boolean => count(who) > 0;
+
 export function forget(who: string): number {
   const n = count(who);
   held.delete(who);

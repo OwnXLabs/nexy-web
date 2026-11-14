@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { boxAllowed, boxRefused } from "../../../../lib/box";
+import { owner, privateOpen } from "../private/_session";
 import { isWav, localVoice, prepare, speak, status, transcribe, voices } from "../../../../lib/voice";
 
 // Speech on this computer, for the same calls the page makes to Own Voice on an Own1:
@@ -21,8 +22,13 @@ export const GET: APIRoute = async ({ params, request }) => {
   return json({ error: "unknown" }, 404);
 };
 
-export const POST: APIRoute = async ({ params, request }) => {
+// speech writes temporary files, so none while an ultra-private session is open
+const PRIVATE = "Voice is off in an ultra-private chat. End it to use voice again.";
+
+export const POST: APIRoute = async (ctx) => {
+  const { params, request } = ctx;
   const no = guard(request); if (no) return no;
+  if ((params.op === "stt" || params.op === "tts") && privateOpen(owner(ctx))) return json({ error: PRIVATE }, 409);
   if (params.op === "prepare") return json(prepare());
   if (params.op === "stt") {
     if (status().state !== "ready") return json({ error: "Speech is still getting ready on this computer.", ...prepare() }, 503);
