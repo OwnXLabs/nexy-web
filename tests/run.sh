@@ -94,6 +94,7 @@ check "before routing: a foreign Host gets 421, an oversized body 413, full chat
 check "chat home: greeting, Get started, model download, computer-only offers" node --test --test-timeout=180000 tests/landing.cjs
 check "box features: shown only where the server allows them, no button leads to a refusal, a routine ask said plainly" node --test --test-timeout=180000 tests/box-features.cjs
 check "what counts as a routine ask" ts tests/routine-ask.test.ts
+check "an engine failure is said plainly" ts tests/engine-plain-error.test.ts
 # browser checks against a served build (empty screen dir, throwaway data and reports)
 tmp=$(mktemp -d)
 mkdir -p "$tmp/screen" "$tmp/reports" "$tmp/data"
