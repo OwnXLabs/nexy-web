@@ -11,7 +11,11 @@ let loading: Promise<EngineList | null> | null = null;
 export function loadEngines(fresh = false): Promise<EngineList | null> {
   if (!enginesHere) return Promise.resolve(null);
   if (loading && !fresh) return loading;
-  loading = fetch("/api/v1/engines").then(async (x) => (x.ok ? ((await x.json()) as EngineList) : null))
+  loading = fetch("/api/v1/engines").then(async (x) => {
+    const r = x.ok ? await x.json() as EngineList : null;
+    if (r && !Array.isArray(r.engines)) { console.warn("[nexy] engines: not a list"); return null; }
+    return r;
+  })
     .catch((e) => { console.warn("[nexy] engines unavailable", e); return null; })
     .then((r) => { list = r; window.dispatchEvent(new CustomEvent("nexy:engines")); return r; });
   return loading;

@@ -110,6 +110,8 @@ export function chosen(owner: string | null): EngineChoice | null {
 }
 
 export const choiceById = (id: string | null | undefined): EngineChoice | null => ENGINES.find((c) => c.id === id) ?? null;
+// engines that may answer a fact question from their own memory unless told to search (Nexy Engine searches on its own)
+export const searchesWhenTold = (id: string): boolean => id === "hermes" || id === "openclaw";
 export const labelOf = (id: string): string => choiceById(id)?.label ?? id;
 
 // the engine for this person: their own copy where they have one, else the shared one

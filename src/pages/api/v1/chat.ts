@@ -10,7 +10,7 @@ function logTurn(fields: Record<string, unknown>, isPrivate: boolean): void {
     console.log(JSON.stringify({ at: new Date().toISOString(), endpoint: "chat", ...fields }));
   } catch (e) { console.warn("[nexy] a turn line could not be written", (e as Error).message); }
 }
-import { ENGINES, chosen, engineFor, labelOf, localEngine } from "../../../lib/engine";
+import { ENGINES, chosen, engineFor, labelOf, localEngine, searchesWhenTold } from "../../../lib/engine";
 import { get as savedChat } from "../../../lib/chats";
 import { agentSessionKey, deniesTools, dropInlineImages, wantsResearch } from "../../../lib/agent-turn";
 import { guardIdentity } from "../../../lib/engine/identity-guard";
@@ -34,7 +34,6 @@ const NO_TOOLS_THIS_TURN = [
 ].join("\n");
 // a fact question on an engine that may answer from its own memory instead (Nexy Engine searches on its own)
 const SEARCH_FIRST = "\n\nSearch the web before answering and cite your sources.";
-const SEARCHES_WHEN_TOLD = new Set(["hermes", "openclaw"]);
 // links in a reply: whether it cited anything, counted, never logged as text
 const cited = (reply: string) => (reply.match(/https?:\/\/[^\s)\]>"']+/g) ?? []).length;
 import { overlayLines } from "../../../lib/overlay";
@@ -325,7 +324,7 @@ export const POST: APIRoute = async (ctx) => {
   // a question about a connected app is answered from it, never from a web search
   const asksApp = connectorAsk(String(said ?? ""), history);
   const research = !asksApp && wantsResearch(String(said ?? ""), history);
-  const searchFirst = research && !priv && !!chatEngine && SEARCHES_WHEN_TOLD.has(chatEngine) ? SEARCH_FIRST : "";
+  const searchFirst = research && !priv && !!chatEngine && searchesWhenTold(chatEngine) ? SEARCH_FIRST : "";
   const startedAt = Date.now();
   // One line when a turn starts and one when it ends, each with its result, under one id: a turn
   // that stalls shows as a start with no end, and a question that never reached here shows as nothing.
