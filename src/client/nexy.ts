@@ -136,7 +136,7 @@ const api = async <T>(path: string, init?: RequestInit): Promise<T> => {
     });
     if (r.ok) return r;
     const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
-    throw new HttpError(r.status, detail || r.statusText);
+    throw new HttpError(r.status, detail);
   };
   const read = !init?.method || init.method === "GET";
   for (let i = 0; ; i++) {
@@ -1829,7 +1829,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
   const probe = window.setTimeout(() => {
     if (id) return;
     fetch("/api/v1/health", { signal: timeoutSignal(5_000), cache: "no-store" }).then(
-      (r) => { if (!r.ok) console.warn(`[nexy] health check: HTTP ${r.status}`); },
+      (r) => { if (!r.ok) console.warn(`[nexy] health check: ${httpMsg(r.status)}`); },
       (e) => { console.warn("[nexy] the machine did not answer a health check", e); if (!id) { gone = new DOMException(GONE, "AbortError"); abort.abort(gone); } },
     );
   }, PROBE_MS);
@@ -1865,7 +1865,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
       .catch((e: unknown) => { throw gone ?? e; });
     if (!r.ok) {
       const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
-      throw new HttpError(r.status, detail || r.statusText);
+      throw new HttpError(r.status, detail);
     }
     if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return (await r.json()) as T;
     for (let n = 0; ; n++) {
@@ -2463,7 +2463,7 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     for (; el; el = el.nextElementSibling) if (el.classList.contains("ai")) last = el as HTMLElement;
     if (last) rateBar(last, text);
     localTurn.lastTurn = { prompt: text, el: last, at: Date.now() };
-    if (last && visible()) void onReply(last.querySelector(".bub")?.textContent ?? "");
+    if (last && visible()) { if (!nowPrivate) void onReply(last.querySelector(".bub")?.textContent ?? ""); }
     // finished in a chat the person has left: say so where they are now
     else if (last) toast(`Done in another chat: “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`);
     saveChat();

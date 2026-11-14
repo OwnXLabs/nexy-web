@@ -2,6 +2,8 @@
 // Get started list, the model download chip and the first-visit pill. Only what works on this
 // machine is offered; what isn't here is left out or explained.
 import { boxHere, hasApp, here, inCloud, onOwn1 } from "./place";
+import { httpMsg } from "./http";
+import { isPrivate } from "./private";
 import { prefs } from "./settings";
 
 export interface LandingHooks {
@@ -36,7 +38,7 @@ export const modelReady = (): Promise<void> => model.ready ? Promise.resolve() :
 async function pollModel(): Promise<void> {
   try {
     const r = await fetch("/api/v1/model");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) throw new Error(httpMsg(r.status));
     model = await r.json() as ModelState;
   } catch (e) {
     // can't tell: treat it as ready so nothing waits on a question nobody answers
@@ -115,7 +117,8 @@ const done = new Set<string>((() => {
 function items(): Item[] {
   const loop = /^(localhost|127\.|\[::1\])/.test(location.hostname);
   const out: Item[] = [{ k: "ask", t: "Ask your first thing", tip: `<b>Ask for outcomes</b>Describe what you want done. ${hasApp("startup") ? "Nexy plans it and puts agents on it." : "Nexy works on it with you."}` }];
-  if (hasApp("voice")) out.push({ k: "voice", t: "Talk instead of typing", act: "Try it now", run: () => H.talk(),
+  // no speech in an ultra-private chat (shell.ts speechOffWhilePrivate)
+  if (hasApp("voice") && !isPrivate()) out.push({ k: "voice", t: "Talk instead of typing", act: "Try it now", run: () => H.talk(),
     tip: `<b>Just talk</b>${isPhone() ? "Hold the mic button and speak. Let go, check the words, then Send." : 'Hold <span class="gs-key">Space</span> anywhere and speak. Let go, check the words, then press Enter.'}` });
   // a computer's Nexy reaches a phone through the app's "Add your phone…" (a QR code over the mesh)
   if (!onOwn1 && !inCloud) out.push({ k: "phone", t: "Get Nexy on your phone", act: "Got it", run: () => did("phone"),
@@ -209,15 +212,17 @@ export function welcome(): void {
 }
 
 // the box's hint line cycles through things to try, each one something that works here
+const SPACE = "Hold Space to talk";
 function rotatePlaceholder(): void {
   const R = ["Try: “Summarise my week”", ...(hasApp("images") ? ["Try: “Make a logo for my bakery”"] : []),
-    ...(hasApp("hub") ? [onOwn1 ? "Try: “What’s on my calendar tomorrow?”" : "Try: “Search my email for invoices”"] : []), ...(hasApp("voice") && !isPhone() ? ["Hold Space to talk"] : [])];
+    ...(hasApp("hub") ? [onOwn1 ? "Try: “What’s on my calendar tomorrow?”" : "Try: “Search my email for invoices”"] : []), ...(hasApp("voice") && !isPhone() ? [SPACE] : [])];
   const own = new Set(["Talk to Nexy", ...R]);
   let i = 0;
   setInterval(() => {
     const inp = $<HTMLTextAreaElement>("#input");
     if (!inp || inp.value || !own.has(inp.placeholder)) return;
-    inp.placeholder = document.body.classList.contains("home") ? R[i++ % R.length] : "Talk to Nexy";
+    const tries = isPrivate() ? R.filter((t) => t !== SPACE) : R;
+    inp.placeholder = document.body.classList.contains("home") ? tries[i++ % tries.length] : "Talk to Nexy";
   }, 3200);
 }
 
@@ -228,6 +233,7 @@ export function initLanding(h: LandingHooks): void {
   document.addEventListener("click", closeTip);
   addEventListener("keydown", (e) => { if (e.key === "Escape") closeTip(); });
   addEventListener("nexy:did", (e) => did(String((e as CustomEvent).detail)));
+  addEventListener("nexy:private", () => { closeTip(); paintList(); });
   rotatePlaceholder();
   void pollModel();
   // the design opens the voice tip once, a moment after landing

@@ -4,6 +4,7 @@ import { here } from "./place";
 // also send it to the Nexy team, only when ticked, after showing exactly what goes.
 // Kept identical in nexy/src/client and desktop-demo/src/lib.
 import { bareUrl, scrub } from "../lib/scrub";
+import { httpMsg } from "./http";
 
 export interface ReporterOptions {
   endpoint: string;                 // POST target on this app's own server
@@ -257,7 +258,7 @@ export function openReporter(): void {
     try {
       const r = await fetch(o.team!, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(shown) });
       const j = await r.json().catch((e: Error) => ({ error: `unreadable answer: ${e.message}` }));
-      if (!r.ok) throw new Error(j.error || `error ${r.status}`);
+      if (!r.ok) throw new Error(j.error || httpMsg(r.status));
       done("Sent", `Sent. Reference ${j.ref}. A copy is kept on this computer.`);
     } catch (e) {
       msg.textContent = `Saved on this computer, but not sent: ${(e as Error).message}`;

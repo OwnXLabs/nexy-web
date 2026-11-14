@@ -52,7 +52,10 @@ async function fetchModel(): Promise<void> {
   const free = (() => { try { const s = fs.statfsSync(DIR); return s.bavail * s.bsize; } catch { return Infinity; } })();
   if (MODEL.bytes + 1e9 > free) throw new Error(`not enough free disk space (${Math.round(MODEL.bytes / 1e6)} MB needed, plus 1 GB spare)`);
   const res = await fetch(MODEL.url, { signal: AbortSignal.timeout(1_800_000) });
-  if (!res.ok || !res.body) throw new Error(`the speech model download failed (HTTP ${res.status})`);
+  if (!res.ok || !res.body) {
+    console.error(`speech model download: HTTP ${res.status}`);
+    throw new Error("the speech model download failed; check the connection and try again");
+  }
   const part = `${modelPath()}.part`, out = fs.createWriteStream(part), hash = createHash("sha256");
   try {
     for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {

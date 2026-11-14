@@ -1,5 +1,14 @@
 // Speech on this computer: the recording goes to the local speech service as a 16 kHz mono WAV, and
 // the speech model is fetched once, with progress, before the first recording.
+import { httpMsg } from "./http.ts";
+import { isPrivate } from "./private.ts";
+
+/** Every speech request from a chat. Speech goes through temporary files, on this computer and in
+ *  Own Voice on an Own1, so none is made while the chat is ultra-private. */
+export function speechFetch(url: string, init?: RequestInit): Promise<Response> {
+  if (isPrivate()) return Promise.reject(new Error("speech is off in an ultra-private chat"));
+  return fetch(url, init);
+}
 
 /** 16-bit PCM WAV of mono samples. */
 export function encodeWav(samples: Float32Array, rate: number): Blob {
@@ -66,9 +75,9 @@ export async function toWav(blob: Blob): Promise<Blob> {
 
 type Prep = { state: "missing" | "fetching" | "ready" | "failed"; done: number; total: number; error?: string };
 const get = async (op: "status" | "prepare"): Promise<Prep> => {
-  const r = await fetch(`/api/v1/voice/${op}`, op === "prepare" ? { method: "POST", headers: { "content-type": "application/json" }, body: "{}" } : {});
+  const r = await speechFetch(`/api/v1/voice/${op}`, op === "prepare" ? { method: "POST", headers: { "content-type": "application/json" }, body: "{}" } : {});
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error ?? `HTTP ${r.status}`);
+  if (!r.ok) throw new Error(d.error ?? httpMsg(r.status));
   return d as Prep;
 };
 
