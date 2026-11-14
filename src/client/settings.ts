@@ -58,11 +58,14 @@ async function loadVoices(): Promise<void> {
 }
 const pickedVoice = () => (voices.some((v) => v.id === P.voice) ? P.voice : localVoice ? "" : P.voice);
 
-// memory across chats and routines: the box owner's, so offered only where the server allows them
-const boxRows = (): string => boxHere
-  ? row("Memory", `<button class="btn small" type="button" data-act="mem">What Nexy remembers</button>`, "List, export or forget the conversations the agent keeps") +
-    row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule or when an email or file arrives, on this machine")
-  : row("Memory and routines", not("Need your own Nexy"), "Memory across chats, and prompts that run later, are for the owner of this Nexy");
+// memory across chats and routines: the box owner's, so offered only where the server allows them,
+// and only where the engine in use keeps them
+const boxRows = (c: Caps): string => !boxHere
+  ? row("Memory and routines", not("Need your own Nexy"), "Memory across chats, and prompts that run later, are for the owner of this Nexy")
+  : (c.memory ? row("Memory", `<button class="btn small" type="button" data-act="mem">What Nexy remembers</button>`, "List, export or forget the conversations the agent keeps")
+    : row("Memory", not("None to show"), "This engine keeps no memory Nexy can show")) +
+    (c.routines ? row("Routines", `<button class="btn small" type="button" data-act="routines">Show routines</button>`, "Prompts that run on a schedule or when an email or file arrives, on this machine")
+    : row("Routines", not("Not with this engine"), "This engine has no routines Nexy can set"));
 
 async function section(sec: string): Promise<string> {
   if (sec === "general") return `<h3>General</h3>` +
@@ -73,14 +76,15 @@ async function section(sec: string): Promise<string> {
     (hasApp("startup") ? row("Where new projects live", sel("defloc", [["own1", "Own 1, this desk"]], "own1")) : "");
   if (sec === "nexy") {
     await loadVoices();
-    if (!hasApp("voice")) return `<h3>Nexy</h3>` + await engineRow() +
+    const list = await loadEngines(), caps = capsIn(list);
+    if (!hasApp("voice")) return `<h3>Nexy</h3>` + engineRow(list) +
       row("Voice", not("Coming in an update"), "Talking to Nexy on this computer arrives in an update") +
-      boxRows();
-    return `<h3>Nexy</h3>` + await engineRow() +
+      boxRows(caps);
+    return `<h3>Nexy</h3>` + engineRow(list) +
       row("Voice", voices.length ? sel("voice", voices.map((v) => [v.id, v.name]), pickedVoice()) : not(`${speech} is not answering`), localVoice ? "Spoken by this computer's own voices; nothing leaves it" : "Spoken by Own Voice on this machine") +
       row("Speak replies aloud", sw(P.speakAlways, "speakAlways"), "Off: only in voice mode") +
       row("Hold space to talk", sw(P.wakeKey, "wakeKey")) +
-      boxRows() +
+      boxRows(caps) +
       `<div class="sbtns"><button class="btn small" type="button" data-act="testVoice">Test the voice</button></div>`;
   }
   if (sec === "team" && !hasApp("startup")) return `<h3>Team</h3><p class="sp">A team of agents working through a plan runs on an Own1 or Nexy Cloud. On this computer, Nexy is one assistant.</p>`;
@@ -114,6 +118,7 @@ async function section(sec: string): Promise<string> {
     row("Agents inherit these", null, "An agent never has more than Nexy");
   if (sec === "cloud") return `<h3>Nexy Cloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on ${here}. Everything runs here.</p>` +
     row("Connection", not("Not connected")) + row("Spending", not("Nothing can be spent"), "There is no wallet or payment method on this machine");
+  const forgets = sec === "security" && boxHere && capsIn(await loadEngines()).memory;
   if (sec === "security") return `<h3>Security and privacy</h3>` +
     row("Where your data lives", not(onHere), inCloud ? "Chats and files stay on this server, which OwnX runs" : "Chats, files, builds and memory stay on this machine") +
     row("Telemetry", not("Off"), inCloud ? "Nothing is sent anywhere beyond this server" : "Nothing is sent to OwnX Labs") +
@@ -121,7 +126,7 @@ async function section(sec: string): Promise<string> {
     (searchHere ? row("Web search", not("Only when you ask"), // the search runs here but asks the search engines directly (privacy engineering doc, §3.5)
       `Through this machine's own search, never through OwnX. The search engines it asks see your query and ${onOwn1 ? "this Own1's" : inCloud ? "Nexy Cloud's" : "this computer's"} IP address, and so do pages Nexy opens`)
       : row("Web search", not("Not set up"), `There is no web search on ${here} yet, so nothing is searched`)) +
-    `<div class="sbtns"><button class="btn small" type="button" data-act="feedback">Show my feedback</button><button class="btn small" type="button" data-act="clearfb">Clear my feedback</button>${boxHere ? `<button class="btn small" type="button" data-act="forget">Forget what Nexy remembers</button>` : ""}</div>`;
+    `<div class="sbtns"><button class="btn small" type="button" data-act="feedback">Show my feedback</button><button class="btn small" type="button" data-act="clearfb">Clear my feedback</button>${forgets ? `<button class="btn small" type="button" data-act="forget">Forget what Nexy remembers</button>` : ""}</div>`;
   if (sec === "appearance") return `<h3>Appearance</h3><h4>Theme</h4><div class="themes">` +
     ([["default", "Default", "the aurora, glass"], ["standard", "Standard", "black, no glass, like the chat apps"], ["cyberpunk", "Cyberpunk", "neon on black"],
       ["win95", "Windows 95", "bevels, teal, Tahoma"], ["lcars", "LCARS", "elbows, amber, lavender"], ["topgun", "Top Gun", "tarmac, sunset, chrome"]] as const)
@@ -158,10 +163,18 @@ function connRow(c: CatalogEntry, granted: string[] | null): string {
 }
 
 // the agent engine for this owner's chats; names come from the server, which lists what runs here
-type EngineList = { engines: { id: string; label: string; note: string }[]; selected: string | null };
-async function engineRow(): Promise<string> {
-  if (!enginesHere) return "";
-  const r = await fetch("/api/v1/engines").then(async (x) => (x.ok ? ((await x.json()) as EngineList) : null)).catch((e) => { console.warn("[nexy] engines unavailable", e); return null; });
+type Caps = { memory: boolean; routines: boolean };
+type EngineList = { engines: ({ id: string; label: string; note: string } & Caps)[]; selected: string | null };
+async function loadEngines(): Promise<EngineList | null> {
+  if (!enginesHere) return null;
+  return fetch("/api/v1/engines").then(async (x) => (x.ok ? ((await x.json()) as EngineList) : null)).catch((e) => { console.warn("[nexy] engines unavailable", e); return null; });
+}
+// what the engine in use keeps; without a list, the one engine here, which keeps both
+const capsIn = (r: EngineList | null): Caps => {
+  const cur = r?.engines.find((e) => e.id === r.selected) ?? r?.engines[0];
+  return { memory: cur?.memory !== false, routines: cur?.routines !== false };
+};
+function engineRow(r: EngineList | null): string {
   // engine names show only where there is a real choice between them
   if (!r || r.engines.length < 2) return "";
   const cur = r.engines.find((e) => e.id === r.selected) ?? r.engines[0];

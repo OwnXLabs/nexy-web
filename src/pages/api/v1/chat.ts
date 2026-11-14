@@ -287,7 +287,7 @@ export const POST: APIRoute = async (ctx) => {
       remember(who, { role: "assistant", content: text, ts: Date.now() }, priv);
   };
 
-  const decided = upstreamFor(engineFor(false, false, picker, user).id === "gateway", priv);
+  const decided = upstreamFor(engineFor(false, false, picker, user), priv);
   const isEval = wantsEval(body?.eval === true);
   const eng = engineFor(priv, isEval, picker, user);
   // one agent session per chat, so its browser keeps the page between turns. The chat id comes
@@ -355,7 +355,7 @@ export const POST: APIRoute = async (ctx) => {
       const r = await use.chat(
         String(said ?? ""),
         history,
-        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine, box) + browse + connPrompt,
+        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine, box && !!use.routines) + browse + connPrompt,
         // silent past its budget, the agent gives way to the model alone (below): a stuck agent
         // turn must not leave the person waiting minutes for nothing
         b.signal,

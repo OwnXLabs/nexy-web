@@ -1,29 +1,37 @@
-import type { APIRoute } from "astro";
-import { engineFor } from "../../../lib/engine";
+import type { APIContext, APIRoute } from "astro";
+import { engineFor, type NexyEngine } from "../../../lib/engine";
 import { boxAllowed, boxRefused } from "../../../lib/box";
-import { identityOwner } from "../../../lib/owner";
+import { owner } from "../../../lib/owner";
 import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
 
 export const prerender = false;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
-const rt = (r: Request) => { const e = engineFor(false, wantsEval(r.headers.get("x-nexy-eval") === "1"), identityOwner(r)); return e.available() ? e.routines : undefined; };
 const NONE = "Routines need the agent's scheduler, which is not configured on this machine.";
+const NOT_KEPT = "The agent engine picked in Settings keeps no routines Nexy can set.";
+// the engine this owner's chats use: its routines, or the plain reason there are none
+const rt = (ctx: APIContext): NonNullable<NexyEngine["routines"]> | Response => {
+  const e = engineFor(false, wantsEval(ctx.request.headers.get("x-nexy-eval") === "1"), owner(ctx));
+  if (!e.available()) return json({ error: NONE }, 503);
+  return e.routines ?? json({ available: false, note: NOT_KEPT, routines: [] });
+};
 // the owner's zone from the request body: a name, undefined when none, or a 400 for one nobody knows
 const zoneOf = (b: any): string | undefined | Response => {
   try { return ownerZone(b?.tz) ?? undefined; }
   catch (e) { if (e instanceof RangeError) return json({ error: `unknown time zone: ${e.message}`.slice(0, 200) }, 400); throw e; }
 };
 
-export const GET: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async (ctx) => {
+  const { request } = ctx;
   if (!boxAllowed(request)) return boxRefused();
-  const r = rt(request); if (!r) return json({ error: NONE }, 503);
+  const r = rt(ctx); if (r instanceof Response) return r;
   try { return json({ routines: await r.list() }); } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
 };
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (ctx) => {
+  const { request } = ctx;
   if (!boxAllowed(request)) return boxRefused();
-  const r = rt(request); if (!r) return json({ error: NONE }, 503);
+  const r = rt(ctx); if (r instanceof Response) return r;
   let b: any; try { b = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
   if (b?.private === true) return json({ error: "private", note: "A routine keeps its results, so it cannot be made from an ultra-private chat." }, 409);
   const name = String(b?.name ?? "").trim().slice(0, 80), schedule = String(b?.schedule ?? "").trim(), prompt = String(b?.prompt ?? "").trim().slice(0, 2000);
@@ -33,18 +41,20 @@ export const POST: APIRoute = async ({ request }) => {
   try { return json({ routine: await r.create({ name, schedule, prompt, tz, utcSchedule }) }); } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
 };
 
-export const DELETE: APIRoute = async ({ url, request }) => {
+export const DELETE: APIRoute = async (ctx) => {
+  const { url, request } = ctx;
   if (!boxAllowed(request)) return boxRefused();
-  const r = rt(request); if (!r) return json({ error: NONE }, 503);
+  const r = rt(ctx); if (r instanceof Response) return r;
   const id = url.searchParams.get("id"); if (!id) return json({ error: "id required" }, 400);
   try { await r.remove(id); return json({ ok: true }); } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
 };
 
 // the owner's answer to a routine made while outside content was in the agent's context, the
 // owner pausing and resuming one, or running one now
-export const PATCH: APIRoute = async ({ request }) => {
+export const PATCH: APIRoute = async (ctx) => {
+  const { request } = ctx;
   if (!boxAllowed(request)) return boxRefused();
-  const r = rt(request); if (!r) return json({ error: NONE }, 503);
+  const r = rt(ctx); if (r instanceof Response) return r;
   let b: any; try { b = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
   const id = String(b?.id ?? "").trim(), action = b?.action;
   if (id && action === "run") {

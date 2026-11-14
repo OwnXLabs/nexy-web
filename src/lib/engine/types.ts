@@ -34,6 +34,8 @@ export interface ChatOpts { outside?: boolean; tz?: string; user?: string }
 
 export interface NexyEngine {
   readonly id: string;
+  // where a turn goes and what keeps it, said in a reply's `upstream`
+  readonly upstream?: string;
   available(): boolean;
   // session: a stable id per chat, so the agent keeps one browser (and its own history) across turns
   chat(message: string, history: ChatTurn[], system: string, signal?: AbortSignal, session?: string, onText?: (delta: string) => void, opts?: ChatOpts): Promise<ChatResult>;
