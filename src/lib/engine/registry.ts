@@ -13,13 +13,15 @@ import { DEFAULT_AGENT, openclawEngine } from "./openclaw";
 // engine, with its own key in NEXY_ENGINE_<ID>_USER_KEYS="u01:<key>,…"; anyone else, or anyone
 // without a key, uses the shared one.
 // OpenClaw speaks the OpenAI chat API only; NEXY_ENGINE_OPENCLAW_AGENT names its agent target.
+// NEXY_DEFAULT_ENGINE=nexy-engine is the engine for anyone who has not picked one; unset, it is the
+// deploy-time agent.
 export interface EngineChoice { id: string; label: string; note: string; engine: NexyEngine; users?: Map<string, NexyEngine> }
 
 // what an engine keeps that Nexy can show: the UI offers only these
 export const capsOf = (e: NexyEngine) => ({ memory: !!e.memory, routines: !!e.routines });
 
 const LABELS: Record<string, [string, string]> = {
-  "hermes": ["Hermes", "Nous Research's agent; the default"],
+  "hermes": ["Hermes", "Nous Research's agent"],
   "nexy-engine": ["Nexy Engine", "OwnX's own small agent engine"],
   "openclaw": ["OpenClaw", "Open-source agent gateway"],
   "ironclaw": ["IronClaw", "NEAR AI's sandboxed agent"],
@@ -51,15 +53,27 @@ function perUser(id: string): Map<string, NexyEngine> | undefined {
   return out;
 }
 
+// engines that speak as themselves: Nexy's persona, its rules and the identity guard are for Nexy Engine
+const OWN_IDENTITY = /^(?:hermes(?:-.*)?|openclaw)$/;
+const named = (id: string, e: NexyEngine): NexyEngine => (OWN_IDENTITY.test(id) ? { ...e, ownIdentity: true } : e);
+
 function engineAt(id: string, url: string, key: string): NexyEngine {
-  if (id === "openclaw") return openclawEngine(url, key, process.env.NEXY_ENGINE_OPENCLAW_AGENT?.trim() || DEFAULT_AGENT, id);
-  return gatewayEngine(url, key, id);
+  if (id === "openclaw") return named(id, openclawEngine(url, key, process.env.NEXY_ENGINE_OPENCLAW_AGENT?.trim() || DEFAULT_AGENT, id));
+  return named(id, gatewayEngine(url, key, id));
 }
+
+// the Mac, Windows and phone apps: Nexy and the engine the app starts, nothing else
+const COMPUTER = process.env.NEXY_STUDIOS === "off" && process.env.NEXY_PLACE !== "cloud";
 
 function build(): EngineChoice[] {
   const out: EngineChoice[] = [];
   const base = (process.env.NEXY_AGENT_NAME ?? "hermes").trim() || "hermes";
-  if (hermesEngine.available()) out.push(choice(base, hermesEngine));
+  // the id stays as it was, so the app's saved chats keep their engine
+  if (COMPUTER) {
+    if (hermesEngine.available()) out.push({ id: base, label: LABELS["nexy-engine"][0], note: LABELS["nexy-engine"][1], engine: hermesEngine });
+    return out;
+  }
+  if (hermesEngine.available()) out.push(choice(base, named(base, hermesEngine)));
   for (const raw of (process.env.NEXY_ENGINES ?? "").split(",")) {
     const id = raw.trim().toLowerCase();
     if (!/^[a-z0-9-]{1,32}$/.test(id) || out.some((c) => c.id === id)) continue;
@@ -76,6 +90,14 @@ function choice(id: string, engine: NexyEngine): EngineChoice {
 }
 
 export const ENGINES: EngineChoice[] = build();
+
+const WANTED = COMPUTER ? "" : (process.env.NEXY_DEFAULT_ENGINE ?? "").trim().toLowerCase();
+const configured = WANTED ? ENGINES.find((c) => c.id === WANTED) ?? null : null;
+if (WANTED && !configured) console.warn(`[nexy] NEXY_DEFAULT_ENGINE=${WANTED} is not on this machine; the default stays ${ENGINES[0]?.id ?? "the local model"}`);
+// the engine of anyone who has not picked one; null only with no engine at all
+export const defaultChoice = (): EngineChoice | null => configured ?? ENGINES[0] ?? null;
+// the configured default, for paths with no owner; null where none is set or it is missing
+export const configuredDefault = (): EngineChoice | null => configured;
 
 // one choice per owner, kept with the owner's other data on this machine
 const FILE = process.env.NEXY_DATA_DIR ? path.join(process.env.NEXY_DATA_DIR, "engines.json") : "/var/lib/nexy/engines.json";
@@ -106,7 +128,7 @@ export function pick(owner: string, id: string): void {
 export function chosen(owner: string | null): EngineChoice | null {
   if (!ENGINES.length) return null;
   const id = owner ? pickedId(owner) : null;
-  return ENGINES.find((c) => c.id === id) ?? ENGINES[0];
+  return ENGINES.find((c) => c.id === id) ?? defaultChoice();
 }
 
 export const choiceById = (id: string | null | undefined): EngineChoice | null => ENGINES.find((c) => c.id === id) ?? null;

@@ -172,8 +172,10 @@ const capsIn = (r: EngineList | null): Caps => {
 function engineRow(r: EngineList | null): string {
   // engine names show only where there is a real choice between them
   if (!r || r.engines.length < 2) return "";
-  const cur = r.engines.find((e) => e.id === r.selected) ?? r.engines[0];
-  return row("Agent engine", `<select data-engine>${r.engines.map((e) => `<option value="${esc(e.id)}"${e.id === cur.id ? " selected" : ""}>${esc(e.label)}</option>`).join("")}</select>`,
+  const def = r.engines.find((e) => e.id === r.default) ?? r.engines[0];
+  const cur = r.engines.find((e) => e.id === r.selected) ?? def;
+  const name = (e: typeof cur) => e.id === def.id ? `${e.label} (default)` : e.label;
+  return row("Agent engine", `<select data-engine>${r.engines.map((e) => `<option value="${esc(e.id)}"${e.id === cur.id ? " selected" : ""}>${esc(name(e))}</option>`).join("")}</select>`,
     `${esc(cur.note)}. Applies to new chats; each chat stays with the engine it started on.`);
 }
 

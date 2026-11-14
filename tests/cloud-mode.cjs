@@ -105,7 +105,7 @@ test('a gate user gets no whole-box features', { timeout: 60000 }, async () => {
 test('engines: each person picks one, their own microVM with its own key, x-nexy-user sent', { timeout: 90000 }, async () => {
   const hermes = await engine('hermes'), think = await engine('think'), shared = await engine('shared'), vm1 = await engine('vm1'), vm3 = await engine('vm3');
   const s = await start({
-    NEXY_TRUST_GATE_USER: '1', NEXY_STUDIOS: 'off', NEXY_ENGINE: 'gateway',
+    NEXY_TRUST_GATE_USER: '1', NEXY_PLACE: 'cloud', NEXY_STUDIOS: 'off', NEXY_ENGINE: 'gateway',
     NEXY_AGENT_URL: hermes.url, NEXY_AGENT_KEY: 'key-hermes',
     NEXY_ENGINES: 'hermes-think,nexy-engine',
     NEXY_ENGINE_HERMES_THINK_URL: think.url, NEXY_ENGINE_HERMES_THINK_KEY: 'key-hermes',
@@ -164,7 +164,9 @@ test('Nexy Cloud: the page, the prompt and the replies say so; no agent screen',
     const r = await ask(u01, 'open github.com and sign me in');
     assert.equal(r.choices[0].message.content, 'Open it here.', 'a hand-over marker never reaches the page');
     const sys = hermes.seen.find((x) => x.path.startsWith('/v1/chat')).body.messages[0].content;
-    assert.match(sys, /^You are Nexy, the assistant in Nexy Cloud, hosted by OwnX on servers it operates\./);
+    // a signed-in person may pick engines, so Hermes speaks as itself: told where it runs, not who to be
+    assert.match(sys, /^You are working in Nexy Cloud, hosted by OwnX on servers it operates\./);
+    assert.doesNotMatch(sys, /You are Nexy|Never name the engine/);
     assert.doesNotMatch(sys, /Own1 machine|this computer|not a cloud service|runs on this device/);
     assert.doesNotMatch(sys, /take-control|watch your browser|open it in your\s+browser/i, 'no screen to hand over or watch');
   } finally { s.p.kill(); hermes.srv.close(); }

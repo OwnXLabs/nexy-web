@@ -140,6 +140,19 @@ however many times Open is clicked, and the tab opens after indexing. A refused 
 plainly and the document stays. Every visible work-pane button is clicked and none may lead to
 a "cannot" or "not yet" message.
 
+Who speaks and the default engine
+=================================
+
+`node --test tests/engine-identity.cjs` and `ts tests/default-engine.test.ts` after
+`npm run build`. Stand-in Hermes, Nexy Engine, OpenClaw and plain-model gateways. Nexy Engine's
+prompt has Nexy's persona and naming rule, and a leaked engine name is rewritten, whole and
+streamed; Hermes and OpenClaw get neither, and "I'm Hermes Agent, built by Nous Research" reaches
+the page unchanged. A failure worded as a reply falls back to the plain model on every engine
+and never shows. A demo visitor without the picker always meets Nexy. `NEXY_DEFAULT_ENGINE`
+puts a fresh owner, and paths with no owner, on that engine; a pick wins; a missing or unset
+default keeps the deploy-time agent. With `NEXY_STUDIOS=off` (the Nexy app) only the app's own
+engine is listed, labelled Nexy Engine, and it speaks as Nexy.
+
 Per-chat engine checks
 ======================
 

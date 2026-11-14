@@ -1,7 +1,9 @@
 // Whole-box features (memory across chats, routines, the engine pick, speech on this computer) show
 // only where the server allows them for this visitor (src/lib/box.ts). With NEXY_BOX_FEATURES unset,
 // as on a public demo, no button leads to a refusal and a routine ask gets a plain sentence; with
-// NEXY_BOX_FEATURES=open they show and work. The agent and the second engine are stand-ins.
+// NEXY_BOX_FEATURES=open they show and work. On a computer the app runs one engine, so there is no
+// engine pick even with a second engine in its environment (tests/engine-picker.cjs has the pick).
+// The agent and the second engine are stand-ins.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/box-features.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -52,7 +54,7 @@ async function start(env) {
   p.kill(); throw new Error('server did not start\n' + log);
 }
 
-// a computer with speech, two engines and an agent: every box feature would have something to show
+// a computer with speech, a second engine leaking into its environment and an agent
 const computer = (g, box) => ({
   NEXY_BOX_FEATURES: box, NEXY_STUDIOS: 'off', NEXY_ENGINE: 'gateway', NEXY_AGENT_URL: g.url, NEXY_AGENT_KEY: 'k',
   NEXY_ENGINES: 'nexy-engine', NEXY_ENGINE_NEXY_ENGINE_URL: g.url,
@@ -145,7 +147,7 @@ test('box features off: nothing that leads to a refusal, a routine ask said plai
   } finally { await b.close(); s.p.kill(); g.srv.close(); fs.rmSync(s.data, { recursive: true, force: true }); }
 });
 
-test('box features open: memory, routines, the engine pick and speech show and work', { timeout: 120000 }, async () => {
+test('box features open: memory, routines and speech show and work; the app has no engine pick', { timeout: 120000 }, async () => {
   const g = await agent();
   const s = await start(computer(g, 'open'));
   const b = await chromium.launch();
@@ -157,14 +159,11 @@ test('box features open: memory, routines, the engine pick and speech show and w
     assert.match(await page.locator('body').innerText(), /Give me a news brief every morning/);
 
     const nexy = await v.settings('nexy');
-    assert.match(nexy, /Agent engine/);
+    assert.doesNotMatch(nexy, /Agent engine/, 'one engine in the app: nothing to pick');
     assert.match(nexy, /What Nexy remembers/);
     assert.match(nexy, /Show routines/);
     assert(await page.locator('#ovSet [data-sel="voice"] option').count() > 0, 'the voices came from this computer');
-    await page.locator('#ovSet [data-engine]').selectOption('nexy-engine');
-    await page.waitForResponse((r) => r.url().endsWith('/api/v1/engines') && r.request().method() === 'POST' && r.ok());
-    await page.waitForTimeout(500);
-    assert.equal(await page.locator('#ovSet [data-engine]').inputValue(), 'nexy-engine', 'the pick holds');
+    assert.equal(await page.locator('#ovSet [data-engine]').count(), 0);
     await page.locator('#ovSet [data-act="routines"]').click();
     await page.locator('#thread .msg.ai', { hasText: 'No routines yet' }).waitFor({ timeout: 20000 });
     assert.match(await v.ask('what do you remember'), /not keeping any conversations/);
@@ -172,7 +171,7 @@ test('box features open: memory, routines, the engine pick and speech show and w
     assert(g.turns.includes(REMIND));
     assert.match(await v.settings('security'), /Forget what Nexy remembers/);
 
-    for (const c of ['GET /api/v1/engines 200', 'POST /api/v1/engines 200', 'GET /api/v1/routines 200', 'GET /api/v1/memory 200', 'GET /api/v1/voice/voices 200'])
+    for (const c of ['GET /api/v1/engines 200', 'GET /api/v1/routines 200', 'GET /api/v1/memory 200', 'GET /api/v1/voice/voices 200'])
       assert(v.calls.includes(c), `${c} in ${JSON.stringify(v.calls)}`);
     assert.deepEqual(v.refused, []);
     assert.deepEqual(v.errs, []);

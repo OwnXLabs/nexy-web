@@ -51,6 +51,8 @@ export interface NexyEngine {
   browsed?(session: string, since: number): Promise<boolean>;
   // the tools the agent ran in this session since `since` (ms), from its own record; null where it has none
   toolsSince?(session: string, since: number): Promise<string[] | null>;
+  // speaks as itself: no Nexy persona or naming rules in its prompt, no identity guard on its replies
+  readonly ownIdentity?: boolean;
   memory?: {
     list(): Promise<MemoryItem[]>;
     export(): Promise<Array<{ id: string; title: string; messages: unknown[] }>>;

@@ -1,7 +1,7 @@
 import type { NexyEngine } from "./types";
 import { hermesEngine, testEngine } from "./hermes";
 import { localEngine } from "./local";
-import { choiceById, chosen, engineOf } from "./registry";
+import { choiceById, chosen, configuredDefault, engineOf } from "./registry";
 
 const REGISTRY: Record<string, NexyEngine> = {
   gateway: hermesEngine,
@@ -10,6 +10,9 @@ const REGISTRY: Record<string, NexyEngine> = {
 
 export function selectEngine(): NexyEngine {
   const want = (process.env.NEXY_ENGINE ?? "").trim();
+  // NEXY_DEFAULT_ENGINE, where it is set and here, unless this machine is set to the model alone
+  const d = want === "local" ? null : configuredDefault()?.engine;
+  if (d?.available()) return d;
   if (want && REGISTRY[want]?.available()) return REGISTRY[want];
   if (hermesEngine.available()) return hermesEngine;
   return localEngine;
@@ -30,6 +33,6 @@ export function engineFor(isPrivate: boolean, isEval = false, owner: string | nu
 export const engine: NexyEngine = selectEngine();
 // the stateless model on this box: the fallback when the agent stalls, and the ultra-private path
 export { localEngine };
-export { ENGINES, capsOf, choiceById, chosen, engineOf, labelOf, pick, pickedId, searchesWhenTold } from "./registry";
+export { ENGINES, capsOf, choiceById, chosen, defaultChoice, engineOf, labelOf, pick, pickedId, searchesWhenTold } from "./registry";
 export type { EngineChoice } from "./registry";
 export type { ChatResult, ChatTurn, NexyEngine } from "./types";

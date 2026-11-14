@@ -69,7 +69,7 @@ test('OpenClaw in Settings and in chat: listed, kept across a reload, answers, n
     await page.locator('#input').waitFor({ timeout: 20000 });
     await settings('nexy');
     const engine = page.locator('#ovSet select[data-engine]');
-    assert.deepEqual(await engine.locator('option').allInnerTexts(), ['Hermes', 'Nexy Engine', 'OpenClaw'], 'three engines');
+    assert.deepEqual(await engine.locator('option').allInnerTexts(), ['Hermes (default)', 'Nexy Engine', 'OpenClaw'], 'three engines, the default marked');
     assert.equal(await engine.inputValue(), 'hermes');
     assert.equal(await page.locator('#ovSet [data-act="mem"]').count(), 1, 'Hermes keeps memory: offered');
 

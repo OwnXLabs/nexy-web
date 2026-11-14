@@ -1,16 +1,17 @@
 import type { APIRoute } from "astro";
-import { ENGINES, capsOf, chosen, pick } from "../../../lib/engine";
+import { ENGINES, capsOf, chosen, defaultChoice, pick } from "../../../lib/engine";
 import { owner } from "../../../lib/owner";
 import { boxRefused, pickAllowed as allowed } from "../../../lib/box";
 
 export const prerender = false;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-// the agent engines on this machine, what each keeps that Nexy can show, and which one this owner's chats use
+// the agent engines on this machine, what each keeps that Nexy can show, which one this owner's chats use
+// and which one is used by anyone who has not picked
 export const GET: APIRoute = async (ctx) => {
   if (!allowed(ctx.request)) return boxRefused();
   const c = chosen(owner(ctx));
-  return json({ engines: ENGINES.map((e) => ({ id: e.id, label: e.label, note: e.note, ...capsOf(e.engine) })), selected: c?.id ?? null });
+  return json({ engines: ENGINES.map((e) => ({ id: e.id, label: e.label, note: e.note, ...capsOf(e.engine) })), selected: c?.id ?? null, default: defaultChoice()?.id ?? null });
 };
 
 export const POST: APIRoute = async (ctx) => {

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { randomUUID } from "node:crypto";
-import { visible } from "../../../lib/stream-guard";
+import { faultReply, visible } from "../../../lib/stream-guard";
 import { owner, remember, upstreamFor } from "./private/_session";
 import { gateUser, owner as signedOwner } from "../../../lib/owner";
 
@@ -13,7 +13,7 @@ function logTurn(fields: Record<string, unknown>, isPrivate: boolean): void {
 import { ENGINES, chosen, engineFor, labelOf, localEngine, searchesWhenTold } from "../../../lib/engine";
 import { get as savedChat } from "../../../lib/chats";
 import { agentSessionKey, deniesTools, dropInlineImages, wantsResearch } from "../../../lib/agent-turn";
-import { guardIdentity } from "../../../lib/engine/identity-guard";
+import { IDENTITY, guardIdentity } from "../../../lib/engine/identity-guard";
 import { canStart, rejoin, sse, startTurn } from "../../../lib/turns";
 import { budget, type Budget } from "../../../lib/budget";
 
@@ -42,7 +42,7 @@ import { connectorAsk, connectorTurn } from "../../../lib/connectors";
 import { byId } from "../../../lib/apps";
 import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
-import { boxAllowed } from "../../../lib/box";
+import { boxAllowed, pickAllowed } from "../../../lib/box";
 import { ROUTINES_ELSEWHERE, routineAsk } from "../../../lib/routine-ask";
 
 export const prerender = false;
@@ -62,6 +62,11 @@ const WHERE = CLOUD
     `You are Nexy, the assistant on ${process.env.NEXY_STUDIOS === "off" ? "this computer" : "an Own1 machine"}. You are not a cloud service.`,
     "Everything you do runs on this device. Nothing leaves it unless the user is asked first.",
   ];
+// An engine that speaks as itself (Hermes, OpenClaw) is told where it runs, not who to be
+const PLACE = CLOUD
+  ? "You are working in Nexy Cloud, hosted by OwnX on servers it operates."
+  : `You are working on ${process.env.NEXY_STUDIOS === "off" ? "this computer" : "an Own1 machine"}, through Nexy.`;
+const WHO = `If asked who or what you are, say "${IDENTITY}" Never name the engine, model or company behind you.`;
 
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), {
@@ -121,7 +126,8 @@ function hasOutside(body: any): boolean {
 
 // agent: the turn goes to an agent with tools (routines among them), not the model alone
 // routines: this visitor may have them (src/lib/box.ts)
-function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval = false, agent = false, routines = true): string {
+// self: the engine speaks as itself, so no Nexy persona and no naming rules
+function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval = false, agent = false, routines = true, self = false): string {
   const c = (ctx ?? {}) as {
     projects?: { name: string; tasks: number; done: number }[];
     apps?: string[];
@@ -130,7 +136,7 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
     open?: { title?: string; text?: string };
   };
   const lines: string[] = [
-    WHERE[0],
+    ...(self ? [PLACE] : [WHERE[0], WHO]),
     // without it the model took its training year for today: "SpaceX is a private company", and
     // today's articles dated 2025 (2026-10-28)
     `Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`,
@@ -255,7 +261,8 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
 }
 
 // what runs Nexy never leaves in a reply, whatever the model was talked into (identity-guard.ts)
-function guard(reply: string): string {
+function guard(reply: string, self = false): string {
+  if (self) return reply;
   const g = guardIdentity(reply);
   if (g.changed) console.warn("[nexy] a reply named the engine or the model; rewritten before it left");
   return g.reply;
@@ -313,6 +320,9 @@ export const POST: APIRoute = async (ctx) => {
   const decided = upstreamFor(engineFor(false, false, picker, user, chatEngine), priv);
   const isEval = wantsEval(body?.eval === true);
   const eng = engineFor(priv, isEval, picker, user, chatEngine);
+  // Hermes and OpenClaw speak as themselves to anyone who may pick engines; a demo visitor, who
+  // may not, always meets Nexy
+  const speaksAsItself = (e: typeof eng) => !!e.ownIdentity && pickAllowed(ctx.request);
   // one agent session per chat, so its browser keeps the page between turns. The chat id comes
   // from the browser and is guessable, so the key also binds the caller and their demo sign-in:
   // nobody can name another visitor's chat and load its history.
@@ -333,14 +343,14 @@ export const POST: APIRoute = async (ctx) => {
     logTurn({ turn: tid.slice(0, 8), ...(chatEngine ? { engine: chatEngine } : {}), ...fields, ...(isEval ? { eval: true } : {}) }, priv);
   // stopped while still writing: what it wrote is kept, and the person is offered to continue
   // `broke`: the model died mid-answer (Ollama killed), rather than running past its budget
-  const stoppedTurn = (b: Budget, via: string, broke = false) => {
-    const cut = guard(dropInlineImages(b.text, false));
+  const stoppedTurn = (b: Budget, via: string, broke = false, self = false) => {
+    const cut = guard(dropInlineImages(b.text, false), self);
     const reply = SCREEN ? cut : cut.replace(NO_HANDOVER, "").trim();
     answered(reply);
     log({ result: "stopped", via, stopped: b.stopped, ms: Date.now() - startedAt, replyChars: reply.length });
     return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via, grounded: false, stopped: true, broke: broke || undefined, private: priv || undefined } };
   };
-  const run = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
+  const run = async (onText?: (d: string) => void, restart?: (self?: boolean) => void): Promise<{ status: number; body: unknown }> => {
     // asked to open a site: open it on the agent's screen first and hand the agent the page, so
     // the person watches it there even when the model would have searched instead
     let browse = priv || !SCREEN ? "" : browserTurn(String(said ?? ""));
@@ -366,6 +376,8 @@ export const POST: APIRoute = async (ctx) => {
     // A turn that read the owner's mail is answered by the model alone, with no tools: an email could
     // otherwise tell the agent to search the web with what it says, and send the owner's mail out.
     const use = conn?.outcome === "read" ? localEngine : eng;
+    const self = speaksAsItself(use);
+    if (self !== speaksAsItself(eng)) restart?.(self);
     if (page) {
       const opened = await openOnScreen(page);
       onScreen = "text" in opened;
@@ -379,7 +391,7 @@ export const POST: APIRoute = async (ctx) => {
       const r = await use.chat(
         String(said ?? ""),
         history,
-        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine, box && !!use.routines) + browse + connPrompt + (use !== localEngine ? searchFirst : ""),
+        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine, box && !!use.routines, self) + browse + connPrompt + (use !== localEngine ? searchFirst : ""),
         // silent past its budget, the agent gives way to the model alone (below): a stuck agent
         // turn must not leave the person waiting minutes for nothing
         b.signal,
@@ -389,6 +401,7 @@ export const POST: APIRoute = async (ctx) => {
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
         { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}) },
       );
+      if (faultReply(r.reply)) throw new Error(`${use.id} worded a failure as its reply`);
       // the tools it ran: from the reply where the engine says, else from its own session record
       let tools = r.tools ?? null;
       if (!tools && agentSession && use.toolsSince) tools = await use.toolsSince(agentSession, startedAt).catch((e) => {
@@ -397,7 +410,7 @@ export const POST: APIRoute = async (ctx) => {
       });
       const browsed = SCREEN && !!tools?.some((t) => /^browser_/.test(t));
       r.reply = dropInlineImages(r.reply, browsed);
-      r.reply = guard(r.reply);
+      r.reply = guard(r.reply, self);
       // a small model still asks for a hand-over now and then: with no screen there is nothing to take
       if (!SCREEN) r.reply = r.reply.replace(NO_HANDOVER, "").trim() || "That step needs a browser, and there isn't one here yet.";
       answered(r.reply);
@@ -429,11 +442,11 @@ export const POST: APIRoute = async (ctx) => {
       } };
     } catch (e: any) {
       log({ result: "engine-failed", via: use.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
-      if (b.stopped && b.text.trim()) return stoppedTurn(b, use.id);
+      if (b.stopped && b.text.trim()) return stoppedTurn(b, use.id, false, self);
       // Words already on screen stay there: asking again from scratch lost them and kept the
       // person waiting minutes while a restarted model loaded (QA 2026-11-12)
       // (only words the person saw: an engine's own failure, worded as a reply, is never shown)
-      if (visible(b.text).trim()) return stoppedTurn(b, use.id, true);
+      if (visible(b.text, self).trim()) return stoppedTurn(b, use.id, true, self);
       // The agent adds memory and tools; the model alone can still answer. A broken agent
       // must not mean a broken chat.
       const timedOut = b.stopped !== null || e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message ?? ""));
@@ -449,7 +462,7 @@ export const POST: APIRoute = async (ctx) => {
       if (use !== localEngine) {
         const b2 = budget(FALLBACK_BUDGET_MS);
         try {
-          restart?.();
+          restart?.(false);
           const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + connPrompt + NO_TOOLS_THIS_TURN, b2.signal, undefined, (d) => { b2.heard(d); onText?.(d); });
           r.reply = guard(r.reply);
           // the model alone must not contradict what the agent just did on screen
@@ -468,7 +481,7 @@ export const POST: APIRoute = async (ctx) => {
     } finally { b.end(); }
   };
   // whatever throws outside the engine call (a connected app, the screen) still ends the turn's log
-  const turn = async (onText?: (d: string) => void, restart?: () => void): Promise<{ status: number; body: unknown }> => {
+  const turn = async (onText?: (d: string) => void, restart?: (self?: boolean) => void): Promise<{ status: number; body: unknown }> => {
     log({ result: "started", via: eng.id, ...(research ? { research: true } : {}), stream: body?.stream === true });
     try { return await run(onText, restart); }
     catch (e) {
@@ -481,7 +494,7 @@ export const POST: APIRoute = async (ctx) => {
     // the person stopped following: the turn goes on, and can be picked up again
     let left = false;
     const gone = () => { if (!left) { left = true; log({ result: "client-left", via: eng.id, ms: Date.now() - startedAt }); } };
-    return sse(startTurn(picker, turn, { id: tid, key, left: gone, wait: eng.waitNote }), picker)!;
+    return sse(startTurn(picker, turn, { id: tid, key, left: gone, wait: eng.waitNote, self: speaksAsItself(eng) }), picker)!;
   }
   const r = await turn();
   return json(r.body, r.status);

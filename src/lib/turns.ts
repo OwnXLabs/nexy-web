@@ -6,7 +6,8 @@ import { visible } from "./stream-guard";
 export type TurnEvent = { reset: string } | { done: { status: number; body: unknown } };
 // key: the client's id for the question, so the same question sent again joins this turn
 // left: called when the last person following it goes before it is done
-type Turn = { who: string; key: string; wait?: string; raw: string; shown: string; done?: { status: number; body: unknown }; subs: Set<(e: TurnEvent) => void>; at: number; timer?: ReturnType<typeof setTimeout>; left?: () => void };
+// self: the engine speaks as itself, so what it writes is not rewritten (stream-guard.ts)
+type Turn = { who: string; key: string; wait?: string; self: boolean; raw: string; shown: string; done?: { status: number; body: unknown }; subs: Set<(e: TurnEvent) => void>; at: number; timer?: ReturnType<typeof setTimeout>; left?: () => void };
 
 const TURNS = new Map<string, Turn>();
 const KEEP_MS = 10 * 60_000;
@@ -35,15 +36,15 @@ export function rejoin(who: string, key: string): string | null {
   return null;
 }
 
-export function startTurn(who: string, run: (onText: (d: string) => void, restart: () => void) => Promise<{ status: number; body: unknown }>,
-  opts: { id?: string; key?: string; left?: () => void; wait?: string } = {}): string {
+export function startTurn(who: string, run: (onText: (d: string) => void, restart: (self?: boolean) => void) => Promise<{ status: number; body: unknown }>,
+  opts: { id?: string; key?: string; left?: () => void; wait?: string; self?: boolean } = {}): string {
   const id = opts.id ?? randomUUID();
-  const t: Turn = { who, key: opts.key ?? "", wait: opts.wait, raw: "", shown: "", subs: new Set(), at: Date.now(), left: opts.left };
+  const t: Turn = { who, key: opts.key ?? "", wait: opts.wait, self: !!opts.self, raw: "", shown: "", subs: new Set(), at: Date.now(), left: opts.left };
   TURNS.set(id, t);
   const emit = (e: TurnEvent) => { for (const s of t.subs) s(e); };
   const flush = () => {
     t.timer = undefined;
-    const next = visible(t.raw);
+    const next = visible(t.raw, t.self);
     if (next !== t.shown) { t.shown = next; emit({ reset: next }); }
   };
   const onText = (d: string) => {
@@ -51,7 +52,8 @@ export function startTurn(who: string, run: (onText: (d: string) => void, restar
     t.raw += d;
     t.timer ??= setTimeout(flush, 60);
   };
-  const restart = () => { t.raw = ""; t.timer ??= setTimeout(flush, 0); };
+  // another engine takes over (the model alone, which speaks as Nexy)
+  const restart = (self = t.self) => { t.self = self; t.raw = ""; t.timer ??= setTimeout(flush, 0); };
   run(onText, restart)
     .catch((e) => { console.warn("[nexy] a streamed turn failed", (e as Error).message); return { status: 502, body: { error: "the model on this machine did not answer" } }; })
     .then((done) => {
