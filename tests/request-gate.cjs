@@ -1,6 +1,6 @@
 // Before routing: a foreign Host gets 421 (DNS rebinding), a body over its route's cap gets 413,
 // saved chats stop at the owner's storage cap (507), and with NEXY_SOCKET the server answers on a
-// unix socket only. Runs the built server (npm run build first).
+// unix socket only, and a trust flag without one refuses to start. Runs the built server (npm run build first).
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');

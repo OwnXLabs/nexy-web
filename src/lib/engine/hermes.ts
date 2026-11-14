@@ -49,8 +49,8 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           "content-type": "application/json",
           ...(KEY ? { authorization: `Bearer ${KEY}` } : {}),
           // without it the gateway derives the session from the system prompt, which changes every
-          // turn. It needs the key to be honoured.
-          ...(KEY && session ? { "X-Hermes-Session-Id": `nexy-${session}` } : {}),
+          // turn. It needs the key to be honoured. Hermes reads only its own header name.
+          ...(KEY && session ? { "x-session-id": `nexy-${session}`, "X-Hermes-Session-Id": `nexy-${session}` } : {}),
           ...(opts?.user ? { "x-nexy-user": opts.user } : {}),
         },
         // vouch for the system message only when the caller says it holds nothing from outside

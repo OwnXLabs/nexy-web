@@ -19,7 +19,7 @@ const seen = [];
 const gw = createServer((req, res) => {
   req.resume();
   req.on("end", () => {
-    if (req.url.startsWith("/v1/chat")) seen.push(req.headers["x-hermes-session-id"] ?? null);
+    if (req.url.startsWith("/v1/chat")) seen.push(req.headers["x-session-id"] === req.headers["x-hermes-session-id"] ? req.headers["x-session-id"] ?? null : "headers differ");
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ choices: [{ message: { content: "ok" }, finish_reason: "stop" }] }));
   });
