@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { get, put, type SavedChat } from "../../../lib/chats";
 import { ENGINES, chosen, labelOf } from "../../../lib/engine";
 import { owner } from "../../../lib/owner";
+import { boxRefused, enginesShown } from "../../../lib/box";
 
 export const prerender = false;
 
@@ -15,6 +16,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 // engine. An ultra-private chat is never shared: it is not saved, and a request marked private is refused.
 export const POST: APIRoute = async (ctx) => {
   const body = await ctx.request.json().catch(() => null) as { from?: unknown; engine?: unknown; private?: unknown } | null;
+  if (!enginesShown(ctx.request)) return boxRefused();
   if (!body) return json({ error: "body must be JSON" }, 400);
   if (body.private === true) return json({ error: "An ultra-private chat stays on this machine, so it can't be shared with another engine." }, 403);
   const who = owner(ctx);

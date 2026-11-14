@@ -42,7 +42,7 @@ import { connectorAsk, connectorTurn } from "../../../lib/connectors";
 import { byId } from "../../../lib/apps";
 import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
-import { boxAllowed, pickAllowed } from "../../../lib/box";
+import { boxAllowed, enginesShown, pickAllowed } from "../../../lib/box";
 import { ROUTINES_ELSEWHERE, routineAsk } from "../../../lib/routine-ask";
 
 export const prerender = false;
@@ -303,6 +303,7 @@ export const POST: APIRoute = async (ctx) => {
   // a turn naming another engine is refused. Engines keep their own copies and memories, so a chat
   // moves to another one only through Continue, which asks first (chat-continue.ts).
   let chatEngine: string | null = null;
+  const shown = enginesShown(ctx.request);
   if (!priv) {
     const asked = typeof body?.engine === "string" && body.engine ? body.engine : null;
     if (asked && !ENGINES.some((c) => c.id === asked)) return json({ error: "That engine isn't on this machine." }, 400);
@@ -313,9 +314,13 @@ export const POST: APIRoute = async (ctx) => {
     // an older chat without one keeps using the current pick
     chatEngine = saved?.engine ?? (saved ? null : asked) ?? chosen(picker)?.id ?? null;
     if (asked && chatEngine && asked !== chatEngine)
-      return json({ error: `This chat is with ${labelOf(chatEngine)}. To ask ${labelOf(asked)}, use Continue with ${labelOf(asked)} in the chat's menu.`, engine: chatEngine }, 409);
+      return json(shown
+        ? { error: `This chat is with ${labelOf(chatEngine)}. To ask ${labelOf(asked)}, use Continue with ${labelOf(asked)} in the chat's menu.`, engine: chatEngine }
+        : { error: "This chat is with another engine. Start a new chat to carry on." }, 409);
     if (saved?.engine && !ENGINES.some((c) => c.id === saved.engine))
-      return json({ error: `This chat was with ${saved.engine}, which isn't on this machine any more. Start a new chat to carry on.`, engine: saved.engine }, 409);
+      return json(shown
+        ? { error: `This chat was with ${saved.engine}, which isn't on this machine any more. Start a new chat to carry on.`, engine: saved.engine }
+        : { error: "This chat's engine isn't on this machine any more. Start a new chat to carry on." }, 409);
   }
   const decided = upstreamFor(engineFor(false, false, picker, user, chatEngine), priv);
   const isEval = wantsEval(body?.eval === true);
@@ -480,10 +485,19 @@ export const POST: APIRoute = async (ctx) => {
       return { status: 502, body: { error: "the model on this machine did not answer" } };
     } finally { b.end(); }
   };
+  // no engine id reaches a client without a choice of engines, and no engine name one who may not pick;
+  // the turn log keeps both
+  const outward = (r: { status: number; body: any }) => {
+    if (shown || !r.body || typeof r.body !== "object") return r;
+    const { engine: _, ...rest } = r.body;
+    if (ENGINES.some((c) => c.id === rest.via)) rest.via = "gateway";
+    if (rest.upstream && decided.via === "gateway" && !pickAllowed(ctx.request)) rest.upstream = "the agent gateway, which keeps memory and sessions";
+    return { ...r, body: rest };
+  };
   // whatever throws outside the engine call (a connected app, the screen) still ends the turn's log
   const turn = async (onText?: (d: string) => void, restart?: (self?: boolean) => void): Promise<{ status: number; body: unknown }> => {
     log({ result: "started", via: eng.id, ...(research ? { research: true } : {}), stream: body?.stream === true });
-    try { return await run(onText, restart); }
+    try { return outward(await run(onText, restart)); }
     catch (e) {
       log({ result: "failed", via: eng.id, error: String((e as Error)?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
       return { status: 502, body: { error: "the model on this machine did not answer" } };
@@ -494,7 +508,7 @@ export const POST: APIRoute = async (ctx) => {
     // the person stopped following: the turn goes on, and can be picked up again
     let left = false;
     const gone = () => { if (!left) { left = true; log({ result: "client-left", via: eng.id, ms: Date.now() - startedAt }); } };
-    return sse(startTurn(picker, turn, { id: tid, key, left: gone, wait: eng.waitNote, self: speaksAsItself(eng) }), picker)!;
+    return sse(startTurn(picker, turn, { id: tid, key, left: gone, wait: eng.waitNote && (pickAllowed(ctx.request) ? eng.waitNote : "Getting ready…"), self: speaksAsItself(eng) }), picker)!;
   }
   const r = await turn();
   return json(r.body, r.status);

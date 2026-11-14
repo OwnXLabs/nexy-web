@@ -153,7 +153,7 @@ test('a slow first turn says OpenClaw is getting ready, then answers; a restart\
     const ask = (text) => page.evaluate(async (text) => (await fetch('/api/v1/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat: 'oc-chat-2', messages: [{ role: 'user', content: text }] }) })).json(), text);
     const before = oc.seen.length;
     const again = await ask('after a restart');
-    assert.equal(again.via, 'openclaw');
+    assert.equal(again.via, 'gateway', 'one engine: its id stays on the server');
     assert.match(again.choices[0].message.content, /answer from openclaw to after a restart/);
     assert.equal(oc.seen.length - before, 2, 'asked once more after the 500');
 

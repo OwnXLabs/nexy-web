@@ -1,4 +1,5 @@
 import { boxOwner, identityOwner } from "./owner";
+import { ENGINES } from "./engine";
 
 // Whole-box features (the agent's memory across every chat, its scheduled routines) belong to the
 // box's owner, not to whoever reached the page. Off unless the deployment says who the owner is:
@@ -14,6 +15,8 @@ export function boxAllowed(request: Request): boolean {
 
 // an engine pick is one person's own: anyone signed in may make theirs, or the box's owner
 export const pickAllowed = (request: Request): boolean => boxAllowed(request) || identityOwner(request) !== null;
+// an engine id reaches the client only where the picker shows: more than one engine, and a caller who may pick
+export const enginesShown = (request: Request): boolean => ENGINES.length > 1 && pickAllowed(request);
 
 export const boxRefused = () =>
   new Response(JSON.stringify({ error: "Only the owner of this machine can do this." }), {
