@@ -13,3 +13,8 @@ test("any other engine failure is said plainly", () => {
   const { error } = engineFailure(new Error("agent gateway 502: upstream timed out"), "memory");
   assert.doesNotMatch(error, /\d{3}|gateway|upstream/i);
 });
+
+test("the engine's own plain explanation is passed on without its code", () => {
+  const { error } = engineFailure(new Error("agent gateway 409: this routine is waiting for confirmation: confirm or discard it"), "routines");
+  assert.equal(error, "this routine is waiting for confirmation: confirm or discard it");
+});

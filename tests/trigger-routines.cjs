@@ -109,7 +109,7 @@ test('pause and resume reach the agent; a waiting routine cannot be resumed', as
   assert.deepEqual((await r.json()).routine, { id: '24', enabled: true, nextRunAt: new Date((RUN_AT + 2 * 86400) * 1000).toISOString() });
   r = await patch({ id: '21', action: 'resume' });
   assert.equal(r.status, 502);
-  assert.match((await r.json()).error, /409.*waiting for confirmation/);
+  assert.match((await r.json()).error, /^this routine is waiting for confirmation/);
   ({ routines } = await (await fetch(app.base + '/api/v1/routines')).json());
   assert.equal(routines.find((x) => x.id === '21').pending, true, 'still waiting');
   assert.equal((await patch({ id: '24', action: 'enable' })).status, 400);
