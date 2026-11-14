@@ -68,6 +68,11 @@ async function visit(b, base) {
     if (r.status() === 403) refused.push(`${r.request().method()} ${r.url()}`);
   });
   page.on('pageerror', (e) => errs.push(String(e)));
+  // chat replies still streaming: a reply is read only once its stream has ended
+  let streaming = 0;
+  const chatReq = (r) => r.method() === 'POST' && new URL(r.url()).pathname === '/api/v1/chat';
+  page.on('request', (r) => { if (chatReq(r)) streaming++; });
+  for (const ev of ['requestfinished', 'requestfailed']) page.on(ev, (r) => { if (chatReq(r)) streaming--; });
   await page.goto(base + '/');
   await page.locator('#input').waitFor({ timeout: 20000 });
   const replies = () => page.locator('#thread .msg.ai .bub');
@@ -79,10 +84,15 @@ async function visit(b, base) {
       const all = document.querySelectorAll('#thread .msg.ai .bub');
       return all.length > k && all[all.length - 1].textContent.trim() !== '';
     }, n, { timeout: 30000 });
-    // the reply is drawn as it streams: read it once it stops changing (a loaded machine is slow)
-    let was = '', now = (await replies().last().innerText()).trim();
-    for (let i = 0; i < 50 && now !== was; i++) { await page.waitForTimeout(300); was = now; now = (await replies().last().innerText()).trim(); }
-    return now;
+    // the stream has ended and the words have stopped changing
+    let last = '', same = 0;
+    for (const t0 = Date.now(); same < 3; await page.waitForTimeout(200)) {
+      if (Date.now() - t0 > 30000) throw new Error(`the reply never settled: ${last}`);
+      const now = (await replies().last().innerText()).trim();
+      same = !streaming && now === last && !(await page.locator('#typing').count()) ? same + 1 : 0;
+      last = now;
+    }
+    return last;
   };
   const settings = async (sec) => {
     if (!(await page.locator('#ovSet.open').count())) { await page.locator('#profileBtn').click(); await page.locator('#settingsBtn').click(); }

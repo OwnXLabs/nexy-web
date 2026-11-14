@@ -1820,7 +1820,8 @@ function offerTakeover(holder: HTMLElement, what: string): void {
 const STREAM_IDLE_MS = 40_000;
 // No turn id this long after asking means the machine may be gone: one quick health check says.
 const PROBE_MS = 8_000;
-async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: (gone: boolean) => void): Promise<T> {
+// onWait: the engine's own words for a slow start, when it has them
+async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: (gone: boolean) => void, onWait?: (note: string) => void): Promise<T> {
   let id = "";
   let abort = new AbortController(), idle = 0;
   // why the first request was stopped: before Chrome 98 abort() drops its reason, and fetch
@@ -1851,7 +1852,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
         if (line.startsWith("event:")) { ev = line.slice(6).trim(); continue; }
         if (!line.startsWith("data:")) continue;
         const d = JSON.parse(line.slice(5));
-        if (ev === "turn") id = String(d.id ?? "");
+        if (ev === "turn") { id = String(d.id ?? ""); if (typeof d.wait === "string" && d.wait) onWait?.(d.wait); }
         else if (ev === "text") onText(String(d.text ?? ""));
         else if (ev === "done") {
           if (d.status >= 400) throw new HttpError(d.status, String(d.body?.error ?? ""));
@@ -1899,6 +1900,8 @@ const closeBold = (t: string): string => ((t.match(/\*\*/g)?.length ?? 0) % 2 ? 
 
 // how often a reply being written is saved, so a quit or crash keeps what had arrived
 const PARTIAL_SAVE_MS = 3_000;
+// a reply with no words this long gets the engine's own note, where it has one
+const WAIT_NOTE_MS = 3_000;
 // what "Continue?" sends. A continued answer keeps the question it continues: its document was
 // titled "continue-from-where-you-stop" (QA 2026-11-12) and is now the same document, grown.
 const CONTINUE = "Continue from where you stopped.";
@@ -1931,7 +1934,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     // tz: routines the agent makes run at this device's local time
     const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
-    let streamed = false;
+    let streamed = false, waitNote = 0;
     const d = await patient(() => streamReply<Reply>(body, (t) => {
       const shown = t && takeoverAsk(t).answer;
       if (!shown) {
@@ -1946,7 +1949,10 @@ async function playChat(text: string, priv = false): Promise<void> {
     }, (gone) => {
       status(holder, gone ? away() : "The connection dropped. Reconnecting, and the reply keeps going meanwhile.");
       stopClock(holder);
-    }), (n, secs, of, e) => {
+    }, (note) => {
+      clearTimeout(waitNote);
+      waitNote = window.setTimeout(() => { if (!streamed && holder.querySelector(".bub .wait")) status(holder, note); }, WAIT_NOTE_MS);
+    }).finally(() => clearTimeout(waitNote)), (n, secs, of, e) => {
       if (unreachable(e)) { status(holder, away()); stopClock(holder); }
       else status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`);
     });

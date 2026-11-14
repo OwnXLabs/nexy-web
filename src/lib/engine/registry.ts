@@ -2,6 +2,7 @@ import { readFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
 import path from "node:path";
 import type { NexyEngine } from "./types";
 import { gatewayEngine, hermesEngine } from "./hermes";
+import { DEFAULT_AGENT, openclawEngine } from "./openclaw";
 
 // Agent engines an owner can pick in Settings. Each speaks the OpenAI chat API plus the
 // sessions/jobs API Nexy's gateway client uses (Hermes' API server, Nexy Engine).
@@ -11,7 +12,11 @@ import { gatewayEngine, hermesEngine } from "./hermes";
 // Cloud), NEXY_ENGINE_<ID>_USER_URLS="u01=http://…,u02=…" gives a person their own copy of the
 // engine, with its own key in NEXY_ENGINE_<ID>_USER_KEYS="u01:<key>,…"; anyone else, or anyone
 // without a key, uses the shared one.
+// OpenClaw speaks the OpenAI chat API only; NEXY_ENGINE_OPENCLAW_AGENT names its agent target.
 export interface EngineChoice { id: string; label: string; note: string; engine: NexyEngine; users?: Map<string, NexyEngine> }
+
+// what an engine keeps that Nexy can show: the UI offers only these
+export const capsOf = (e: NexyEngine) => ({ memory: !!e.memory, routines: !!e.routines });
 
 const LABELS: Record<string, [string, string]> = {
   "hermes": ["Hermes", "Nous Research's agent; the default"],
@@ -40,10 +45,15 @@ function perUser(id: string): Map<string, NexyEngine> | undefined {
   const out = new Map<string, NexyEngine>();
   for (const [user, url] of urls) {
     const key = keys.get(user);
-    if (key) out.set(user, gatewayEngine(url, key, id));
+    if (key) out.set(user, engineAt(id, url, key));
     else console.warn(`[nexy] engine ${id}: no key for ${user}, who uses the shared one`);
   }
   return out;
+}
+
+function engineAt(id: string, url: string, key: string): NexyEngine {
+  if (id === "openclaw") return openclawEngine(url, key, process.env.NEXY_ENGINE_OPENCLAW_AGENT?.trim() || DEFAULT_AGENT, id);
+  return gatewayEngine(url, key, id);
 }
 
 function build(): EngineChoice[] {
@@ -55,7 +65,7 @@ function build(): EngineChoice[] {
     if (!/^[a-z0-9-]{1,32}$/.test(id) || out.some((c) => c.id === id)) continue;
     const url = process.env[`NEXY_ENGINE_${envKey(id)}_URL`] ?? "";
     if (!url) { console.warn(`[nexy] engine ${id}: no NEXY_ENGINE_${envKey(id)}_URL, not listed`); continue; }
-    out.push({ ...choice(id, gatewayEngine(url, readKey(id), id)), users: perUser(id) });
+    out.push({ ...choice(id, engineAt(id, url, readKey(id))), users: perUser(id) });
   }
   return out;
 }

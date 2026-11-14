@@ -82,14 +82,15 @@ export interface Upstream {
   why: string;
 }
 
-export function upstreamFor(hasGateway: boolean, isPrivate: boolean): Upstream {
+// engine: the one this turn goes to; its own words say what keeps the turn
+export function upstreamFor(engine: { id: string; upstream?: string } | null, isPrivate: boolean): Upstream {
   if (isPrivate)
     return {
       via: "local",
       persists: false,
       why: "ultra-private: the stateless model on this box, so nothing upstream keeps the turn",
     };
-  if (hasGateway)
-    return { via: "gateway", persists: true, why: "the agent gateway, which keeps memory and sessions" };
+  if (engine?.id === "gateway")
+    return { via: "gateway", persists: true, why: engine.upstream ?? "the agent gateway, which keeps memory and sessions" };
   return { via: "local", persists: false, why: "no gateway configured" };
 }

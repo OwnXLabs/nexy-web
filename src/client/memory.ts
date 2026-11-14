@@ -129,8 +129,11 @@ async function call(path: string, init: RequestInit = {}): Promise<any> {
   const r = await fetch(path, { ...init, headers: { "content-type": "application/json", ...(EVAL ? { "x-nexy-eval": "1" } : {}), ...(init.headers ?? {}) } });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d?.note ?? d?.error ?? httpMsg(r.status));
+  if (d?.available === false) throw new NotKept(String(d.note ?? "The agent engine picked in Settings does not keep this."));
   return d;
 }
+// the engine in use keeps no memory or routines: said plainly, never as a failure
+class NotKept extends Error {}
 
 function blockEl(title: string, right: string, rows: string, foot = "", cls = ""): HTMLElement {
   const el = document.createElement("div");
@@ -201,6 +204,7 @@ export async function playMemory(cmd: MemCmd, ui: MemUI): Promise<void> {
       ui.push("ai", `Stopped <b>${esc(hit[0].name)}</b>. It will not run again.`);
     }
   } catch (e) {
+    if (e instanceof NotKept) { ui.push("ai", esc(e.message)); return; }
     ui.push("ai", `That did not work: <code>${esc(errText(e))}</code>`);
   }
 }

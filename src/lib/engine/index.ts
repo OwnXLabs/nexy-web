@@ -29,6 +29,6 @@ export function engineFor(isPrivate: boolean, isEval = false, owner: string | nu
 export const engine: NexyEngine = selectEngine();
 // the stateless model on this box: the fallback when the agent stalls, and the ultra-private path
 export { localEngine };
-export { ENGINES, chosen, engineOf, pick, pickedId } from "./registry";
+export { ENGINES, capsOf, chosen, engineOf, pick, pickedId } from "./registry";
 export type { EngineChoice } from "./registry";
 export type { ChatResult, ChatTurn, NexyEngine } from "./types";

@@ -4,6 +4,12 @@ import { readCompletion } from "./sse";
 const DEFAULT_KEY = process.env.NEXY_AGENT_KEY ?? "";
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
 
+// where a turn goes, by engine; Hermes' wording for any other gateway
+const UPSTREAM: Record<string, string> = {
+  "nexy-engine": "Nexy Engine, the agent engine on this machine, which keeps its own sessions and memory",
+};
+const HERMES_UPSTREAM = "the agent gateway, which keeps memory and sessions";
+
 // name: what a reply says it came via (an engine picked in Settings says which); the kind stays "gateway"
 export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "gateway"): NexyEngine {
   const URL_ = url.replace(/\/+$/, "");
@@ -30,6 +36,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
   };
   return {
     id: "gateway",
+    upstream: UPSTREAM[name] ?? HERMES_UPSTREAM,
 
     available: () => URL_ !== "",
 

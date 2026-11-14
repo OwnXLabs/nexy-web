@@ -35,6 +35,8 @@ check "chat streams, resumes, hides engine faults" node --test --test-timeout=18
 check "network faults: latency, drops, silence" node --test --test-timeout=180000 tests/network-faults.cjs
 check "a hanging gateway and a lost question: every turn logged start to end, a question sent again joins its reply" node --test --test-timeout=180000 tests/gateway-stall.cjs
 check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
+check "OpenClaw engine: agent target, bearer from the key file, one safe session key per chat, whole and streamed, failures fall back" ts tests/openclaw.test.ts
+check "OpenClaw in Settings and chat: three engines, the pick kept, via=openclaw, no memory controls, no session calls" node --test --test-timeout=180000 tests/openclaw-engine.cjs
 check "Nexy Cloud: the gate names each person, their own engine and key, no box features, Nexy Cloud wording, no agent screen" node --test --test-timeout=180000 tests/cloud-mode.cjs
 check "Nexy Cloud wording in the page and in who Nexy says it is" ts tests/cloud-place.test.ts
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
@@ -101,6 +103,9 @@ export NEXY_BASE=http://127.0.0.1:4389 REPORTS_DIR="$tmp/data/reports"
 check "screen control" node tests/screen.cjs
 check "routines" node tests/routines.cjs
 check "problem reports" node tests/problem-report.cjs
+check "each chat keeps its own files, builds and replies" node tests/conversation-isolation.cjs
+check "publishing from Share: the right chat and output, unpublish, reload, a failed save and Retry" node tests/publishing-browser.cjs
+check "every visible button does something, at desktop and phone width" node tests/buttons.cjs
 
 echo
 echo "$pass passed, $fail failed"
