@@ -1,7 +1,8 @@
 import type { ChatResult, ChatTurn, MemoryItem, NexyEngine, Routine } from "./types";
 import { readCompletion } from "./sse";
+import { AGENT_KEY } from "./key";
 
-const DEFAULT_KEY = process.env.NEXY_AGENT_KEY ?? "";
+const DEFAULT_KEY = AGENT_KEY;
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
 
 // name: what a reply says it came via (an engine picked in Settings says which); the kind stays "gateway"

@@ -17,7 +17,7 @@ import { offersProject } from "./promote";
 import { fromReply, htmlArtifact, gameArtifact, markdownArtifact } from "./content-view";
 import { slidesFrom, monthIn, subjectIn, type DocSource } from "./deck";
 import { planBlock, markStarted, agentsBlock, consentBlock, resumeBlock, summaryBlock, autopilotBlock } from "./blocks";
-import { classify, splitTasks, asksToChangePage } from "./intent";
+import { classify, splitTasks, asksToChangePage, meansOwner } from "./intent";
 import { connectIntent, playConnect } from "./perm";
 import { handleEdit, editablePage, applyRevision } from "./edit-loop";
 import { installReporter, openReporter } from "./problem-report";
@@ -31,7 +31,7 @@ import { renderGate } from "./build-gate";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine, deviceZone, showWaitingRoutines } from "./memory";
-import { initSettings, notify, openSettings } from "./settings";
+import { initSettings, notify, openSettings, prefs } from "./settings";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
@@ -1700,7 +1700,7 @@ async function playBoardEdit(i: { kind: string; title: string; role?: string; st
         return;
       }
       const target = String(i.role ?? "").trim();
-      const toHuman = /^(me|myself|you)$/i.test(target);
+      const toHuman = meansOwner(target, prefs().name);
       if (i.kind === "completeTask" && i.state === "review") {
         bub.innerHTML = `The board has no Review column yet, so <b>${esc(match.t)}</b> is unchanged. Say “mark it doing” or “mark it done”.`;
         return;

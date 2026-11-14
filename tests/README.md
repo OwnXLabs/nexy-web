@@ -19,7 +19,7 @@ completed output history, start a fresh chat, fail a background generation, and 
 ultra-private session without persisting its outputs. Browser errors fail the suite.
 
 For comparison, `NEXY_CLIENT_BUNDLE=/path/to/before.js` replaces the browser bundle.
-The pre-fix client fails the selected-chat output check.
+An older client bundle fails the selected-chat output check.
 
 Existing chats without output IDs recover only explicit preview links found in their
 own transcript. They never inherit the machine-wide recent feed. Closing/reloading the

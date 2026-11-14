@@ -2,9 +2,10 @@
 // self-contained HTML file, checked here before anyone sees it. One attempt per job; the
 // browser runs the page in a sandbox and decides whether to try once more.
 import { randomUUID } from "node:crypto";
+import { AGENT_KEY } from "./engine/key.ts";
 
 const AGENT = (process.env.NEXY_AGENT_URL ?? "").replace(/\/+$/, "");
-const KEY = process.env.NEXY_AGENT_KEY ?? "";
+const KEY = AGENT_KEY;
 const COMPUTER = process.env.NEXY_STUDIOS === "off";
 const BOT = "builder";
 const TURN_MS = 1000_000; // the pack stops itself at 900 s

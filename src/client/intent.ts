@@ -248,3 +248,11 @@ export function asksToChangePage(text: string, kind: Intent["kind"]): boolean {
   if (kind !== "make" && kind !== "build" && kind !== "chat") return false;
   return CHANGES_PAGE.test(text) && !ASKS_ABOUT.test(text) && !NEW_THING.test(text);
 }
+
+// an assignment to the owner: "me", "myself", "you", or the name they set in Settings
+export function meansOwner(target: string, ownerName = ""): boolean {
+  const t = target.trim().toLowerCase();
+  if (/^(me|myself|you)$/.test(t)) return true;
+  const full = ownerName.trim().toLowerCase().replace(/\s+/g, " ");
+  return !!full && (t === full || t === full.split(" ")[0]);
+}

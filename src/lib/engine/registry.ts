@@ -2,6 +2,7 @@ import { readFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
 import path from "node:path";
 import type { NexyEngine } from "./types";
 import { gatewayEngine, hermesEngine } from "./hermes";
+import { keyFrom } from "./key";
 
 // Agent engines an owner can pick in Settings. Each speaks the OpenAI chat API plus the
 // sessions/jobs API Nexy's gateway client uses (Hermes' API server, Nexy Engine).
@@ -21,14 +22,7 @@ const LABELS: Record<string, [string, string]> = {
   "zeroclaw": ["ZeroClaw", "Lightweight agent runtime"],
 };
 const envKey = (id: string) => id.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-function readKey(id: string): string {
-  const file = process.env[`NEXY_ENGINE_${envKey(id)}_KEY_FILE`];
-  if (file) {
-    try { return readFileSync(file, "utf8").trim(); }
-    catch (e) { console.warn(`[nexy] engine ${id}: key file unreadable: ${(e as Error).message}`); return ""; }
-  }
-  return process.env[`NEXY_ENGINE_${envKey(id)}_KEY`] ?? "";
-}
+const readKey = (id: string): string => keyFrom(`NEXY_ENGINE_${envKey(id)}_KEY_FILE`, `NEXY_ENGINE_${envKey(id)}_KEY`);
 
 const pairs = (v: string | undefined, sep: string): [string, string][] =>
   (v ?? "").split(",").map((p) => p.trim()).filter((p) => p.includes(sep))

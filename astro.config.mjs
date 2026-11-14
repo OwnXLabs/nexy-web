@@ -1,16 +1,21 @@
 import { defineConfig } from "astro/config";
 import node from "@astrojs/node";
-import { copyFileSync } from "node:fs";
+import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { LARGEST_CAP } from "./src/lib/gate.ts";
 
-// dist/server/serve.mjs: the start script that can listen on a unix socket (deploy/serve.mjs)
+// dist/server/serve.mjs: the start script that can listen on a unix socket (deploy/serve.mjs).
+// entry.mjs imports deploy/trust-guard.mjs first, so a trust flag on TCP stops it before it listens.
 const serve = () => {
   let out;
   return {
     name: "nexy-serve",
     hooks: {
       "astro:config:done": ({ config }) => { out = config.build.server; },
-      "astro:build:done": () => copyFileSync(new URL("./deploy/serve.mjs", import.meta.url), new URL("serve.mjs", out)),
+      "astro:build:done": () => {
+        for (const f of ["serve.mjs", "trust-guard.mjs"]) copyFileSync(new URL(`./deploy/${f}`, import.meta.url), new URL(f, out));
+        const entry = new URL("entry.mjs", out);
+        writeFileSync(entry, `import "./trust-guard.mjs";\n${readFileSync(entry, "utf8")}`);
+      },
     },
   };
 };

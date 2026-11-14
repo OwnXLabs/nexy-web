@@ -42,7 +42,7 @@
               option = {
                 type = lib.types.bool;
                 default = false;
-                description = "Use xnode-auth's signed-in identity as the owner, so data follows the person across devices. Enable ONLY where an xnode-auth block guards every path; otherwise Xnode-Auth-User is a header anyone can send.";
+                description = "Use xnode-auth's signed-in identity as the owner, so data follows the person across devices. Enable ONLY where an xnode-auth block guards every path; otherwise Xnode-Auth-User is a header anyone can send. Nexy refuses to start with it unless it runs dist/server/serve.mjs on NEXY_SOCKET.";
               };
               does = { value, service, ... }: service { environment.NEXY_TRUST_XNODE_AUTH = if value then "1" else "0"; };
             };
@@ -63,8 +63,20 @@
               does = { value, service, ... }: service { environment.NEXY_TEST_AGENT_URL = value; };
             };
             agentKey = {
-              option = { type = lib.types.str; default = ""; description = "Bearer key for the gateway, if it requires one."; };
+              option = { type = lib.types.str; default = ""; description = "Bearer key for the gateway, if it requires one. Prefer agentKeyFile: this value is written to the Nix store, readable by every local user."; };
               does = { value, service, ... }: service { environment.NEXY_AGENT_KEY = value; };
+            };
+            agentKeyFile = {
+              option = {
+                type = lib.types.str;
+                default = null;
+                description = "File holding the gateway's bearer key, loaded as a systemd credential and kept out of the Nix store. Takes precedence over agentKey.";
+              };
+              does = { value, service, ... }: service {
+                # %d: the unit's credentials directory
+                environment.NEXY_AGENT_KEY_FILE = "%d/agent-key";
+                serviceConfig.LoadCredential = [ "agent-key:${value}" ];
+              };
             };
             socialDataDir = {
               option = {

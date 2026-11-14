@@ -120,9 +120,31 @@ test('a socket group the server cannot use stops it at start', async () => {
   assert.equal(require('node:fs').existsSync(sock), false);
 });
 
-test('trusting the identity header on TCP warns loudly at start', async () => {
-  const port = await freePort();
-  const s = await start('serve.mjs', { HOST: '127.0.0.1', PORT: String(port), NEXY_TRUST_XNODE_AUTH: '1' });
-  assert.equal((await req({ port })).status, 200);
-  assert.match(s.log(), /WARNING: NEXY_TRUST_XNODE_AUTH=1 on TCP/);
+// exits with its code and what it logged, or null if still running after 15 s
+function refused(script, env) {
+  const p = spawn(process.execPath, [join(DIST, script)], { env: { ...process.env, NEXY_DATA_DIR: tmp(), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  procs.push(p);
+  let log = ''; p.stdout.on('data', (d) => { log += d; }); p.stderr.on('data', (d) => { log += d; });
+  return new Promise((ok) => {
+    const t = setTimeout(() => ok(null), 15_000);
+    p.on('exit', (code) => { clearTimeout(t); ok({ code, log }); });
+  });
+}
+
+test('a trusted identity header without NEXY_SOCKET refuses to start', async () => {
+  for (const flag of ['NEXY_TRUST_XNODE_AUTH', 'NEXY_TRUST_GATE_USER'])
+    for (const script of ['serve.mjs', 'entry.mjs']) {
+      const port = await freePort();
+      const r = await refused(script, { HOST: '127.0.0.1', PORT: String(port), [flag]: '1' });
+      assert.ok(r, `${script} with ${flag} kept running`);
+      assert.equal(r.code, 1, `${script} with ${flag}`);
+      assert.match(r.log, new RegExp(`refusing to start: ${flag}=1 needs NEXY_SOCKET`));
+    }
+});
+
+test('entry.mjs listens on TCP, so NEXY_SOCKET does not make it trust the header', async () => {
+  const port = await freePort(), sock = join(tmp(), 'web.sock');
+  const r = await refused('entry.mjs', { HOST: '127.0.0.1', PORT: String(port), NEXY_SOCKET: sock, NEXY_TRUST_GATE_USER: '1' });
+  assert.ok(r, 'entry.mjs kept running');
+  assert.equal(r.code, 1);
 });

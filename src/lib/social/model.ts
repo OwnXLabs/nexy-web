@@ -1,8 +1,9 @@
 import type { Complete } from "./draft.ts";
 import { guardIdentity } from "../engine/identity-guard.ts";
+import { AGENT_KEY } from "../engine/key.ts";
 
 const GATEWAY = process.env.NEXY_AGENT_URL ?? "";
-const GATEWAY_KEY = process.env.NEXY_AGENT_KEY ?? "";
+const GATEWAY_KEY = AGENT_KEY;
 const FALLBACK = process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080";
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
 

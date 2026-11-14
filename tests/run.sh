@@ -61,6 +61,7 @@ check "beta reports: preview is what is sent, secrets removed, private sends not
 check "a computer that stops answering: plain words, no countdown, never the browser's wording" node --test --test-timeout=180000 tests/computer-away.cjs
 check "two devices on one chat: an older copy never saves over newer turns" node --test --test-timeout=180000 tests/chat-two-devices.cjs
 check "tables, lists and emails are chat answers, not projects" ts tests/intent-text-answers.test.ts
+check "assigning a task to me or to the name set in Settings goes to the owner" ts tests/assign-owner.test.ts
 check "Continue is never taken as a search" ts tests/continue-not-search.test.ts
 check "the model dies mid-answer: words kept, Continue" node --test --test-timeout=180000 tests/model-dies.cjs
 check "killed mid-answer: question and partial answer kept, marked interrupted, asked again once" node --test --test-timeout=180000 tests/interrupted-chat.cjs

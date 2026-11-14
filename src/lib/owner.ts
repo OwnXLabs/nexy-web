@@ -16,16 +16,13 @@ const fresh = () =>
 // them across devices. Only enable where an xnode-auth block guards every path: without
 // one, Xnode-Auth-User is just a header anyone can send.
 const TRUST_XNODE_AUTH = process.env.NEXY_TRUST_XNODE_AUTH === "1";
-// started straight from entry.mjs (serve.mjs warns itself; the app's launcher sets the header at its own door)
-if (TRUST_XNODE_AUTH && !process.env.NEXY_SOCKET && process.env.ASTRO_NODE_AUTOSTART !== "disabled")
-  console.warn("[nexy] WARNING: NEXY_TRUST_XNODE_AUTH=1 on TCP. Any local process can claim to be the owner; start dist/server/serve.mjs with NEXY_SOCKET.");
 
 // Behind Nexy Cloud's gate each person signs in with their own code, and the gate names them in
 // x-nexy-user, dropping any copy a visitor sends. Only enable where that gate is the sole caller
 // (NEXY_SOCKET): each person's data is their own, and none of them is the box's owner.
 const TRUST_GATE_USER = process.env.NEXY_TRUST_GATE_USER === "1";
-if (TRUST_GATE_USER && !process.env.NEXY_SOCKET && process.env.ASTRO_NODE_AUTOSTART !== "disabled")
-  console.warn("[nexy] WARNING: NEXY_TRUST_GATE_USER=1 on TCP. Any local process can name a user; start dist/server/serve.mjs with NEXY_SOCKET.");
+
+// both flags are refused at start without NEXY_SOCKET (deploy/trust-guard.mjs)
 
 const hashed = (kind: string, id: string) => `o_${kind}_${createHash("sha256").update(id).digest("hex").slice(0, 16)}`;
 
