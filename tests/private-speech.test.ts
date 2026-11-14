@@ -43,3 +43,11 @@ test("speechFetch makes no request while the chat is ultra-private", async () =>
     assert.deepEqual(calls.filter((u) => /voice/.test(u)), ["/api/v1/voice/status"]);
   } finally { globalThis.fetch = real; }
 });
+
+test("the server's speech route refuses while an ultra-private session is open", () => {
+  const api = path.join(import.meta.dirname, "..", "src", "pages", "api", "v1");
+  const session = fs.readFileSync(path.join(api, "private", "_session.ts"), "utf8");
+  assert.match(session, /export const privateOpen = \(who: string\): boolean => count\(who\) > 0;/);
+  const route = fs.readFileSync(path.join(api, "voice", "[op].ts"), "utf8");
+  assert.match(route, /\(params\.op === "stt" \|\| params\.op === "tts"\) && privateOpen\(owner\(ctx\)\)\) return json\(\{ error: PRIVATE \}, 409\)/);
+});
