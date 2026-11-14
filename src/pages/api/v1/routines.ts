@@ -1,3 +1,4 @@
+import { engineFailure } from "../../../lib/engine/plain-error";
 import type { APIContext, APIRoute } from "astro";
 import { engineFor, type NexyEngine } from "../../../lib/engine";
 import { boxAllowed, boxRefused } from "../../../lib/box";
@@ -25,7 +26,7 @@ export const GET: APIRoute = async (ctx) => {
   const { request } = ctx;
   if (!boxAllowed(request)) return boxRefused();
   const r = rt(ctx); if (r instanceof Response) return r;
-  try { return json({ routines: await r.list() }); } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+  try { return json({ routines: await r.list() }); } catch (e: any) { return json(engineFailure(e, "routines"), 502); }
 };
 
 export const POST: APIRoute = async (ctx) => {
@@ -38,7 +39,7 @@ export const POST: APIRoute = async (ctx) => {
   if (!name || !schedule || !prompt) return json({ error: "name, schedule and prompt are required" }, 400);
   const tz = zoneOf(b); if (tz instanceof Response) return tz;
   const utcSchedule = String(b?.utcSchedule ?? "").trim() || undefined;
-  try { return json({ routine: await r.create({ name, schedule, prompt, tz, utcSchedule }) }); } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+  try { return json({ routine: await r.create({ name, schedule, prompt, tz, utcSchedule }) }); } catch (e: any) { return json(engineFailure(e, "routines"), 502); }
 };
 
 export const DELETE: APIRoute = async (ctx) => {
@@ -46,7 +47,7 @@ export const DELETE: APIRoute = async (ctx) => {
   if (!boxAllowed(request)) return boxRefused();
   const r = rt(ctx); if (r instanceof Response) return r;
   const id = url.searchParams.get("id"); if (!id) return json({ error: "id required" }, 400);
-  try { await r.remove(id); return json({ ok: true }); } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+  try { await r.remove(id); return json({ ok: true }); } catch (e: any) { return json(engineFailure(e, "routines"), 502); }
 };
 
 // the owner's answer to a routine made while outside content was in the agent's context, the
@@ -60,12 +61,12 @@ export const PATCH: APIRoute = async (ctx) => {
   if (id && action === "run") {
     if (!r.runNow) return json({ error: "This agent cannot run a routine on request." }, 501);
     try { return json({ run: { id, ...(await r.runNow(id)) } }); }
-    catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+    catch (e: any) { return json(engineFailure(e, "routines"), 502); }
   }
   if (id && (action === "pause" || action === "resume")) {
     if (!r.setPaused) return json({ error: "This agent cannot pause routines." }, 501);
     try { return json({ routine: { id, ...(await r.setPaused(id, action === "pause")) } }); }
-    catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+    catch (e: any) { return json(engineFailure(e, "routines"), 502); }
   }
   if (!id || (action !== "confirm" && action !== "discard")) return json({ error: "id and action (confirm, discard, pause, resume or run) are required" }, 400);
   if (!r.confirm || !r.discard) return json({ error: "This agent does not hold routines for confirmation." }, 501);
@@ -73,5 +74,5 @@ export const PATCH: APIRoute = async (ctx) => {
   try {
     if (action === "confirm") return json({ routine: { id, ...(await r.confirm(id, tz)) } });
     await r.discard(id); return json({ ok: true });
-  } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+  } catch (e: any) { return json(engineFailure(e, "routines"), 502); }
 };

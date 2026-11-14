@@ -35,7 +35,7 @@ async function runRoutine(r: { id?: string; name: string; prompt: string }, ui: 
     const reply = String(run?.reply ?? "").trim();
     ui.push("ai", reply ? renderMd(reply) : "It ran, and had nothing to report this time.");
   } catch (e) {
-    ui.push("ai", `It could not run just now: <code>${esc(errText(e))}</code>. It still runs on its schedule.`);
+    ui.push("ai", `It could not run just now: ${esc(errText(e))} It still runs on its schedule.`);
   }
 }
 

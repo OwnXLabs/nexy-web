@@ -1,3 +1,4 @@
+import { engineFailure } from "../../../lib/engine/plain-error";
 import type { APIContext, APIRoute } from "astro";
 import { engineFor } from "../../../lib/engine";
 import { boxAllowed, boxRefused } from "../../../lib/box";
@@ -23,7 +24,7 @@ export const GET: APIRoute = async (ctx) => {
   if (m === "none") return json({ available: false, note: NONE, items: [], sessions: [] });
   try {
     return url.searchParams.get("export") === "1" ? json({ exportedAt: new Date().toISOString(), sessions: await m.export() }) : json({ items: await m.list() });
-  } catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+  } catch (e: any) { return json(engineFailure(e, "memory"), 502); }
 };
 
 export const DELETE: APIRoute = async (ctx) => {
@@ -35,5 +36,5 @@ export const DELETE: APIRoute = async (ctx) => {
   const id = url.searchParams.get("id") ?? undefined;
   if (!id && url.searchParams.get("all") !== "1") return json({ error: "name one conversation (id) or all=1" }, 400);
   try { return json({ forgotten: await m.forget(id) }); }
-  catch (e: any) { return json({ error: String(e?.message ?? e).slice(0, 200) }, 502); }
+  catch (e: any) { return json(engineFailure(e, "memory"), 502); }
 };
