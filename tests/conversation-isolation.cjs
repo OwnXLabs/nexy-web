@@ -38,6 +38,9 @@ const revised = [];
     if(req.postDataJSON().private) { await route.fulfill({contentType:"application/json",body:JSON.stringify({choices:[{message:{content:"```html\n<h1>PRIVATEOUTPUT</h1>\n```"}}]})}); return; }
     body={choices:[{message:{content:`Reply for ${m.at(-1).content}`}}]};
    } else if(path==='/api/v1/title') body={title:null};
+   // the model is in, and this machine builds sites itself rather than across devices
+   else if(path==='/api/v1/model') body={ready:true};
+   else if(path==='/api/v1/swarm') { await route.fulfill({status:404,contentType:'application/json',body:'{}'}); return; }
    else if(path.includes('connections')) body={items:[],connections:[]};
    await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
   });

@@ -17,6 +17,9 @@ const SKIP = /sign out|log out|delete|remove/i;
   const failures = [];
   try {
     const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true, hasTouch: true, permissions: ['microphone'] });
+    // each click starts from a first visit: a Get started step done by an earlier click
+    // (Try it now, Got it) no longer offers Later
+    await ctx.addInitScript(() => { try { localStorage.removeItem('nexy.getStarted.v1'); } catch (e) { console.warn('get started not reset', e); } });
     const page = await ctx.newPage();
     let requests = 0, popups = 0, downloads = 0;
     const errors = [];

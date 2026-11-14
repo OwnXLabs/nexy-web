@@ -103,6 +103,9 @@ export NEXY_BASE=http://127.0.0.1:4389 REPORTS_DIR="$tmp/data/reports"
 check "screen control" node tests/screen.cjs
 check "routines" node tests/routines.cjs
 check "problem reports" node tests/problem-report.cjs
+check "each chat keeps its own files, builds and replies" node tests/conversation-isolation.cjs
+check "publishing from Share: the right chat and output, unpublish, reload, a failed save and Retry" node tests/publishing-browser.cjs
+check "every visible button does something, at desktop and phone width" node tests/buttons.cjs
 
 echo
 echo "$pass passed, $fail failed"
