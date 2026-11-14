@@ -212,3 +212,59 @@ test('the Mac, Windows and phone apps: one engine, no picker, Nexy speaks, whate
     assert.equal((await req('/api/v1/chat', { chat: 'capp00002', engine: 'openclaw', messages: [{ role: 'user', content: 'hi' }] })).status, 400, 'another engine cannot be named');
   } finally { e.close(); }
 });
+
+// every file under a directory, read whole
+const filesUnder = (dir) => fs.readdirSync(dir, { recursive: true }).map((f) => path.join(dir, f)).filter((f) => fs.statSync(f).isFile()).map((f) => fs.readFileSync(f, 'utf8'));
+const HISTORY = [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }];
+
+test('one engine and no picker (the public demo): no engine id reaches the visitor, the log and the disk keep it', { timeout: 60000 }, async () => {
+  const agent = await gateway('plain'), plain = await gateway('plain');
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-identity-one-'));
+  const s = await start({ NEXY_DATA_DIR: data, NEXY_BOX_FEATURES: '', NEXY_SCREEN: 'none', NEXY_LLM_URL: plain.url, NEXY_AGENT_URL: agent.url, NEXY_AGENT_KEY: 'k' });
+  const req = client(s.base);
+  const clean = (what, text) => {
+    assert.doesNotMatch(text, /"engine"/, `${what}: no engine field`);
+    assert.doesNotMatch(text, /hermes/i, `${what}: no engine id`);
+  };
+  try {
+    assert.equal((await req('/api/v1/engines')).status, 403, 'no picker');
+    const saved = await req('/api/v1/chats', { id: 'cdemo0001', pid: '_', title: 'Demo', html: '', history: HISTORY, base: 0 });
+    assert.equal(saved.status, 200, saved.text);
+    clean('the save', saved.text);
+    let r = await req('/api/v1/chat', { chat: 'cdemo0001', messages: [{ role: 'user', content: 'who' }] });
+    assert.equal(r.status, 200, r.text);
+    clean('the reply', r.text);
+    r = await req('/api/v1/chat', { chat: 'cdemo0002', messages: [{ role: 'user', content: 'hello' }] });
+    assert.equal(replyOf(r), 'answer from plain');
+    clean('a new chat\'s reply', r.text);
+    for (const q of ['who', 'long']) {
+      const st = await req('/api/v1/chat', { chat: 'cdemo0001', stream: true, messages: [{ role: 'user', content: q }] });
+      assert(streamed(st.text).done, st.text);
+      clean(`the stream (${q})`, st.text);
+    }
+    clean('the list', (await req('/api/v1/chats')).text);
+    const got = await req('/api/v1/chats?id=cdemo0001');
+    assert.equal(got.status, 200);
+    clean('the chat', got.text);
+    assert.equal((await req('/api/v1/chat-continue', { from: 'cdemo0001', engine: 'hermes' })).status, 403, 'no Continue without a picker');
+    assert.match(s.log(), /"engine":"hermes"/, 'the turn log keeps the engine');
+    assert(filesUnder(data).some((t) => /"engine":"hermes"/.test(t) && t.includes('cdemo0001')), 'the stored chat keeps the engine');
+  } finally { s.p.kill(); agent.srv.close(); plain.srv.close(); fs.rmSync(data, { recursive: true, force: true }); }
+});
+
+test('several engines and an owner who may pick: the engine id still reaches the client', { timeout: 60000 }, async () => {
+  const e = await engines();
+  const req = client(e.s.base);
+  try {
+    const saved = await req('/api/v1/chats', { id: 'cowner001', pid: '_', title: 'Owner', html: '', history: HISTORY, base: 0 });
+    assert.equal(saved.json.engine, 'hermes', 'the save');
+    assert.equal((await req('/api/v1/chat', { chat: 'cowner001', messages: [{ role: 'user', content: 'hello' }] })).json.engine, 'hermes', 'the reply');
+    const st = streamed((await req('/api/v1/chat', { chat: 'cowner001', stream: true, messages: [{ role: 'user', content: 'hello' }] })).text);
+    assert.equal(st.done.body.engine, 'hermes', 'the stream');
+    assert.equal((await req('/api/v1/chats')).json.chats.find((c) => c.id === 'cowner001').engine, 'hermes', 'the list');
+    assert.equal((await req('/api/v1/chats?id=cowner001')).json.chat.engine, 'hermes', 'the chat');
+    const r = await req('/api/v1/chat', { chat: 'cowner001', engine: 'openclaw', messages: [{ role: 'user', content: 'hi' }] });
+    assert.equal(r.status, 409);
+    assert.equal(r.json.engine, 'hermes', 'a refused turn says which engine the chat is with');
+  } finally { e.close(); }
+});
