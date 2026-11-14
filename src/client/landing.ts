@@ -2,6 +2,7 @@
 // Get started list, the model download chip and the first-visit pill. Only what works on this
 // machine is offered; what isn't here is left out or explained.
 import { boxHere, hasApp, here, inCloud, onOwn1 } from "./place";
+import { httpMsg } from "./http";
 import { prefs } from "./settings";
 
 export interface LandingHooks {
@@ -36,7 +37,7 @@ export const modelReady = (): Promise<void> => model.ready ? Promise.resolve() :
 async function pollModel(): Promise<void> {
   try {
     const r = await fetch("/api/v1/model");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) throw new Error(httpMsg(r.status));
     model = await r.json() as ModelState;
   } catch (e) {
     // can't tell: treat it as ready so nothing waits on a question nobody answers

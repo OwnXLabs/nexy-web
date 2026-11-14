@@ -63,5 +63,6 @@ export async function forward(body: Record<string, unknown>): Promise<string> {
   }
   const j: any = await r.json().catch((e: Error) => { console.error(`beta report: unreadable answer (${r.status}): ${e.message}`); return {}; });
   if (r.status === 201 && typeof j.ref === "string") return j.ref.slice(0, 20);
-  throw new BetaRefused(typeof j.error === "string" ? j.error.slice(0, 200) : `the team's server answered ${r.status}`, r.status === 429 || r.status === 413 ? r.status : 502);
+  console.error(`beta report: the team's server answered ${r.status}`);
+  throw new BetaRefused(typeof j.error === "string" ? j.error.slice(0, 200) : "the Nexy team's server did not take the report; try again later", r.status === 429 || r.status === 413 ? r.status : 502);
 }

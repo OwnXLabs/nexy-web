@@ -1,5 +1,6 @@
 // Speech on this computer: the recording goes to the local speech service as a 16 kHz mono WAV, and
 // the speech model is fetched once, with progress, before the first recording.
+import { httpMsg } from "./http.ts";
 
 /** 16-bit PCM WAV of mono samples. */
 export function encodeWav(samples: Float32Array, rate: number): Blob {
@@ -68,7 +69,7 @@ type Prep = { state: "missing" | "fetching" | "ready" | "failed"; done: number; 
 const get = async (op: "status" | "prepare"): Promise<Prep> => {
   const r = await fetch(`/api/v1/voice/${op}`, op === "prepare" ? { method: "POST", headers: { "content-type": "application/json" }, body: "{}" } : {});
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error ?? `HTTP ${r.status}`);
+  if (!r.ok) throw new Error(d.error ?? httpMsg(r.status));
   return d as Prep;
 };
 
