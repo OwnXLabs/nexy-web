@@ -37,6 +37,7 @@ check "a hanging gateway and a lost question: every turn logged start to end, a 
 check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
 check "OpenClaw engine: agent target, bearer from the key file, one safe session key per chat, whole and streamed, failures fall back" ts tests/openclaw.test.ts
 check "OpenClaw in Settings and chat: three engines, the pick kept, via=openclaw, no memory controls, no session calls" node --test --test-timeout=180000 tests/openclaw-engine.cjs
+check "one engine per chat: kept after the pick changes, a mismatched turn refused, Continue shares as a linked chat or starts fresh, never from ultra-private, fact questions searched on Hermes and OpenClaw, engine and tools in the turn line, no labels with one engine" node --test --test-timeout=180000 tests/per-chat-engine.cjs
 check "Nexy Cloud: the gate names each person, their own engine and key, no box features, Nexy Cloud wording, no agent screen" node --test --test-timeout=180000 tests/cloud-mode.cjs
 check "Nexy Cloud wording in the page and in who Nexy says it is" ts tests/cloud-place.test.ts
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs

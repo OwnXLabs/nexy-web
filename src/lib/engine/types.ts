@@ -9,6 +9,9 @@ export interface ChatResult {
   grounded: boolean;
   // the model stopped at its length limit, not because it had finished
   cut?: boolean;
+  // the tools and sources the engine says it used this turn; absent where it does not say
+  tools?: string[];
+  sources?: string[];
 }
 
 export interface MemoryItem { id: string; title: string; source: string; startedAt: number | null; messages: number }
@@ -46,6 +49,8 @@ export interface NexyEngine {
   // whether the agent has used its browser in this session since `since` (ms): the agent's screen
   // is shown only then, never on a guess from the person's wording
   browsed?(session: string, since: number): Promise<boolean>;
+  // the tools the agent ran in this session since `since` (ms), from its own record; null where it has none
+  toolsSince?(session: string, since: number): Promise<string[] | null>;
   memory?: {
     list(): Promise<MemoryItem[]>;
     export(): Promise<Array<{ id: string; title: string; messages: unknown[] }>>;

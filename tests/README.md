@@ -139,3 +139,17 @@ in its health; without it, no Open in Docs shows. A document written in chat is 
 however many times Open is clicked, and the tab opens after indexing. A refused upload is said
 plainly and the document stays. Every visible work-pane button is clicked and none may lead to
 a "cannot" or "not yet" message.
+
+Per-chat engine checks
+======================
+
+`node --test tests/per-chat-engine.cjs` after `npm run build`. Stand-in Hermes, Nexy Engine and
+OpenClaw gateways. A chat keeps the engine it started on after the owner's pick changes, and a
+save cannot move it; a turn naming another engine is refused (409) and reaches no engine.
+Continue → Share makes a new chat on the other engine holding the transcript, linked to the
+original, and Start fresh an empty one; the original keeps its engine. An ultra-private chat has
+no label or Continue, and the server refuses to share one. A fact question gets one search line
+on Hermes and OpenClaw only. The turn line names the engine and the tools it reports ("unknown"
+where it says nothing). A one-engine install shows no label and no Continue.
+`SHOTS_DIR=<dir>` also saves screenshots of the label, the Continue sheet and Settings at
+desktop and phone width.

@@ -518,6 +518,7 @@ body[data-theme=standard] .rail{padding-top:6px}
 .ws .hbtn{margin-left:auto}
 .tabs{align-items:center}
 .tabtools{margin-left:auto;display:flex;gap:2px}
+#hdrEngine{align-self:center;margin-right:6px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hbtn{position:relative;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:var(--fg3)}
 .hbtn:hover,.hbtn.on{background:rgba(255,255,255,.1);color:#fff}
 .hbtn b{position:absolute;top:1px;right:1px;min-width:14px;height:14px;padding:0 4px;border-radius:999px;background:var(--coral);color:#1a0c08;font-size:10px;font-weight:600;display:none;place-items:center}

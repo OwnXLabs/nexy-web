@@ -40,7 +40,7 @@ NEXY_DATA_DIR=./data node dist/server/entry.mjs
 | `NEXY_PLACE` | `cloud` for Nexy Cloud: the page, the prompt and Nexy's own identity say Nexy Cloud, hosted by OwnX |
 | `NEXY_SCREEN` | `none` where there is no agent browser: nothing is opened on a screen and no step is handed over |
 | `NEXY_TRUST_GATE_USER` | `1` behind Nexy Cloud's gate, which names each signed-in person in `x-nexy-user`: each one's chats and engine pick are their own, sent on to the engine as `x-nexy-user`, and none of them gets the box's own features. Use it only with `NEXY_SOCKET` and the gate as the socket's only client |
-| `NEXY_ENGINES`, `NEXY_ENGINE_<ID>_URL`, `_KEY` or `_KEY_FILE` | More agent engines, each picked per owner in Settings, each with its own key. `_LABEL` and `_NOTE` name one in Settings |
+| `NEXY_ENGINES`, `NEXY_ENGINE_<ID>_URL`, `_KEY` or `_KEY_FILE` | More agent engines, each picked per owner in Settings, each with its own key. `_LABEL` and `_NOTE` name one in Settings. The pick applies to new chats: each chat keeps the engine it started on, and moves to another only through Continue, which asks first and makes a new linked chat |
 | `NEXY_ENGINE_OPENCLAW_AGENT`, `NEXY_ENGINE_OPENCLAW_BUDGET_MS` | OpenClaw's agent target (`openclaw/default`, or `openclaw/<agentId>`), and how long it may stay silent before the plain model answers (120000). OpenClaw speaks the OpenAI chat API only, so memory and routines are not offered while it is picked |
 | `NEXY_ENGINE_<ID>_USER_URLS`, `_USER_KEYS` | Behind the gate: a person's own copy of an engine (`u01=http://…,u02=…`) and its key (`u01:<key>,…`). Anyone without both uses the shared one |
 

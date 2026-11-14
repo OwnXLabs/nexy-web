@@ -6,9 +6,12 @@ const DIR = process.env.NEXY_DATA_DIR ? path.join(process.env.NEXY_DATA_DIR, "ch
 const ID = /^c[a-z0-9]{4,24}$/;
 const PID = /^[\w:-]{1,64}$/;
 const MAX_HTML = 2_000_000;
+export const ENGINE_ID = /^[a-z0-9-]{1,32}$/;
 
 export interface Turn { role: "user" | "assistant"; content: string }
-export interface SavedChat { id: string; pid: string; title: string; ts: number; html: string; history: Turn[]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; open?: { kind: string; title: string; href: string; project?: unknown; ex?: string; needs?: string } }
+// engine: the agent engine the chat talks to, fixed when it starts (absent on older chats)
+// from: the chat it was continued from, on another engine
+export interface SavedChat { id: string; pid: string; title: string; ts: number; html: string; history: Turn[]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string; from?: { id: string; title: string }; open?: { kind: string; title: string; href: string; project?: unknown; ex?: string; needs?: string } }
 export type ChatMeta = Omit<SavedChat, "html" | "history" | "outputs">;
 
 const dirOf = (owner: string) => path.join(DIR, owner);
@@ -22,7 +25,9 @@ export function clean(raw: any): SavedChat | null {
     .filter((t: any) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
     .slice(-200)
     .map((t: any) => ({ role: t.role, content: t.content.slice(0, 16_000) }));
-  return { id: raw.id, pid: raw.pid, title: String(raw.title ?? "Chat").slice(0, 80), ts: Date.now(), html, history, outputs: cleanOutputs(raw.outputs), projectId: typeof raw.projectId === "string" && PID.test(raw.projectId) ? raw.projectId : undefined, activeOutput: typeof raw.activeOutput === "string" ? raw.activeOutput.slice(0, 240) : undefined };
+  return { id: raw.id, pid: raw.pid, title: String(raw.title ?? "Chat").slice(0, 80), ts: Date.now(), html, history, outputs: cleanOutputs(raw.outputs), projectId: typeof raw.projectId === "string" && PID.test(raw.projectId) ? raw.projectId : undefined, activeOutput: typeof raw.activeOutput === "string" ? raw.activeOutput.slice(0, 240) : undefined,
+    engine: typeof raw.engine === "string" && ENGINE_ID.test(raw.engine) ? raw.engine : undefined,
+    from: raw.from && ID.test(String(raw.from.id)) ? { id: String(raw.from.id), title: String(raw.from.title ?? "Chat").slice(0, 80) } : undefined };
 }
 
 export async function list(owner: string): Promise<ChatMeta[]> {
@@ -31,7 +36,7 @@ export async function list(owner: string): Promise<ChatMeta[]> {
   for (const n of names.filter((x) => x.endsWith(".json"))) {
     try {
       const c = JSON.parse(await fs.readFile(path.join(dirOf(owner), n), "utf8")) as SavedChat;
-      out.push({ id: c.id, pid: c.pid, title: c.title, ts: c.ts });
+      out.push({ id: c.id, pid: c.pid, title: c.title, ts: c.ts, ...(c.engine ? { engine: c.engine } : {}) });
     } catch (e) {
       console.warn(`[nexy] chat ${n} unreadable: ${(e as Error).message}`);
     }
@@ -45,6 +50,8 @@ export async function get(owner: string, id: string): Promise<SavedChat | null> 
   catch (e: any) { if (e?.code === "ENOENT") return null; throw e; }
 }
 
+// A chat's engine and link never change once saved: a save naming another engine keeps the first.
+// stamp: the engine a new chat gets when its save names none (the owner's pick at the time)
 // A save says which version it was made from (`base`: the saved ts, 0 for a new chat).
 // A device holding an older copy is refused, so it cannot overwrite turns another
 // device added since (a phone left open erased the Mac's answer, 2026-11-12).
@@ -65,12 +72,14 @@ async function sizes(owner: string, file: string): Promise<{ total: number; mine
   return { total, mine };
 }
 const locks = new Map<string, Promise<unknown>>();
-export function put(owner: string, c: SavedChat, base?: number): Promise<void> {
+export function put(owner: string, c: SavedChat, base?: number, stamp?: string | null): Promise<void> {
   const file = fileOf(owner, c.id);
   const run = (locks.get(file) ?? Promise.resolve()).catch(() => {}).then(async () => {
     const now = await get(owner, c.id);
     if (base !== undefined && (now?.ts ?? 0) !== base) throw new Conflict(now?.ts ?? 0);
     if (now && c.ts <= now.ts) c.ts = now.ts + 1;
+    if (now) { c.engine = now.engine; c.from = now.from; }
+    else if (!c.engine && stamp) c.engine = stamp;
     const text = JSON.stringify(c);
     const { total, mine } = await sizes(owner, file), size = Buffer.byteLength(text);
     if (size > mine && total - mine + size > storageCap()) throw new StorageFull();
