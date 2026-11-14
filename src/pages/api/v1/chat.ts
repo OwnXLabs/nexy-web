@@ -127,13 +127,12 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
   const lines: string[] = [
     WHERE[0],
     // without it the model took its training year for today: "SpaceX is a private company", and
-    // today's articles dated 2025 (2026-10-28)
+    // today's articles dated 2025
     `Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`,
     "What you know from training stops well before today: never say from memory that",
     "something is private, does not exist or has not happened.",
     ...WHERE.slice(1),
     "Be brief and concrete. Never invent activity, files, agents or numbers you were not given.",
-    // 2026-11-12: after "search isn't working" a local model made up steps it said it had given
     "If a search or tool fails, say plainly you can't check that right now. Never invent facts,",
     "steps, sources or news to fill the gap. Never say you said something earlier unless it is",
     "in this conversation.",
@@ -172,8 +171,7 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
         "browser. Never paste screenshots, images or base64 into a reply.",
       ] : ["Never paste screenshots, images or base64 into a reply."]),
       "For prices, news, companies, people or anything that changes, look it up before answering.",
-      // 2026-10-28: with every search engine rate-limited, the agent searched 60+ times, then
-      // answered from memory that SpaceX "has never IPO'd"; its own browser showed the price
+      // with search rate-limited, an agent keeps searching, then answers from memory
       "If two searches come back empty or fail, stop searching: say search is not working right",
       SCREEN ? "now, do not fill in current facts from memory, and offer to open a site in your browser."
         : "now, and do not fill in current facts from memory.",
@@ -217,8 +215,7 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
       "and if it was built, say so and offer to open it.",
     );
   }
-  // "where is the super mario website?" got "I can't browse the file system... the terminal tool
-  // isn't available" (feedback, 2026-09-28): the list above is this chat only, by design.
+  // the list above is this chat only, by design; never an answer about file systems or tools
   lines.push(
     "",
     "Things built in OTHER chats are not listed here. When asked where something is, say it is in",
@@ -399,7 +396,7 @@ export const POST: APIRoute = async (ctx) => {
       log({ result: "engine-failed", via: use.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
       if (b.stopped && b.text.trim()) return stoppedTurn(b, use.id);
       // Words already on screen stay there: asking again from scratch lost them and kept the
-      // person waiting minutes while a restarted model loaded (QA 2026-11-12)
+      // person waiting minutes while a restarted model loaded
       // (only words the person saw: an engine's own failure, worded as a reply, is never shown)
       if (visible(b.text).trim()) return stoppedTurn(b, use.id, true);
       // The agent adds memory and tools; the model alone can still answer. A broken agent

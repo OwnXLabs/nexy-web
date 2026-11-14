@@ -34,8 +34,7 @@ publishing handlers against temporary saved chats and the private Python publish
 with a loopback Own Build fixture. It checks owner/chat/output scoping, same-origin
 mutations, name conflicts, saved output edits, restart persistence, independent
 unpublishing, compatibility with the standalone page, and unconfigured instances.
-Set `NEXY_PUBLISHER_SCRIPT` if the private publisher copy is elsewhere (default:
-`../publisher.py` from tests/).
+Set `NEXY_PUBLISHER_SCRIPT` to the publisher under test; without it the check is skipped.
 Requires Python 3 and permission to bind loopback test ports; no Own1 services used.
 
 After a production build, serve it locally and run

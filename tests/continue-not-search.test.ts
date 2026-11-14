@@ -1,5 +1,5 @@
 // "Continue" after a cut answer carries the answer on; it is never taken as a yes to a search the
-// answer mentioned (QA 2026-11-12: it waited 200 s, then said a search had run long).
+// answer mentioned.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { wantsResearch } from "../src/lib/agent-turn.ts";

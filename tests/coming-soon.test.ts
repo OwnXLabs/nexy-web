@@ -1,5 +1,5 @@
 // Nexy Cloud is "Coming soon": what Nexy on a computer says it cannot do here never sends the
-// person to it. 0.2.8 offered it for making images.
+// person to it, for images or anything else.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clientModule } from "./client-module.ts";

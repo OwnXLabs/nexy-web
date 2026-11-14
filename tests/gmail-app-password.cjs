@@ -80,7 +80,7 @@ test('Gmail (app password): steps, connect, refusal, pause, resume, disconnect; 
     await card.locator('#apEmail').fill('owner@example.com');
     await pass.fill('zzzz zzzz zzzz zzzz');
     await card.locator('[data-act="apon"]').click();
-    // it stays on the card until the field is edited (QA 2026-11-12: a toast, gone in 3 s)
+    // it stays on the card until the field is edited, not a toast
     const note = card.locator('#apNote');
     await note.filter({ hasText: "Gmail didn't accept that app password" }).waitFor({ timeout: 10000 });
     assert.equal(await note.getAttribute('role'), 'alert');

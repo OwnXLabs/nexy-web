@@ -1,7 +1,6 @@
 // The owner's own mail is never looked for on the public web. With Gmail paused, missing or
 // failing, "search my email for Acme Billing" is answered plainly and reaches no agent and no
-// model (QA 2026-11-12: a paused Gmail became a web search for site:mail.google.com "Acme
-// Billing"). The starter "Find the latest invoice in my email" reads the mail through the stand-in
+// model, never a web search. The starter "Find the latest invoice in my email" reads the mail through the stand-in
 // hub instead of switching the chat to ultra-private; ultra-private the owner chose keeps it off.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/mail-privacy.cjs
 const test = require('node:test');
@@ -177,7 +176,7 @@ test('the starter "Find the latest invoice in my email" reads the mail, in a reg
   } finally { await b.close(); }
 });
 
-// QA 0.2.10: follow-ups about the mail just read lost Gmail ("I don't have access to your email
+// Follow-ups about the mail just read lost Gmail ("I don't have access to your email
 // inbox") or went ultra-private ("the Invoice 4471 email"), and gmail_read never ran.
 const READ = [{ role: 'user', content: 'search my email for Acme Billing' }, { role: 'assistant', content: 'Invoice 4471 for October, from Acme Billing.' }];
 test('a follow-up about the mail just read opens it in full, answered by the model alone', { timeout: 60000 }, async () => {
@@ -217,7 +216,7 @@ test('in the browser: follow-ups read the mail in the regular chat; an email rou
     assert.equal(await page.locator('#thread').getByText('switched this chat to ultra-private').count(), 0);
     assert.deepEqual(h.st.calls.slice(calls).map((c) => c.name), ['gmail_search', 'gmail_search', 'gmail_read', 'gmail_search', 'gmail_read']);
 
-    // QA 0.2.10: "invoice number and the amount" went ultra-private and no routine was made
+    // "invoice number and the amount" is a routine, not ultra-private
     const agentBefore = agent.got.length;
     await say('when an email arrives from billing@acme.example, tell me the invoice number and the amount', 3, 'waiting for you to turn it on');
     assert.equal(await page.locator('#nexyPrivBanner').isVisible(), false, 'a routine on an email is not switched to ultra-private');
@@ -228,8 +227,7 @@ test('in the browser: follow-ups read the mail in the regular chat; an email rou
   } finally { await b.close(); }
 });
 
-// QA 0.2.11: "open it" ran gmail_read, then the model answered nothing, "[[open-url: …]]" or
-// 'open_url("…")' 3 times in 4. The email itself is the answer; no model is asked.
+// The email itself is the answer to "open it"; no model is asked.
 test('"open it" after a mail search shows the email in full, with no model or agent', { timeout: 60000 }, async () => {
   h.st.mode = 'granted';
   const calls = h.st.calls.length, modelBefore = model.got.length, agentBefore = agent.got.length;

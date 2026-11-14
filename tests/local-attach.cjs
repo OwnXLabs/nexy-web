@@ -1,6 +1,5 @@
 // A file attached on a computer without Own Docs is read in the page and reaches the model with the
-// question (QA 0.2.13: the upload went to Own Docs, the chip said "memo.txt: unknown app" and the
-// model saw nothing). Images are refused plainly. On an Own1 the upload still goes to Own Docs.
+// question. Images are refused plainly. On an Own1 the upload still goes to Own Docs.
 // The model is a stand-in that records what it was sent.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/local-attach.cjs
 const test = require('node:test');

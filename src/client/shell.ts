@@ -80,7 +80,7 @@ function stash(): void {
   c.nodes = document.createDocumentFragment();
   while (th.firstChild) c.nodes.appendChild(th.firstChild);
   H.history.length = 0;
-  // a New chat left before anything was said in it goes: they piled up in the list (QA 2026-11-12)
+  // a New chat left before anything was said in it goes: they piled up in the list
   if (untouched(c)) chats.set(cur.pid, (chats.get(cur.pid) ?? []).filter((x) => x !== c));
 }
 const untouched = (c: Chat) => c.title === "New chat" && !c.saved && c.example === undefined && !c.history.length && !c.nodes.querySelector(".msg");
@@ -164,8 +164,8 @@ function load(pid: string, id: string): void {
   cardsNow(th);
 }
 
-// A chat reopened from memory: if another device saved it since, show that copy instead
-// (QA 2026-11-12: the phone reopened its old copy without the Mac's turn). Not while this copy
+// A chat reopened from memory: if another device saved it since, show that copy instead.
+// Not while this copy
 // has a save on its way or a reply still arriving.
 function freshen(pid: string, c: Chat): void {
   const seen = c.ts;

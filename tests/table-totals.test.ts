@@ -1,14 +1,13 @@
 // A table's total is checked only against the rows of the same table, in its own column, just
-// above it. 0.2.8 read two tables as one, "corrected" Total Cost from 9 to 24 by adding in the
-// selling price, and told the person the model was wrong.
+// above it: two tables are never read as one.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clientModule } from "./client-module.ts";
 
 const { checkTotals, fromReply } = await clientModule("src/client/content-view.ts");
 
-// the reply QA saw: a cost table, then a worked example with the selling price above the costs
-const QA = `### Step 2: Calculate the Total Cost per Pack
+// a cost table, then a worked example with the selling price above the costs
+const REPLY = `### Step 2: Calculate the Total Cost per Pack
 
 | Cost Component | Example Amount (₱) |
 |---|---|
@@ -33,11 +32,11 @@ const QA = `### Step 2: Calculate the Total Cost per Pack
 `;
 
 test("two tables in one reply: neither total is touched, and nothing is said", () => {
-  const l = fromReply(QA, "explain step by step how to")!;
+  const l = fromReply(REPLY, "explain step by step how to")!;
   assert.ok(l, "the tables go to the pane");
   assert.equal(l.note, "The tables are on the right.");
   assert.doesNotMatch(l.note, /corrected|rows add to/);
-  // two tables are two tables: not joined into one sheet whose total adds both (QA 2026-11-12)
+  // two tables are two tables: not joined into one sheet whose total adds both
   assert.equal(l.artifact.kind, "doc");
 });
 

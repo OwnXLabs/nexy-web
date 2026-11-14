@@ -120,7 +120,7 @@ export function sheetArtifact(m: { title: string; rows: (string | number | null)
   let grid: Raw[][] = m.rows.length ? m.rows.map((r) => r.map((v) => (v === undefined ? null : v))) : [["", "", ""], ["", "", ""]];
   let sel = { r: 1, c: 0 };
   // a total row only where adding up means something: a stock's open, close, high and low were
-  // summed to 922.75 (2026-10-28). The button still turns it on.
+  // summed to 922.75. The button still turns it on.
   let sortCol = -1, sortDir = 1, totals = grid[0]?.some((h, c) =>
     typeof h === "string" && ADDS_UP.test(h) && grid.slice(1).some((r) => typeof r[c] === "number")) ?? false;
 

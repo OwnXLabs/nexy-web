@@ -1,5 +1,5 @@
 // A model sometimes answers with a tool call written as text: "[[open-url: https://…]]" or
-// 'open_url("https://…")' (QA 0.2.11, "open it" after a mail search). Nexy acts on one marker,
+// 'open_url("https://…")'. Nexy acts on one marker,
 // [[take-control: …]]; any other is dropped, as is a line that is only a snake_case call.
 // Code blocks are left as they are.
 const MARK = /[ \t]*\[\[(?!take-control:)[a-z][\w-]*:[^\]\n]*(?:\]\]|$)/gim;

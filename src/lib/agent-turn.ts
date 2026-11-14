@@ -10,32 +10,30 @@ export function agentSessionKey(who: string, sid: string | undefined, chat: unkn
 }
 
 // Research (search, read pages, cite sources) takes longer than a chat turn: at 90 s a "give me
-// the links" follow-up timed out every time (2026-10-22).
+// the links" follow-up timed out every time.
 const RESEARCH = /\b(search|research|look(?:ing)? up|google|latest|news|today|this week|current(?:ly)?|recent(?:ly)?|right now|sources?|links?|urls?|citations?|cite|internet|online|web|prices?|how much (?:is|does|are))\b/i;
 // opening a page is the slowest thing the agent does
 const BROWSING = /\b(open|pull (?:it |that |them )?up|browser|screen|web ?page|website|site|page|go to|visit|dig deeper|look into)\b/i;
 
-// A short answer to an offer ("yes", "go on") carries the offer's weight: on 2026-10-28 "yes" to
-// "Want me to pull up the Yahoo Finance page?" got the 90 s chat budget while the agent loaded it.
+// A short answer to an offer ("yes", "go on") carries the offer's weight: "yes" to "Want me to
+// pull up the page?" gets the research budget, not the chat budget.
 export function wantsResearch(said: string, history: { role: string; content: string }[]): boolean {
   if (RESEARCH.test(said) || BROWSING.test(said)) return true;
   if (said.trim().length > 40) return false;
   // "Continue" carries on the last answer; it is not a yes to a search that answer offered
-  // (QA 2026-11-12: Continue after a cut guide waited 200 s, then said a search had run long)
   if (/^\s*continue\b/i.test(said)) return false;
   const offer = [...history].reverse().find((t) => t.role === "assistant")?.content ?? "";
   return RESEARCH.test(offer) || BROWSING.test(offer);
 }
 
-// The model answering alone, without tools, after the agent timed out. It was told not to deny
-// its tools and on 2026-10-28 did anyway: "I cannot browse live internet data… the previous
-// figures were illustrative sample data", about figures the agent had just found.
+// The model answering alone, without tools, after the agent timed out. Told not to deny its
+// tools, it may still say "I cannot browse live internet data… the previous figures were
+// illustrative sample data" about figures the agent had just found.
 const DENIES = /\b(?:cannot|can ?not|can't|unable to|do not have|don't have|no)\b[^.\n]{0,40}\b(?:browse|browsing|internet|real-time|live data|web access|access to (?:the )?(?:web|internet))\b|\billustrative\b|\bsample data\b/i;
 export const deniesTools = (reply: string): boolean => DENIES.test(reply);
 
 // The agent sometimes pastes a screenshot into its reply as a base64 data: image. Typed out by a
-// model it is thousands of characters of noise, never a picture (2026-10-28: the chat showed raw
-// base64 and the long reply was moved into an empty document). The page is on its screen.
+// model it is thousands of characters of noise, never a picture. The page is on its screen.
 const INLINE_IMAGE = /!\[[^\]\n]*\]\(\s*data:[^)]*(?:\)|$)|data:image\/[a-z+]+;base64,[A-Za-z0-9+/=\s]{40,}/gi;
 export function dropInlineImages(reply: string, browsed: boolean): string {
   const left = reply.replace(INLINE_IMAGE, "").replace(/\n{3,}/g, "\n\n").trim();

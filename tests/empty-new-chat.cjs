@@ -1,5 +1,5 @@
-// An untouched "New chat" does not stay in the chat list once the owner goes to another chat
-// (QA 2026-11-12: empty New chats piled up). One that has a message stays. The model is a stand-in.
+// An untouched "New chat" does not stay in the chat list once the owner goes to another chat.
+// One that has a message stays. The model is a stand-in.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/empty-new-chat.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');

@@ -1,5 +1,5 @@
-// Markdown in chat bubbles and documents: rendered, and safe. 0.2.8 showed "[Title](url)", "###" and
-// ">" raw in chat. Nothing a reply (or a page it quotes) writes may become HTML, a script or a
+// Markdown in chat bubbles and documents: rendered ("[Title](url)", "###", ">"), and safe.
+// Nothing a reply (or a page it quotes) writes may become HTML, a script or a
 // link that is not http(s).
 import { test } from "node:test";
 import assert from "node:assert/strict";

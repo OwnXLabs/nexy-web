@@ -5,7 +5,7 @@ import { clientModule } from "./client-module.ts";
 
 const { classify } = await clientModule("src/client/intent.ts");
 
-test("a long ask for two tables is a chat answer (QA 2026-11-12)", () => {
+test("a long ask for two tables is a chat answer", () => {
   const ask = "Make two small tables for my sari-sari store: table 1 = this week's costs with rent, power, stock and wages, with a total at the bottom; table 2 = the selling prices of my five best items and the margin on each one, please";
   assert.ok(ask.split(/\s+/).length > 30);
   assert.equal(classify(ask).kind, "chat");

@@ -2,7 +2,6 @@ import { here } from "./place";
 // "Report a problem": what went wrong, an optional screenshot, and what the page was doing
 // (recent errors, failed requests, the app's own state). Saved on this box. A beta build can
 // also send it to the Nexy team, only when ticked, after showing exactly what goes.
-// Kept identical in nexy/src/client and desktop-demo/src/lib.
 import { bareUrl, scrub } from "../lib/scrub";
 
 export interface ReporterOptions {

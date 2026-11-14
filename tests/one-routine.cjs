@@ -1,7 +1,6 @@
-// One request, one routine (QA 0.2.8): "Every weekday at 7:30 am, remind me to …" set the routine
-// from the owner's words, then its first run went to the agent as a chat turn, which made the
-// routine again at 8:00 (0.2.8) or answered "I cannot run existing routines" (0.2.9). The first run
-// and "run it now" are now the agent's own run of the routine. The stand-in agent's chat still
+// One request, one routine: "Every weekday at 7:30 am, remind me to …" sets the routine from the
+// owner's words. Its first run and "run it now" are the agent's own run of the routine, never a
+// chat turn that could make it again or refuse. The stand-in agent's chat still
 // does what those models did, so a chat turn about the routine would show.
 // Run after `npm run build`: node --test tests/one-routine.cjs
 const test = require('node:test');

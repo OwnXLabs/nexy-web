@@ -1,5 +1,5 @@
 // Two devices on one chat: a phone left open on an older copy must never save it over
-// turns the Mac added since (QA 2026-11-12: New chat on the phone erased the Mac's answer).
+// turns the Mac added since.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/chat-two-devices.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');

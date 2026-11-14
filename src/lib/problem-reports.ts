@@ -1,6 +1,5 @@
 // Problem reports, saved on this box only: <dir>/<id>.json plus <id>.jpg when there is a
-// screenshot, readable by the owner over SSH. Kept identical in nexy/src/lib and
-// desktop-demo/src/lib.
+// screenshot, readable by the owner over SSH.
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import { randomBytes } from "node:crypto";

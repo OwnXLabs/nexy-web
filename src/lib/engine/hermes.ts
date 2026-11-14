@@ -49,7 +49,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           "content-type": "application/json",
           ...(KEY ? { authorization: `Bearer ${KEY}` } : {}),
           // without it the gateway derives the session from the system prompt, which changes every
-          // turn, so each turn opened a fresh browser on about:blank. It needs the key to be honoured.
+          // turn. It needs the key to be honoured.
           ...(KEY && session ? { "X-Hermes-Session-Id": `nexy-${session}` } : {}),
           ...(opts?.user ? { "x-nexy-user": opts.user } : {}),
         },
@@ -61,9 +61,8 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
         throw new Error(`agent gateway ${res.status}`);
       }
       const { content: reply, last: body } = await readCompletion(res, onText);
-      // 0.22 marks a failed turn in the response itself; its reply text changes between
-      // versions (an overload read "…send /retry, or switch models with /model…", which
-      // reached a visitor on 2026-10-24), so trust the flag before the wording
+      // the engine marks a failed turn in the response itself; its reply text changes between
+      // versions, so trust the flag before the wording
       if (body?.choices?.[0]?.finish_reason === "error" || body?.hermes?.failed === true) {
         const why = `${body?.hermes?.error ?? ""} ${reply}`;
         throw new Error(/\b429\b|too many requests|rate.?limit/i.test(why)
@@ -71,7 +70,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           : `agent gateway upstream failed: ${String(body?.hermes?.error ?? "the turn failed").slice(0, 120)}`);
       }
       // The engine reports its own faults as an ordinary reply: "API call failed after
-      // 3 retries: …", or "⚠ Provider authentication failed: /var/lib/hermes/…". Never a
+      // 3 retries: …", or "⚠ Provider authentication failed: …". Never a
       // reply to show anyone.
       const fault = /^API call failed after \d+ retries?: (.*)$/s.exec(reply.trim())?.[1]
         ?? /^\s*⚠\uFE0F?\s*(.*)$/s.exec(reply)?.[1];

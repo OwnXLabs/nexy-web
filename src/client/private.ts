@@ -172,13 +172,10 @@ export function setPrivate(on: boolean, announce = true): boolean {
   return priv;
 }
 
-// An explicit ask to read the owner's own connected app ("find the latest invoice in my email") is
-// not switched to ultra-private: that would turn the app off and answer "I don't have access to
-// your email" (QA 2026-11-12). The app runs on this device through the owner's own sign-in.
+// An explicit ask to read the owner's own connected app ("find the latest invoice in my email"),
+// a follow-up about mail just read, or a routine on an event is not switched to ultra-private:
+// that would turn the app off. The app runs on this device through the owner's own sign-in.
 // Ultra-private the owner chose still keeps connected apps off.
-// Checked first: a follow-up about mail just read ("the Invoice 4471 email"), and a routine on an
-// event ("when an email arrives from X, tell me the invoice number"): "invoice" plus "me" read as
-// financial and the chat went ultra-private, with no app and no routine (QA 0.2.10).
 export const autoPrivate = (text: string, history: readonly Turn[] = []): SensitiveHit | null =>
   eventAsk(text) || connectorAsk(text, history) ? null : detectSensitive(text);
 

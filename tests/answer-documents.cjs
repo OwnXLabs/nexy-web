@@ -1,5 +1,5 @@
 // A long answer goes into a document in the pane. Continue on a cut one grows that document
-// under the question's name (QA 2026-11-12: the pane was titled "continue from where you stop"),
+// under the question's name,
 // and the note pointing at it fits the layout: "on the right" beside the chat, a button that
 // opens it on a phone, where the pane covers the chat. The model is a stand-in.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/answer-documents.cjs

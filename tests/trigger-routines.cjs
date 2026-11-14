@@ -288,8 +288,7 @@ test('in the browser: card wording, escaping, waiting until turned on, list chip
   }
 });
 
-// QA 0.2.10: "invoice number and the amount" read as financial details, so the chat went
-// ultra-private, replied "I can't monitor incoming emails" and made no routine
+// "invoice number and the amount" is not taken as financial details that switch the chat to ultra-private
 test('in the browser: a routine on an email makes its card whatever the task says, money words included', async () => {
   const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   const g = await agent();

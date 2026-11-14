@@ -20,8 +20,7 @@ let lastRoutine: { id?: string; name: string; prompt: string; human: string } | 
 
 /**
  * One run, now, by the agent itself: the routine's own run, as its schedule will run it, and its
- * result in the chat. A chat turn about the routine was answered "I cannot run existing
- * routines" (QA 0.2.9), or made a second routine (QA 0.2.8).
+ * result in the chat, never a chat turn about it that could refuse or make a second routine.
  */
 async function runRoutine(r: { id?: string; name: string; prompt: string }, ui: MemUI): Promise<void> {
   let id = r.id;

@@ -101,7 +101,7 @@ export function savedOutputs(): { outputs: ChatOutput[]; activeOutput: string } 
 function restored(o: ChatOutput): Artifact {
   const kind = o.kind as ArtifactKind;
   const base = { id: o.id, kind, title: o.title, meta: o.meta, href: o.href };
-  // a sheet keeps its CSV: rebuilt as a page, a reopened chat showed it as raw text (QA 2026-11-12)
+  // a sheet keeps its CSV: rebuilt as a page, a reopened chat showed it as raw text
   if (o.source !== undefined && kind === "table") { const a = sheetArtifact({ title: o.title, rows: [], meta: o.meta }); a.source!.set(o.source); return { ...a, id: o.id }; }
   if (o.source !== undefined && kind === "doc") return { ...markdownArtifact({ title: o.title, meta: o.meta, md: o.source }), id: o.id };
   if (o.source !== undefined) return { ...(kind === "game" ? gameArtifact({ ...base, html: o.source }) : htmlArtifact({ ...base, html: o.source })), id: o.id };

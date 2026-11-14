@@ -1,5 +1,5 @@
 // How long an answer may take: an engine that keeps writing is alive, so a reply that streams for
-// 150 s finishes (0.2.8 cut it at 90 s and told the person Nexy had closed). One that goes silent
+// 150 s finishes. One that goes silent
 // past the limit is stopped with what it wrote kept and an honest "taking too long … Continue?";
 // one stopped at the length limit says "Answer cut short. Continue?". Engines are stand-ins.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/answer-budget.cjs

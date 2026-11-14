@@ -1,7 +1,6 @@
 // How long an engine call may run. Text arriving means the engine is alive, so the limit is on
 // silence, not on the whole answer: `quietMs` for the first words and between any two, under a
-// hard `capMs` for the whole call. 0.2.8 cut a reply at 90 s in total while it was still writing,
-// though the engine finished at 122 s.
+// hard `capMs` for the whole call, so a reply still being written is never cut short.
 export const CAP_MS = Number(process.env.NEXY_AGENT_CAP_MS ?? 10 * 60_000);
 
 export type Budget = {

@@ -56,8 +56,8 @@ function stripLead(s: string): string {
 }
 
 const MAKE_VERB = /\b(build|make|create|code|write|design|give me|i want|i need)\b/i;
-// a build verb as an ask: at the start of a sentence, or after "can you", "please", "I want you to"
-// (2026-10-28: "each cup costs $1.20 to make", "how do I set up my router?" started builds)
+// a build verb as an ask: at the start of a sentence, or after "can you", "please", "I want you to",
+// so "each cup costs $1.20 to make" or "how do I set up my router?" is not a build
 const ASKS_TO_MAKE = /(?:^|[.!?]\s+)(?:(?:hey\s+)?nexy[,\s]+)?(?:please\s+)?(?:(?:can|could|would|will) you\s+(?:please\s+)?|i(?: want|'d like| would like| need) you to\s+|help me\s+|let'?s\s+)?(?:build|create|make|set up|launch|start a project)\b/i;
 const REFERS_BACK = /^\s*(?:please\s+)?(?:can you\s+)?make\s+(?:it|that|this|them|those)\s+(?!(?:a|an|into|as)\b)/i;
 const OPENS_EXISTING = /^\s*(?:please\s+)?(?:can you\s+)?(?:open|visit|go to|browse|pull up|bring up|load|show me)\s+(?!(?:me\s+)?(?:up\s+)?(?:a|an|new|another)\b)/i;
@@ -191,12 +191,12 @@ export function classify(text: string): Intent {
     return { kind: "make", brief: s, deliverable: "diagram" };
   }
 
-  // "make it shorter" is about the last reply (or the open page, caught before this); it built a
-  // text-shortening app (2026-10-28). "make it a website" still builds.
+  // "make it shorter" is about the last reply (or the open page, caught before this), not a
+  // text-shortening app. "make it a website" still builds.
   if (REFERS_BACK.test(s)) return { kind: "chat" };
 
-  // opening a site that exists is the agent's job, not a build: "open the first one's website"
-  // built a new one (2026-10-28). "show me a website for…" still builds.
+  // opening a site that exists is the agent's job, not a build: "open the first one's website".
+  // "show me a website for…" still builds.
   if (OPENS_EXISTING.test(s) && !MAKE_VERB.test(s)) return { kind: "chat" };
 
   const words = s.split(/\s+/).length;
@@ -207,8 +207,7 @@ export function classify(text: string): Intent {
     return { kind: "make", brief: s, deliverable: "web_app" };
   }
 
-  // Tables, a list, an email: an answer in the chat, however long the ask. "make two small
-  // tables… table 1 = …" ran past 30 words and was taken for a team project (QA 2026-11-12).
+  // Tables, a list, an email: an answer in the chat, however long the ask, never a team project.
   if (ASKS_TO_MAKE.test(s) && TEXT_ANSWER.test(s) && !namesDeliverable(s) && !PROJECT.test(s)) return { kind: "chat" };
 
   if (ASKS_TO_MAKE.test(s)) {
@@ -220,8 +219,8 @@ export function classify(text: string): Intent {
   return { kind: "chat" };
 }
 
-// "make an image of a lighthouse, then a website for it" is two jobs; only the first ran
-// (2026-10-20). Split only when both halves are work Nexy does, so a question that says
+// "make an image of a lighthouse, then a website for it" is two jobs. Split only when both
+// halves are work Nexy does, so a question that says
 // "then" stays one message. The second half queues like a second message.
 const WORK = new Set<Intent["kind"]>(["generate", "make", "chart", "paint", "build"]);
 const THEN = /\s*(?:[,;.]\s*)?(?:and\s+)?\bthen\b[,\s]+|\s*[,;.]\s*(?:and\s+)?after that[,\s]+/i;
@@ -237,10 +236,9 @@ export function splitTasks(text: string): [string, string] | null {
   return b2 && WORK.has(classify(b2).kind) ? [a, b2] : null;
 }
 
-// With a built page open, a change to it, not a new build. Before this, "make the background
-// darker" hit the build catch-all and rebuilt the whole site from scratch, and "add a pricing
-// section" went to chat, which cannot touch the page (design feedback, 2026-10-23). Asking for
-// something new ("build me a shop", "a new website") still builds.
+// With a built page open, a change to it ("make the background darker", "add a pricing
+// section") edits that page: not a new build, and not chat, which cannot touch the page. Asking
+// for something new ("build me a shop", "a new website") still builds.
 const NEW_THING = /\b(?:new|another|different|second|separate|fresh)\s+(?:\w+\s+){0,2}(?:website|site|web ?app|app|game|landing page|diagram|project|plan|deck)\b|\bfrom scratch\b|\bstart (?:over|again)\b|\b(?:build|create|design|make|give|write|generate|draw|plan)\s+(?:me\s+)?(?:a|an)\s/i;
 const CHANGES_PAGE = /\b(?:make|change|update|add|remove|delete|drop|use|set|turn|switch|replace|swap|move|put|rename|increase|decrease|enlarge|shrink|redo|fix|tweak|edit|adjust|hide|include|insert|bigger|smaller|larger|darker|lighter|bolder|brighter|rounder|rounded|centre|center|align)\b/i;
 const ASKS_ABOUT = /^\s*(?:what|how|why|when|where|who|which|whose|is|are|was|were|does|do|did|has|have|tell me|explain|describe|summari[sz]e)\b/i;
