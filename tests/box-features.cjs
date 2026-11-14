@@ -79,8 +79,10 @@ async function visit(b, base) {
       const all = document.querySelectorAll('#thread .msg.ai .bub');
       return all.length > k && all[all.length - 1].textContent.trim() !== '';
     }, n, { timeout: 30000 });
-    await page.waitForTimeout(300);
-    return (await replies().last().innerText()).trim();
+    // the reply is drawn as it streams: read it once it stops changing (a loaded machine is slow)
+    let was = '', now = (await replies().last().innerText()).trim();
+    for (let i = 0; i < 50 && now !== was; i++) { await page.waitForTimeout(300); was = now; now = (await replies().last().innerText()).trim(); }
+    return now;
   };
   const settings = async (sec) => {
     if (!(await page.locator('#ovSet.open').count())) { await page.locator('#profileBtn').click(); await page.locator('#settingsBtn').click(); }
