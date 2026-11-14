@@ -33,6 +33,6 @@ export const localEngine: NexyEngine = {
 
     if (!res.ok) throw new Error(`llama-swap ${res.status}`);
     const { content, last } = await readCompletion(res, onText);
-    return { reply: content, via: "local", grounded: false, cut: last?.choices?.[0]?.finish_reason === "length" };
+    return { reply: content, via: "local", grounded: false, cut: last?.choices?.[0]?.finish_reason === "length", tools: [] };
   },
 };

@@ -29,6 +29,10 @@ export interface ShellHooks {
   fresh?(): void;
   // turn the visible chat into a Project
   promote?(): void;
+  // the open chat's engine is now known or different: its label follows
+  engineChanged?(): void;
+  // the open chat's own menu items for its engine (Continue elsewhere)
+  engineItems?(): { label: string; icon: string; run: () => void }[];
 }
 
 export interface ExampleOpen { kind: string; title: string; href: string; ts?: number; ex?: string; needs?: string }
@@ -38,7 +42,8 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
 let H: ShellHooks;
 
-interface Chat { id: string; title: string; nodes: DocumentFragment; history: ShellHooks["history"]; saved?: boolean; loaded?: boolean; example?: ExampleOpen | null; first?: string; named?: boolean; naming?: boolean; projectId?: string; loading?: Promise<void>; ts?: number; sig?: string }
+// engine: the agent engine this chat talks to, fixed on its first turn; an older chat has none and uses the current pick
+interface Chat { id: string; title: string; nodes: DocumentFragment; history: ShellHooks["history"]; engine?: string; saved?: boolean; loaded?: boolean; example?: ExampleOpen | null; first?: string; named?: boolean; naming?: boolean; projectId?: string; loading?: Promise<void>; ts?: number; sig?: string }
 const EX = "_examples";
 const chats = new Map<string, Chat[]>();
 const retired = new Map<string, Chat>();
@@ -110,9 +115,10 @@ function fetchChat(c: Chat): Promise<void> {
 }
 async function readChat(c: Chat): Promise<void> {
   const r = await fetch(`/api/v1/chats?id=${encodeURIComponent(c.id)}`);
-  const d = await r.json() as { chat?: { html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string }; error?: string };
+  const d = await r.json() as { chat?: { html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string }; error?: string };
   if (!r.ok || !d.chat) throw new Error(d.error ?? httpMsg(r.status));
   c.nodes = revive(d.chat.html);
+  c.engine = d.chat.engine;
   c.history.splice(0, c.history.length, ...d.chat.history);
   c.projectId = d.chat.projectId;
   c.ts = (d.chat as { ts?: number }).ts;
@@ -226,7 +232,7 @@ export function saveChat(): void {
   c.saved = true;
   c.loaded = true;
   persist(c, { id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,
-    history, projectId: c.projectId, ...savedOutputs() });
+    history, projectId: c.projectId, engine: c.engine, ...savedOutputs() });
 }
 
 function interrupted(m: HTMLElement): void {
@@ -253,7 +259,7 @@ export async function flushChat(): Promise<void> {
   await writes.get(id);
   if (writeFailures.has(id)) throw writeFailures.get(id);
 }
-type Body = { id: string; pid: string; title: string; html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string };
+type Body = { id: string; pid: string; title: string; html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string };
 // What a save would change: the words on screen, the turns, the name, the outputs.
 // Markup details (a disabled button, a spinner) are not changes.
 function sigOf(b: Pick<Body, "title" | "html" | "history" | "outputs" | "activeOutput" | "projectId">): string {
@@ -268,10 +274,12 @@ function persist(c: Chat, body: Body): void {
   // The version is read when the request goes, after the previous write has answered.
   const next = (writes.get(body.id) ?? Promise.resolve()).then(async () => {
     const r = await fetch("/api/v1/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, base: c.ts ?? 0 }) });
-    const d = await r.json().catch(() => ({})) as { error?: string; ts?: number };
+    const d = await r.json().catch(() => ({})) as { error?: string; ts?: number; engine?: string };
     if (r.status === 409) throw new Stale(d.error ?? "this chat changed on another device");
     if (!r.ok) throw new Error(d.error ?? httpMsg(r.status));
     c.ts = d.ts; c.sig = sig;
+    // the engine the server holds for it, which a later save cannot change
+    if (d.engine && c.engine !== d.engine) { c.engine = d.engine; if (cur?.cid === c.id) H.engineChanged?.(); }
     writeFailures.delete(body.id);
   }).catch((e: Error) => {
     writeFailures.set(body.id, e);
@@ -285,7 +293,7 @@ function persist(c: Chat, body: Body): void {
 // resave a chat that is not on screen (rename, move)
 function resave(pid: string, c: Chat): void {
   if (!c.saved) return;
-  const go = () => persist(c, { id: c.id, pid, title: c.title, html: [...c.nodes.childNodes].map((n) => (n as Element).outerHTML ?? n.textContent ?? "").join(""), history: c.history, projectId: c.projectId, ...inChat(c.id, savedOutputs) });
+  const go = () => persist(c, { id: c.id, pid, title: c.title, html: [...c.nodes.childNodes].map((n) => (n as Element).outerHTML ?? n.textContent ?? "").join(""), history: c.history, projectId: c.projectId, engine: c.engine, ...inChat(c.id, savedOutputs) });
   if (cur?.cid === c.id) { saveChat(); return; }
   if (c.loaded) go(); else fetchChat(c).then(go).catch((e: Error) => H.toast(`This chat was not saved: ${errText(e)}`));
 }
@@ -294,13 +302,13 @@ function resave(pid: string, c: Chat): void {
 // `pending`: the request already started at boot, so the list does not wait behind other loads
 export async function restoreChats(pending?: Promise<Response>): Promise<void> {
   const r = await (pending ?? fetch("/api/v1/chats"));
-  const d = await r.json() as { chats?: { id: string; pid: string; title: string }[]; examples?: { id: string; title: string; ts: number; open?: ExampleOpen }[]; error?: string };
+  const d = await r.json() as { chats?: { id: string; pid: string; title: string; engine?: string }[]; examples?: { id: string; title: string; ts: number; open?: ExampleOpen }[]; error?: string };
   if (!r.ok) throw new Error(d.error ?? httpMsg(r.status));
   chats.set(EX, (d.examples ?? []).map((e) => ({ id: e.id, title: e.title, nodes: document.createDocumentFragment(), history: [], saved: true, example: e.open ? { ...e.open, ts: e.ts } : null })));
   for (const m of d.chats ?? []) {
     const list = chats.get(m.pid) ?? [];
     if (list.some((x) => x.id === m.id)) continue;
-    list.push({ id: m.id, title: m.title, nodes: document.createDocumentFragment(), history: [], saved: true });
+    list.push({ id: m.id, title: m.title, nodes: document.createDocumentFragment(), history: [], saved: true, engine: m.engine });
     chats.set(m.pid, list);
   }
   const pid = H.currentProject() || "_";
@@ -322,12 +330,12 @@ export async function refreshChats(): Promise<void> {
   if (Date.now() - refreshedAt < 5_000) return;
   refreshedAt = Date.now();
   const r = await fetch("/api/v1/chats");
-  const d = await r.json() as { chats?: { id: string; pid: string; title: string; ts: number }[]; error?: string };
+  const d = await r.json() as { chats?: { id: string; pid: string; title: string; ts: number; engine?: string }[]; error?: string };
   if (!r.ok) throw new Error(d.error ?? httpMsg(r.status));
   for (const m of [...(d.chats ?? [])].reverse()) {
     const list = chats.get(m.pid) ?? [];
     const c = list.find((x) => x.id === m.id);
-    if (!c) { list.unshift({ id: m.id, title: m.title, nodes: document.createDocumentFragment(), history: [], saved: true }); chats.set(m.pid, list); continue; }
+    if (!c) { list.unshift({ id: m.id, title: m.title, nodes: document.createDocumentFragment(), history: [], saved: true, engine: m.engine }); chats.set(m.pid, list); continue; }
     if (cur?.cid === c.id || writes.has(c.id)) continue;
     c.title = m.title;
     if (c.loaded && c.ts !== undefined && m.ts > c.ts) { c.loaded = false; c.ts = undefined; c.sig = undefined; }
@@ -484,6 +492,7 @@ export function wireChatRows(root: HTMLElement): void {
         { label: "Rename", icon: IC.pen, run: () => inlineRename(b, c.title, (v) => { if (v) { c.title = v; resave(pid, c); } H.renderSide(); }) },
         ...(pid === "_" && !c.projectId && !H.isPrivate() ? [{ label: "Make it a project", icon: IC.plus, run: () => { switchChat(pid, id); void (c.loading ?? Promise.resolve()).then(() => H.promote?.()); } }] : []),
         { label: "Move to another project", icon: IC.move, run: () => H.toast("Drag the chat onto a project in the sidebar") },
+        ...(cur?.cid === id ? H.engineItems?.() ?? [] : []),
         { label: "Delete chat", icon: IC.trash, danger: true, run: () => confirmDel("Delete chat?", `<b>${esc(c.title)}</b> will be removed from this project.`, () => deleteChat(pid, id)) },
       ], r.right - 176, r.bottom + 4);
     };
@@ -1141,4 +1150,53 @@ export function wireExamples(root: HTMLElement): void {
 }
 
 export const viewingExample = (): boolean => cur?.pid === EX;
+
+// The chat a turn belongs to, held from the moment the turn starts. A chat not yet saved takes
+// `pick` (the owner's engine for new chats) on its first turn and keeps it; an older saved chat
+// without one goes on with whatever the current pick is.
+export function engineSlot(): { claim(pick: string | undefined): string | undefined } {
+  const c = scopedChat();
+  return {
+    claim(pick) {
+      if (!c) return undefined;
+      if (!c.engine && !c.saved && c.example === undefined && pick) { c.engine = pick; if (cur?.cid === c.id) H.engineChanged?.(); }
+      return c.engine;
+    },
+  };
+}
+// the open chat's own engine, if it has one yet; and whether it can be continued elsewhere
+export function openChat(): { id: string; engine?: string; started: boolean; example: boolean } | null {
+  const c = cur ? (chats.get(cur.pid) ?? []).find((x) => x.id === cur!.cid) : undefined;
+  return c ? { id: c.id, engine: c.engine, started: !!c.saved || c.history.length > 0, example: c.example !== undefined } : null;
+}
+
+// a chat not yet started takes the engine the owner chooses for it: nothing has been said to share
+export function useEngine(engine: string): void {
+  const c = cur ? (chats.get(cur.pid) ?? []).find((x) => x.id === cur!.cid) : undefined;
+  if (!c || c.saved || c.history.length) return;
+  c.engine = engine;
+  H.engineChanged?.();
+}
+
+// Continue the open chat on another engine, which the owner agreed to: `share` makes a new chat
+// there holding the conversation so far, linked to this one; otherwise a new empty chat there.
+// This chat keeps its engine either way.
+export async function continueOn(engine: string, share: boolean): Promise<void> {
+  if (blockedByPrivate() || !cur) return;
+  const pid = cur.pid, from = cur.cid;
+  if (!share) {
+    newChat({ inProject: pid !== "_" });
+    const c = (chats.get(cur!.pid) ?? []).find((x) => x.id === cur!.cid);
+    if (c) { c.engine = engine; H.engineChanged?.(); }
+    return;
+  }
+  await flushChat();
+  const r = await fetch("/api/v1/chat-continue", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ from, engine, private: H.isPrivate() }) });
+  const d = await r.json().catch(() => ({})) as { chat?: { id: string; pid: string; title: string; engine?: string; ts?: number }; error?: string };
+  if (!r.ok || !d.chat) throw new Error(d.error ?? httpMsg(r.status));
+  const list = chats.get(d.chat.pid) ?? [];
+  list.unshift({ id: d.chat.id, title: d.chat.title, nodes: document.createDocumentFragment(), history: [], saved: true, engine: d.chat.engine });
+  chats.set(d.chat.pid, list);
+  switchChat(d.chat.pid, d.chat.id);
+}
 export const currentChatId = (): string => cur?.cid ?? "";

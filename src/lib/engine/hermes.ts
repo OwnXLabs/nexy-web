@@ -34,6 +34,16 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
     const a = [...list].reverse().find((x) => x?.role === "assistant" && typeof x?.content === "string" && x.content.trim());
     return a?.content;
   };
+  // the gateway writes each tool call as it runs, newest last
+  const toolsSince = async (session: string, since: number): Promise<string[] | null> => {
+    const m = await api(`/api/sessions/${encodeURIComponent(`nexy-${session}`)}/messages?limit=40`).catch((e: Error) => {
+      if (/^agent gateway 404\b/.test(e.message)) return null; // the first turn has not started yet
+      throw e;
+    });
+    if (!m) return null;
+    const list: any[] = m?.data ?? [];
+    return list.filter((x) => x?.role === "tool" && Number(x?.timestamp) * 1000 >= since).map((x) => String(x?.tool_name ?? "")).filter(Boolean);
+  };
   return {
     id: "gateway",
     upstream: UPSTREAM[name] ?? HERMES_UPSTREAM,
@@ -86,18 +96,13 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           ? "agent gateway busy: the model is serving other requests"
           : `agent gateway upstream failed: ${fault.slice(0, 120)}`);
       }
-      return { reply, via: name, grounded: true, cut: body?.choices?.[0]?.finish_reason === "length" };
+      // Nexy Engine says what it ran in the reply itself ("nexy": {tools, …})
+      const strs = (v: unknown) => (Array.isArray(v) ? v.map(String).slice(0, 40) : undefined);
+      return { reply, via: name, grounded: true, cut: body?.choices?.[0]?.finish_reason === "length", tools: strs(body?.nexy?.tools), sources: strs(body?.nexy?.sources) };
     },
 
-    async browsed(session, since) {
-      // the gateway writes each tool call as it runs, newest last
-      const m = await api(`/api/sessions/${encodeURIComponent(`nexy-${session}`)}/messages?limit=40`).catch((e: Error) => {
-        if (/^agent gateway 404\b/.test(e.message)) return null; // the first turn has not started yet
-        throw e;
-      });
-      const list: any[] = m?.data ?? [];
-      return list.some((x) => x?.role === "tool" && /^browser_/.test(String(x?.tool_name ?? "")) && Number(x?.timestamp) * 1000 >= since);
-    },
+    browsed: async (session, since) => ((await toolsSince(session, since)) ?? []).some((t) => /^browser_/.test(t)),
+    toolsSince,
     memory: {
       async list() { return (await sessions()).map(toItem); },
       async export() {

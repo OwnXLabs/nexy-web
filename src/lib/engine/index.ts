@@ -1,7 +1,7 @@
 import type { NexyEngine } from "./types";
 import { hermesEngine, testEngine } from "./hermes";
 import { localEngine } from "./local";
-import { chosen, engineOf } from "./registry";
+import { choiceById, chosen, engineOf } from "./registry";
 
 const REGISTRY: Record<string, NexyEngine> = {
   gateway: hermesEngine,
@@ -17,10 +17,11 @@ export function selectEngine(): NexyEngine {
 
 // owner: the signed-in owner, whose pick in Settings decides the agent engine
 // user: the person a gate signed in, who may have their own copy of the engine
-export function engineFor(isPrivate: boolean, isEval = false, owner: string | null = null, user: string | null = null): NexyEngine {
+// chat: the engine a chat is fixed to, which wins over the owner's current pick
+export function engineFor(isPrivate: boolean, isEval = false, owner: string | null = null, user: string | null = null, chat: string | null = null): NexyEngine {
   if (isPrivate) return localEngine;
   if (isEval) return testEngine;
-  const c = owner ? chosen(owner) : null;
+  const c = choiceById(chat) ?? (owner ? chosen(owner) : null);
   const e = c ? engineOf(c, user) : null;
   if (e && e.available()) return e;
   return selectEngine();
@@ -29,6 +30,6 @@ export function engineFor(isPrivate: boolean, isEval = false, owner: string | nu
 export const engine: NexyEngine = selectEngine();
 // the stateless model on this box: the fallback when the agent stalls, and the ultra-private path
 export { localEngine };
-export { ENGINES, capsOf, chosen, engineOf, pick, pickedId } from "./registry";
+export { ENGINES, capsOf, choiceById, chosen, engineOf, labelOf, pick, pickedId } from "./registry";
 export type { EngineChoice } from "./registry";
 export type { ChatResult, ChatTurn, NexyEngine } from "./types";

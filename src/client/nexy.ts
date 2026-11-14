@@ -28,7 +28,9 @@ import { initPrivate, guard, conversation as privateConversation, isPrivate, pri
 import { matchSocial, playSocial } from "./social";
 import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff } from "./place";
 import { renderGate } from "./build-gate";
-import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, type ExampleOpen } from "./shell";
+import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, engineSlot, type ExampleOpen } from "./shell";
+import { engineItems, initEngineChat, labelReply, renderEngineChip } from "./engine-chat";
+import { loadEngines, pickedEngine } from "./engines";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine, deviceZone, showWaitingRoutines } from "./memory";
 import { initSettings, notify, openSettings } from "./settings";
@@ -1914,6 +1916,7 @@ async function playChat(text: string, priv = false): Promise<void> {
   holder.dataset.pending = "1";
   holder.dataset.q = text;
   const chat = currentChatId();
+  const slot = engineSlot();
   status(holder, "Thinking", typicalMs("chat"));
   const browsing = priv ? null : watchBrowsing(chat, () => showArtifact(screenArtifact()));
   const askedAt = Date.now();
@@ -1924,15 +1927,17 @@ async function playChat(text: string, priv = false): Promise<void> {
   const docKey = `${chat ?? ""}\n${slugOf(asked)}.md`;
   const prior = continuing ? answerDocs.get(docKey) : undefined;
   const grows = !!prior && thread[thread.length - 1]?.role === "assistant" && thread[thread.length - 1].content === prior.last;
+  // the engine this chat talks to: fixed on its first turn, before its first save
+  const engine = priv ? undefined : slot.claim(await loadEngines().then(pickedEngine));
   thread.push({ role: "user", content: text });
   saveChat();
   let savedAt = Date.now();
   // the last words on screen: if the model dies mid-answer, they stay up with Ask again
   let kept = "";
   try {
-    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean; broke?: boolean };
+    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean; broke?: boolean; engine?: string };
     // tz: routines the agent makes run at this device's local time
-    const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(EVAL ? { eval: true } : {}) });
+    const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(engine ? { engine } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
     let streamed = false, waitNote = 0;
     const d = await patient(() => streamReply<Reply>(body, (t) => {
@@ -1975,6 +1980,7 @@ async function playChat(text: string, priv = false): Promise<void> {
 
     if (!answer) throw new Error(d.error ?? "the model returned an empty message");
     thread.push({ role: "assistant", content: answer });
+    if (!priv) labelReply(holder, engine ?? d.engine);
     // the agent says a routine it made waits in Routines: its card follows, to answer here
     if (!priv && /\bRoutines\b/.test(answer)) showWaitingRoutines({ push: (_w, html) => push("ai", html), block: pushBlock }, bindChat(chatThread))
       .catch((e: Error) => console.warn("[nexy] waiting routines not shown", e));
@@ -2632,7 +2638,10 @@ async function boot(): Promise<void> {
     openProject,
     needs: () => P()?.tasks.filter((t) => t.human && t.s !== "done").length ?? 0,
     promote: () => void promoteChat(),
+    engineChanged: renderEngineChip,
+    engineItems,
   });
+  initEngineChat(toast);
   initSettings({ send, toast, roster: ROSTER, projects: () => S.projects.map((p) => ({ name: p.name, taskCount: p.taskCount, doneCount: p.doneCount })) });
   initPrivate({ history, say: (t) => { push("ai", esc(t)); }, toast });
   initLanding({ send: (t) => void send(t), settings: openSettings, toast, talk: () => $("#waveBtn")?.click() });

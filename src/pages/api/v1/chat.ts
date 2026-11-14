@@ -10,7 +10,8 @@ function logTurn(fields: Record<string, unknown>, isPrivate: boolean): void {
     console.log(JSON.stringify({ at: new Date().toISOString(), endpoint: "chat", ...fields }));
   } catch (e) { console.warn("[nexy] a turn line could not be written", (e as Error).message); }
 }
-import { engineFor, localEngine } from "../../../lib/engine";
+import { ENGINES, chosen, engineFor, labelOf, localEngine } from "../../../lib/engine";
+import { get as savedChat } from "../../../lib/chats";
 import { agentSessionKey, deniesTools, dropInlineImages, wantsResearch } from "../../../lib/agent-turn";
 import { guardIdentity } from "../../../lib/engine/identity-guard";
 import { canStart, rejoin, sse, startTurn } from "../../../lib/turns";
@@ -31,6 +32,11 @@ const NO_TOOLS_THIS_TURN = [
   "you already know. Do not say you cannot access the internet or have no tools: you normally do.",
   "If the question needs a live search, say the search did not finish this time and to ask again.",
 ].join("\n");
+// a fact question on an engine that may answer from its own memory instead (Nexy Engine searches on its own)
+const SEARCH_FIRST = "\n\nSearch the web before answering and cite your sources.";
+const SEARCHES_WHEN_TOLD = new Set(["hermes", "openclaw"]);
+// links in a reply: whether it cited anything, counted, never logged as text
+const cited = (reply: string) => (reply.match(/https?:\/\/[^\s)\]>"']+/g) ?? []).length;
 import { overlayLines } from "../../../lib/overlay";
 import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/browse-intent";
 import { connectorAsk, connectorTurn } from "../../../lib/connectors";
@@ -287,9 +293,27 @@ export const POST: APIRoute = async (ctx) => {
       remember(who, { role: "assistant", content: text, ts: Date.now() }, priv);
   };
 
-  const decided = upstreamFor(engineFor(false, false, picker, user), priv);
+  // One engine per chat: a chat keeps the engine it started on, whatever the owner picks later, and
+  // a turn naming another engine is refused. Engines keep their own copies and memories, so a chat
+  // moves to another one only through Continue, which asks first (chat-continue.ts).
+  let chatEngine: string | null = null;
+  if (!priv) {
+    const asked = typeof body?.engine === "string" && body.engine ? body.engine : null;
+    if (asked && !ENGINES.some((c) => c.id === asked)) return json({ error: "That engine isn't on this machine." }, 400);
+    const id = typeof body?.chat === "string" ? body.chat : "";
+    let saved: Awaited<ReturnType<typeof savedChat>> = null;
+    try { saved = id ? await savedChat(picker, id) : null; }
+    catch (e) { console.warn(`[nexy] chat ${id} unreadable, its engine unknown: ${(e as Error).message}`); return json({ error: "This chat could not be read on this machine." }, 500); }
+    // an older chat without one keeps using the current pick
+    chatEngine = saved?.engine ?? (saved ? null : asked) ?? chosen(picker)?.id ?? null;
+    if (asked && chatEngine && asked !== chatEngine)
+      return json({ error: `This chat is with ${labelOf(chatEngine)}. To ask ${labelOf(asked)}, use Continue with ${labelOf(asked)} in the chat's menu.`, engine: chatEngine }, 409);
+    if (saved?.engine && !ENGINES.some((c) => c.id === saved.engine))
+      return json({ error: `This chat was with ${saved.engine}, which isn't on this machine any more. Start a new chat to carry on.`, engine: saved.engine }, 409);
+  }
+  const decided = upstreamFor(engineFor(false, false, picker, user, chatEngine), priv);
   const isEval = wantsEval(body?.eval === true);
-  const eng = engineFor(priv, isEval, picker, user);
+  const eng = engineFor(priv, isEval, picker, user, chatEngine);
   // one agent session per chat, so its browser keeps the page between turns. The chat id comes
   // from the browser and is guessable, so the key also binds the caller and their demo sign-in:
   // nobody can name another visitor's chat and load its history.
@@ -301,12 +325,13 @@ export const POST: APIRoute = async (ctx) => {
   // a question about a connected app is answered from it, never from a web search
   const asksApp = connectorAsk(String(said ?? ""), history);
   const research = !asksApp && wantsResearch(String(said ?? ""), history);
+  const searchFirst = research && !priv && !!chatEngine && SEARCHES_WHEN_TOLD.has(chatEngine) ? SEARCH_FIRST : "";
   const startedAt = Date.now();
   // One line when a turn starts and one when it ends, each with its result, under one id: a turn
   // that stalls shows as a start with no end, and a question that never reached here shows as nothing.
   const tid = randomUUID();
   const log = (fields: Record<string, unknown>) =>
-    logTurn({ turn: tid.slice(0, 8), ...fields, ...(isEval ? { eval: true } : {}) }, priv);
+    logTurn({ turn: tid.slice(0, 8), ...(chatEngine ? { engine: chatEngine } : {}), ...fields, ...(isEval ? { eval: true } : {}) }, priv);
   // stopped while still writing: what it wrote is kept, and the person is offered to continue
   // `broke`: the model died mid-answer (Ollama killed), rather than running past its budget
   const stoppedTurn = (b: Budget, via: string, broke = false) => {
@@ -355,7 +380,7 @@ export const POST: APIRoute = async (ctx) => {
       const r = await use.chat(
         String(said ?? ""),
         history,
-        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine, box && !!use.routines) + browse + connPrompt,
+        systemPrompt(body?.context, priv, body?.docs, isEval, use !== localEngine, box && !!use.routines) + browse + connPrompt + (use !== localEngine ? searchFirst : ""),
         // silent past its budget, the agent gives way to the model alone (below): a stuck agent
         // turn must not leave the person waiting minutes for nothing
         b.signal,
@@ -365,10 +390,13 @@ export const POST: APIRoute = async (ctx) => {
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
         { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}) },
       );
-      const browsed = SCREEN && !!agentSession && !!use.browsed && await use.browsed(agentSession, startedAt).catch((e) => {
+      // the tools it ran: from the reply where the engine says, else from its own session record
+      let tools = r.tools ?? null;
+      if (!tools && agentSession && use.toolsSince) tools = await use.toolsSince(agentSession, startedAt).catch((e) => {
         console.warn("[nexy] could not read the agent's tool use", (e as Error).message);
-        return false;
+        return null;
       });
+      const browsed = SCREEN && !!tools?.some((t) => /^browser_/.test(t));
       r.reply = dropInlineImages(r.reply, browsed);
       r.reply = guard(r.reply);
       // a small model still asks for a hand-over now and then: with no screen there is nothing to take
@@ -382,6 +410,10 @@ export const POST: APIRoute = async (ctx) => {
         turns: history.length + 1,
         contextKeys: Object.keys(body?.context ?? {}),
         replyChars: typeof r.reply === "string" ? r.reply.length : 0,
+        tools: tools ?? "unknown",
+        sources: r.sources ?? "unknown",
+        cited: cited(r.reply),
+        ...(searchFirst && use !== localEngine ? { searchAsked: true } : {}),
         ...(conn ? { connector: conn.id, connectorOutcome: conn.outcome } : {}),
       });
       return { status: 200, body: {
@@ -393,6 +425,7 @@ export const POST: APIRoute = async (ctx) => {
         // stopped at the length limit: the client offers to continue
         cut: r.cut || undefined,
         upstream: decided.why,
+        engine: chatEngine ?? undefined,
         private: priv || undefined,
       } };
     } catch (e: any) {
@@ -423,7 +456,7 @@ export const POST: APIRoute = async (ctx) => {
           // the model alone must not contradict what the agent just did on screen
           if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";
           answered(r.reply);
-          log({ result: "fallback", via: r.via, fallback: true, ms: Date.now() - startedAt });
+          log({ result: "fallback", via: r.via, fallback: true, ms: Date.now() - startedAt, tools: [], sources: "unknown", cited: cited(r.reply) });
           return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true, cut: r.cut || undefined } };
         } catch (e2: any) {
           log({ result: "fallback-failed", via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ms: Date.now() - startedAt });

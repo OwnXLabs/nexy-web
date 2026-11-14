@@ -1,4 +1,5 @@
-import { boxHere, enginesHere, hasApp, here, inCloud, localVoice, onOwn1, voiceApi } from "./place";
+import { loadEngines, type Caps, type EngineList } from "./engines";
+import { boxHere, hasApp, here, inCloud, localVoice, onOwn1, voiceApi } from "./place";
 
 // where this Nexy and its data are, said plainly
 const onHere = onOwn1 ? "On this Own1" : inCloud ? "On Nexy Cloud's server" : "On this computer";
@@ -76,7 +77,7 @@ async function section(sec: string): Promise<string> {
     (hasApp("startup") ? row("Where new projects live", sel("defloc", [["own1", "Own 1, this desk"]], "own1")) : "");
   if (sec === "nexy") {
     await loadVoices();
-    const list = await loadEngines(), caps = capsIn(list);
+    const list = await loadEngines(true), caps = capsIn(list);
     if (!hasApp("voice")) return `<h3>Nexy</h3>` + engineRow(list) +
       row("Voice", not("Coming in an update"), "Talking to Nexy on this computer arrives in an update") +
       boxRows(caps);
@@ -162,13 +163,7 @@ function connRow(c: CatalogEntry, granted: string[] | null): string {
   return row(n, `<span class="faint connected">Connected</span>${pause} ${disc}`, granted ? scopes : `${scopes}. Nexy's access can't be read right now`);
 }
 
-// the agent engine for this owner's chats; names come from the server, which lists what runs here
-type Caps = { memory: boolean; routines: boolean };
-type EngineList = { engines: ({ id: string; label: string; note: string } & Caps)[]; selected: string | null };
-async function loadEngines(): Promise<EngineList | null> {
-  if (!enginesHere) return null;
-  return fetch("/api/v1/engines").then(async (x) => (x.ok ? ((await x.json()) as EngineList) : null)).catch((e) => { console.warn("[nexy] engines unavailable", e); return null; });
-}
+// the agent engine for new chats; names come from the server, which lists what runs here
 // what the engine in use keeps; without a list, the one engine here, which keeps both
 const capsIn = (r: EngineList | null): Caps => {
   const cur = r?.engines.find((e) => e.id === r.selected) ?? r?.engines[0];
@@ -179,7 +174,7 @@ function engineRow(r: EngineList | null): string {
   if (!r || r.engines.length < 2) return "";
   const cur = r.engines.find((e) => e.id === r.selected) ?? r.engines[0];
   return row("Agent engine", `<select data-engine>${r.engines.map((e) => `<option value="${esc(e.id)}"${e.id === cur.id ? " selected" : ""}>${esc(e.label)}</option>`).join("")}</select>`,
-    `${esc(cur.note)}. New chats use it; each chat keeps the history it already has.`);
+    `${esc(cur.note)}. Applies to new chats; each chat stays with the engine it started on.`);
 }
 
 export async function renderSettings(sec = "general"): Promise<void> {
@@ -199,7 +194,8 @@ export async function renderSettings(sec = "general"): Promise<void> {
   }));
   body.querySelectorAll<HTMLSelectElement>("[data-engine]").forEach((s) => s.addEventListener("change", async () => {
     const r = await fetch("/api/v1/engines", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: s.value }) }).catch(() => null);
-    H.toast(r?.ok ? `Agent engine: ${s.selectedOptions[0]?.textContent ?? s.value}` : "The engine wasn't changed");
+    H.toast(r?.ok ? `New chats will use ${s.selectedOptions[0]?.textContent ?? s.value}` : "The engine wasn't changed");
+    await loadEngines(true);
     void renderSettings(sec);
   }));
   body.querySelectorAll<HTMLInputElement>("[data-txt]").forEach((i) => i.addEventListener("change", () => {

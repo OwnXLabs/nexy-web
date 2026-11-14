@@ -109,6 +109,9 @@ export function chosen(owner: string | null): EngineChoice | null {
   return ENGINES.find((c) => c.id === id) ?? ENGINES[0];
 }
 
+export const choiceById = (id: string | null | undefined): EngineChoice | null => ENGINES.find((c) => c.id === id) ?? null;
+export const labelOf = (id: string): string => choiceById(id)?.label ?? id;
+
 // the engine for this person: their own copy where they have one, else the shared one
 export const engineOf = (c: EngineChoice, user: string | null): NexyEngine =>
   (user && c.users?.get(user)) || c.engine;

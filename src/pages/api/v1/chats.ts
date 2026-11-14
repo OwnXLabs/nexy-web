@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { clean, Conflict, StorageFull, example, exampleAsset, examples, get, list, put, remove } from "../../../lib/chats";
 import { owner } from "../../../lib/owner";
+import { ENGINES, chosen } from "../../../lib/engine";
 
 export const prerender = false;
 
@@ -31,7 +32,11 @@ export const POST: APIRoute = async (ctx) => {
   const c = clean(body);
   if (!c) return json({ error: "not a chat (bad id, project or size)" }, 400);
   const b = (body as { base?: unknown }).base;
-  try { await put(who, c, typeof b === "number" && Number.isFinite(b) ? b : 0); return json({ ok: true, ts: c.ts }); }
+  // a new chat keeps the engine it was started on; one this machine does not run is not taken
+  // only Continue (chat-continue.ts) links a chat to the one it came from
+  c.from = undefined;
+  if (c.engine && !ENGINES.some((e) => e.id === c.engine)) c.engine = undefined;
+  try { await put(who, c, typeof b === "number" && Number.isFinite(b) ? b : 0, chosen(who)?.id); return json({ ok: true, ts: c.ts, ...(c.engine ? { engine: c.engine } : {}) }); }
   catch (e) {
     if (e instanceof Conflict) return json({ error: e.message, ts: e.current }, 409);
     if (e instanceof StorageFull) return json({ error: e.message }, 507);
