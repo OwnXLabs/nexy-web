@@ -4,7 +4,7 @@ import { STORAGE_SHIM } from "./content-view";
 
 const PROBE = `<script>${STORAGE_SHIM}(function(){var E=[],B=[];function add(a,m){if(a.length<5)a.push(String(m).slice(0,200))}` +
   `var ce=console.error;console.error=function(){add(E,[].map.call(arguments,String).join(" "));return ce.apply(console,arguments)};` +
-  `addEventListener("error",function(e){add(E,e.message||e.error||("could not load "+(e.target&&e.target.tagName||"a file")))},true);` +
+  `addEventListener("error",function(e){add(E,e.message?e.message+(e.lineno?" (line "+e.lineno+(e.colno?":"+e.colno:"")+")":""):e.error||("could not load "+(e.target&&e.target.tagName||"a file")))},true);` +
   `addEventListener("unhandledrejection",function(e){add(E,e.reason&&e.reason.message||e.reason)});` +
   `document.addEventListener("securitypolicyviolation",function(e){add(B,e.blockedURI||e.violatedDirective)});` +
   // text boxes that sit on top of each other (a nav drawn over a heading)

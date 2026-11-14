@@ -1,4 +1,4 @@
-import { cleanOutputs, type ChatOutput } from "./chat-output";
+import { cleanLastBuild, cleanOutputs, type ChatOutput, type LastBuild } from "./chat-output";
 import { promises as fs, constants } from "node:fs";
 import * as path from "node:path";
 
@@ -11,8 +11,8 @@ export const ENGINE_ID = /^[a-z0-9-]{1,32}$/;
 export interface Turn { role: "user" | "assistant"; content: string }
 // engine: the agent engine the chat talks to, fixed when it starts (absent on older chats)
 // from: the chat it was continued from, on another engine
-export interface SavedChat { id: string; pid: string; title: string; ts: number; html: string; history: Turn[]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string; from?: { id: string; title: string }; open?: { kind: string; title: string; href: string; project?: unknown; ex?: string; needs?: string } }
-export type ChatMeta = Omit<SavedChat, "html" | "history" | "outputs">;
+export interface SavedChat { id: string; pid: string; title: string; ts: number; html: string; history: Turn[]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string; lastBuild?: LastBuild; from?: { id: string; title: string }; open?: { kind: string; title: string; href: string; project?: unknown; ex?: string; needs?: string } }
+export type ChatMeta = Omit<SavedChat, "html" | "history" | "outputs" | "lastBuild">;
 
 const dirOf = (owner: string) => path.join(DIR, owner);
 const fileOf = (owner: string, id: string) => path.join(dirOf(owner), `${id}.json`);
@@ -27,6 +27,7 @@ export function clean(raw: any): SavedChat | null {
     .map((t: any) => ({ role: t.role, content: t.content.slice(0, 16_000) }));
   return { id: raw.id, pid: raw.pid, title: String(raw.title ?? "Chat").slice(0, 80), ts: Date.now(), html, history, outputs: cleanOutputs(raw.outputs), projectId: typeof raw.projectId === "string" && PID.test(raw.projectId) ? raw.projectId : undefined, activeOutput: typeof raw.activeOutput === "string" ? raw.activeOutput.slice(0, 240) : undefined,
     engine: typeof raw.engine === "string" && ENGINE_ID.test(raw.engine) ? raw.engine : undefined,
+    lastBuild: cleanLastBuild(raw.lastBuild),
     from: raw.from && ID.test(String(raw.from.id)) ? { id: String(raw.from.id), title: String(raw.from.title ?? "Chat").slice(0, 80) } : undefined };
 }
 

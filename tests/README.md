@@ -166,3 +166,17 @@ on Hermes and OpenClaw only. The turn line names the engine and the tools it rep
 where it says nothing). A one-engine install shows no label and no Continue.
 `SHOTS_DIR=<dir>` also saves screenshots of the label, the Continue sheet and Settings at
 desktop and phone width.
+
+Build again
+===========
+
+`ts tests/rebuild-intent.test.ts`, `ts tests/build-failure-log.test.ts` and
+`node --test tests/rebuild-last-brief.cjs` after `npm run build`. Stand-in Own Build and engine
+builder. A retry right after a build ("again", "build again", "try again", "rebuild", "fix it",
+"that didn't work, try again") reruns that build's brief and kind, saved with the chat as
+`lastBuild` (brief, kind, build id, outcome, error), and tells the builder the run-check error
+with its line; the new build is never titled "again". A bare "try again" after another turn is
+not a rebuild, "fix it" only follows a failed build, and "build again" with nothing built asks
+what to build. Each failed build leaves one `build-failed` line in the turn log (id, kind,
+builder, brief length, duration, error, line), with no brief text. Own Build's code excerpt
+("(line 214: `…`)") goes to the builder on a rebuild; the chat and the log get the line number only.

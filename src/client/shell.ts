@@ -1,6 +1,6 @@
 import { chatScope, visibleChat, inChat, selectChat } from "./chat-scope";
 import { savedOutputs, restoreOutputs } from "./canvas";
-import type { ChatOutput } from "../lib/chat-output";
+import type { ChatOutput, LastBuild } from "../lib/chat-output";
 import { prefs, openSettings } from "./settings";
 import { setPrivate, isPrivate, endPrivate } from "./private";
 import { isOpen, closeCanvas } from "./canvas";
@@ -43,7 +43,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 let H: ShellHooks;
 
 // engine: the agent engine this chat talks to, fixed on its first turn; an older chat has none and uses the current pick
-interface Chat { id: string; title: string; nodes: DocumentFragment; history: ShellHooks["history"]; engine?: string; saved?: boolean; loaded?: boolean; example?: ExampleOpen | null; first?: string; named?: boolean; naming?: boolean; projectId?: string; loading?: Promise<void>; ts?: number; sig?: string }
+interface Chat { id: string; title: string; nodes: DocumentFragment; history: ShellHooks["history"]; engine?: string; lastBuild?: LastBuild; saved?: boolean; loaded?: boolean; example?: ExampleOpen | null; first?: string; named?: boolean; naming?: boolean; projectId?: string; loading?: Promise<void>; ts?: number; sig?: string }
 const EX = "_examples";
 const chats = new Map<string, Chat[]>();
 const retired = new Map<string, Chat>();
@@ -110,15 +110,21 @@ export function chatReady(): Promise<void> | undefined {
   return c?.saved && !c.loaded ? fetchChat(c) : undefined;
 }
 export const chatDeleted = () => retired.has(chatScope());
+export const chatLastBuild = (): LastBuild | undefined => scopedChat()?.lastBuild;
+export function setChatLastBuild(b: LastBuild | undefined): void {
+  const c = scopedChat();
+  if (c) c.lastBuild = b;
+}
 function fetchChat(c: Chat): Promise<void> {
   return c.loading ??= readChat(c).finally(() => { c.loading = undefined; });
 }
 async function readChat(c: Chat): Promise<void> {
   const r = await fetch(`/api/v1/chats?id=${encodeURIComponent(c.id)}`);
-  const d = await r.json() as { chat?: { html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string }; error?: string };
+  const d = await r.json() as { chat?: { html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string; lastBuild?: LastBuild }; error?: string };
   if (!r.ok || !d.chat) throw new Error(d.error ?? httpMsg(r.status));
   c.nodes = revive(d.chat.html);
   c.engine = d.chat.engine;
+  c.lastBuild = d.chat.lastBuild;
   c.history.splice(0, c.history.length, ...d.chat.history);
   c.projectId = d.chat.projectId;
   c.ts = (d.chat as { ts?: number }).ts;
@@ -232,7 +238,7 @@ export function saveChat(): void {
   c.saved = true;
   c.loaded = true;
   persist(c, { id: c.id, pid: [...chats].find(([, list]) => list.includes(c))?.[0] ?? "_", title: c.title, html: copy.firstElementChild?.id === "thread" ? copy.firstElementChild.innerHTML : copy.innerHTML,
-    history, projectId: c.projectId, engine: c.engine, ...savedOutputs() });
+    history, projectId: c.projectId, engine: c.engine, lastBuild: c.lastBuild, ...savedOutputs() });
 }
 
 function interrupted(m: HTMLElement): void {
@@ -259,11 +265,11 @@ export async function flushChat(): Promise<void> {
   await writes.get(id);
   if (writeFailures.has(id)) throw writeFailures.get(id);
 }
-type Body = { id: string; pid: string; title: string; html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string };
+type Body = { id: string; pid: string; title: string; html: string; history: ShellHooks["history"]; outputs?: ChatOutput[]; activeOutput?: string; projectId?: string; engine?: string; lastBuild?: LastBuild };
 // What a save would change: the words on screen, the turns, the name, the outputs.
 // Markup details (a disabled button, a spinner) are not changes.
-function sigOf(b: Pick<Body, "title" | "html" | "history" | "outputs" | "activeOutput" | "projectId">): string {
-  return JSON.stringify([b.title, b.projectId ?? "", b.history, revive(b.html).textContent ?? "", b.outputs ?? [], b.activeOutput ?? ""]);
+function sigOf(b: Pick<Body, "title" | "html" | "history" | "outputs" | "activeOutput" | "projectId" | "lastBuild">): string {
+  return JSON.stringify([b.title, b.projectId ?? "", b.history, revive(b.html).textContent ?? "", b.outputs ?? [], b.activeOutput ?? "", b.lastBuild ?? null]);
 }
 class Stale extends Error {}
 function persist(c: Chat, body: Body): void {
@@ -293,7 +299,7 @@ function persist(c: Chat, body: Body): void {
 // resave a chat that is not on screen (rename, move)
 function resave(pid: string, c: Chat): void {
   if (!c.saved) return;
-  const go = () => persist(c, { id: c.id, pid, title: c.title, html: [...c.nodes.childNodes].map((n) => (n as Element).outerHTML ?? n.textContent ?? "").join(""), history: c.history, projectId: c.projectId, engine: c.engine, ...inChat(c.id, savedOutputs) });
+  const go = () => persist(c, { id: c.id, pid, title: c.title, html: [...c.nodes.childNodes].map((n) => (n as Element).outerHTML ?? n.textContent ?? "").join(""), history: c.history, projectId: c.projectId, engine: c.engine, lastBuild: c.lastBuild, ...inChat(c.id, savedOutputs) });
   if (cur?.cid === c.id) { saveChat(); return; }
   if (c.loaded) go(); else fetchChat(c).then(go).catch((e: Error) => H.toast(`This chat was not saved: ${errText(e)}`));
 }

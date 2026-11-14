@@ -4,12 +4,8 @@ import { faultReply, visible } from "../../../lib/stream-guard";
 import { owner, remember, upstreamFor } from "./private/_session";
 import { gateUser, owner as signedOwner } from "../../../lib/owner";
 
-function logTurn(fields: Record<string, unknown>, isPrivate: boolean): void {
-  if (isPrivate) return;
-  try {
-    console.log(JSON.stringify({ at: new Date().toISOString(), endpoint: "chat", ...fields }));
-  } catch (e) { console.warn("[nexy] a turn line could not be written", (e as Error).message); }
-}
+import { logTurn as writeTurn } from "../../../lib/turn-log";
+const logTurn = (fields: Record<string, unknown>, isPrivate: boolean) => writeTurn("chat", fields, isPrivate);
 import { ENGINES, chosen, engineFor, labelOf, localEngine, searchesWhenTold } from "../../../lib/engine";
 import { get as savedChat } from "../../../lib/chats";
 import { agentSessionKey, deniesTools, dropInlineImages, wantsResearch } from "../../../lib/agent-turn";

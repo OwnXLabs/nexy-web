@@ -21,7 +21,7 @@ export const STORAGE_SHIM =
   `get length(){return Object.keys(d).length}}};["localStorage","sessionStorage"].forEach(function(n){try{Object.defineProperty(window,n,{value:m(),configurable:true})}catch(_){}})}})();`;
 const PROBE =
   `<script>${STORAGE_SHIM}(function(){function r(m){try{parent.postMessage({nexyRunError:String(m).slice(0,200)},"*")}catch(_){}}` +
-  `addEventListener("error",function(e){r(e.message||e.error)});` +
+  `addEventListener("error",function(e){r((e.message||e.error)+(e.lineno?" (line "+e.lineno+(e.colno?":"+e.colno:"")+")":""))});` +
   `addEventListener("unhandledrejection",function(e){r(e.reason&&e.reason.message||e.reason)})})()</script>`;
 export function withProbe(html: string): string {
   // the picker rides with the probe, so Select works on any page Nexy shows

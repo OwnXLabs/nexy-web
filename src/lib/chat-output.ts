@@ -19,3 +19,30 @@ export function cleanOutputs(raw: unknown): ChatOutput[] {
       markup: typeof o.markup === "string" ? o.markup.slice(0, 2_000_000) : undefined }];
   });
 }
+
+// Own Build ends an error with the line and its code: "(line 214: `const n = obstacles.length;`)".
+// The builder gets all of it; the chat and the turn log only the line number.
+export const ERROR_MAX = 600;
+export const plainError = (error: string): string => error.replace(/\(line (\d+): `[^`]*`?\)?/g, "(line $1)");
+
+// The chat's last build, so "build again" reruns what was asked rather than the words "again".
+// next: another turn came after it
+export interface LastBuild {
+  brief: string;
+  deliverable: "web_app" | "diagram";
+  id?: string;
+  outcome: "running" | "done" | "failed";
+  error?: string;
+  next?: boolean;
+}
+export function cleanLastBuild(raw: any): LastBuild | undefined {
+  if (!raw || typeof raw.brief !== "string" || !raw.brief.trim()) return undefined;
+  return {
+    brief: raw.brief.slice(0, 4000),
+    deliverable: raw.deliverable === "diagram" ? "diagram" : "web_app",
+    id: typeof raw.id === "string" ? raw.id.slice(0, 120) : undefined,
+    outcome: raw.outcome === "done" || raw.outcome === "failed" ? raw.outcome : "running",
+    error: typeof raw.error === "string" ? raw.error.slice(0, ERROR_MAX) : undefined,
+    next: raw.next === true || undefined,
+  };
+}

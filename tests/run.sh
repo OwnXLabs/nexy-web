@@ -47,6 +47,9 @@ check "a computer without an Own1: no studio it lacks, no Own1 wording" node --t
 check "building on this computer: names, subject, no outside files" ts tests/local-build.test.ts
 check "search for charts: results come through, no search said plainly" ts tests/research-search.test.ts
 check "building on this computer: engine builder, checks, one retry, plain no; Own1 still uses Own Build" node --test --test-timeout=180000 tests/local-build.cjs
+check "build again: the last brief rerun with its error, only right after a build, asked what to build when there is none" ts tests/rebuild-intent.test.ts
+check "build again in the browser: Own Build and the engine builder get the original brief and the run-check error, never \"again\"" node --test --test-timeout=180000 tests/rebuild-last-brief.cjs
+check "a failed build in the turn log: id, kind, brief length, duration, error and line, no brief text" ts tests/build-failure-log.test.ts
 check "speech on this computer: model fetch, transcripts, spoken replies" ts tests/voice.test.ts
 check "hold to talk: live words one read at a time, skipped when busy, slow computers fall back" ts tests/voice-partials.test.ts
 check "connected apps in chat: lookups and follow-ups recognised, only the words to find searched, granted tool read as data, missing or failing said plainly, an ask of one or a mail routine not switched to ultra-private" ts tests/connectors.test.ts
