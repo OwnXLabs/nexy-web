@@ -1,5 +1,6 @@
 import { here, onOwn1 } from "./place";
 import { classifyEdit } from "./edit-loop";
+import type { LastBuild } from "../lib/chat-output";
 
 export type Intent =
   | { kind: "addTask"; title: string }
@@ -23,6 +24,7 @@ export type Intent =
   | { kind: "edit"; text: string }
   | { kind: "build" }
   | { kind: "make"; brief: string; deliverable: "web_app" | "diagram" }
+  | { kind: "rebuild"; brief: string; deliverable: "web_app" | "diagram"; error: string; fix: string }
   | { kind: "chat" };
 
 const VIEWS: [RegExp, string, string][] = [
@@ -128,6 +130,8 @@ export function classify(text: string): Intent {
   const s = text.trim();
 
   if (/^\s*(?:help|what can you do|what do you do)\s*[?.!]*\s*$/i.test(s)) return { kind: "help" };
+  const retry = retryOf(s, null);
+  if (retry) return retry;
   if (/\b(?:paint|drawing|sketch)\s*(?:app|pad|canvas|workspace)\b|\bcanvas to draw\b|^\s*(?:open\s+)?(?:paint|sketch(?:pad)?)\s*$/i.test(s)) return { kind: "paint" };
   if (PAINT_ASK.test(s) && !DIAGRAM.test(s)) return { kind: "paint" };
   if (/\b(show|what|list|see)\b.*\b(connections?|connected|reach|access)\b/i.test(s)) return { kind: "connections" };
@@ -247,4 +251,34 @@ const ASKS_ABOUT = /^\s*(?:what|how|why|when|where|who|which|whose|is|are|was|we
 export function asksToChangePage(text: string, kind: Intent["kind"]): boolean {
   if (kind !== "make" && kind !== "build" && kind !== "chat") return false;
   return CHANGES_PAGE.test(text) && !ASKS_ABOUT.test(text) && !NEW_THING.test(text);
+}
+
+// "build again" after a build reruns that build's brief, told what went wrong; it built a page
+// titled "again" and lost the brief and the error (demo, 2026-11-13).
+const RETRY = new RegExp(
+  "^\\s*(?:(?:ok(?:ay)?|please|so|hmm|no|nope)[,.!\\s]+)*" +
+  "(?:(?:that|it)\\s+(?:didn['’]?t|did not|doesn['’]?t|does not)\\s+work[,.!;\\s]*)?" +
+  "(?:(?:can|could|would) you\\s+)?(?:please\\s+)?" +
+  "(again|retry|rebuild(?:\\s+(?:it|that|this))?|(?:try|build|do|make|run)(?:\\s+(?:it|that|this))?\\s+again|(?:fix|redo)(?:\\s+(?:it|that|this))?)" +
+  "(?:\\s+please)?[\\s.!?]*$", "i");
+const NAMES_BUILD = /\b(?:re)?build\b/i;
+
+export const NOTHING_TO_REBUILD = "There is nothing built in this chat yet to build again. What should I build?";
+
+export function fixNote(error: string): string {
+  return `The previous build failed its run check with: ${error}. Fix that.`;
+}
+
+// last: the chat's last build. A bare "again" or "try again" counts only right after it;
+// "fix it" only when it failed. Saying "build" asks for one even with nothing to rebuild.
+export function retryOf(text: string, last: LastBuild | null | undefined): Intent | null {
+  const m = RETRY.exec(text);
+  if (!m) return null;
+  const build = NAMES_BUILD.test(text);
+  const fix = /^(?:fix|redo)\b/i.test(m[1]);
+  if (!last) return build ? { kind: "unavailable", say: NOTHING_TO_REBUILD } : null;
+  if (last.next && !build) return null;
+  if (fix && last.outcome !== "failed") return null;
+  const error = last.outcome === "failed" ? last.error ?? "" : "";
+  return { kind: "rebuild", brief: last.brief, deliverable: last.deliverable, error, fix: error ? fixNote(error) : "" };
 }

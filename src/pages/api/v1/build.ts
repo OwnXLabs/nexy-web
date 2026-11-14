@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { owner } from "../../../lib/owner";
 import { builderAvailable, busy, start, stream } from "../../../lib/local-build";
+import { ERROR_MAX } from "../../../lib/chat-output";
 
 export const prerender = false;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -14,7 +15,7 @@ export const POST: APIRoute = async (ctx) => {
   const brief = String(body?.brief ?? "").trim().slice(0, 4000);
   if (!brief) return json({ error: "say what to build" }, 400);
   if (busy()) return json({ error: "already building something on this computer" }, 429);
-  return json({ id: start(owner(ctx), brief, String(body?.fix ?? "").slice(0, 300)) });
+  return json({ id: start(owner(ctx), brief, String(body?.fix ?? "").slice(0, ERROR_MAX)) });
 };
 
 // ?id=… streams progress, then the page (replayed after a dropped connection)

@@ -17,7 +17,8 @@ import { offersProject } from "./promote";
 import { fromReply, htmlArtifact, gameArtifact, markdownArtifact } from "./content-view";
 import { slidesFrom, monthIn, subjectIn, type DocSource } from "./deck";
 import { planBlock, markStarted, agentsBlock, consentBlock, resumeBlock, summaryBlock, autopilotBlock } from "./blocks";
-import { classify, splitTasks, asksToChangePage } from "./intent";
+import { classify, splitTasks, asksToChangePage, retryOf, fixNote } from "./intent";
+import { ERROR_MAX, plainError, type LastBuild } from "../lib/chat-output";
 import { connectIntent, playConnect } from "./perm";
 import { handleEdit, editablePage, applyRevision } from "./edit-loop";
 import { installReporter, openReporter } from "./problem-report";
@@ -28,7 +29,7 @@ import { initPrivate, guard, conversation as privateConversation, isPrivate, pri
 import { matchSocial, playSocial } from "./social";
 import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff } from "./place";
 import { renderGate } from "./build-gate";
-import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, engineSlot, type ExampleOpen } from "./shell";
+import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, engineSlot, chatLastBuild, setChatLastBuild, type ExampleOpen } from "./shell";
 import { engineItems, initEngineChat, labelReply, renderEngineChip } from "./engine-chat";
 import { loadEngines, pickedEngine } from "./engines";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
@@ -72,7 +73,7 @@ function captureWork() {
     visible: () => owner === visibleChat(),
     push: bindChat((who: "me" | "ai", html: string) => push(who, html, priv)), pushBlock: bindChat((el: HTMLElement) => pushBlock(el, priv)),
     showArtifact: bindChat((a: Parameters<typeof showArtifact>[0]) => { a.ephemeral ??= priv; showArtifact(a); }), generating: bindChat(generating),
-    saveChat: bindChat(saveChat), nameChat: bindChat(nameChat),
+    saveChat: bindChat(saveChat), nameChat: bindChat(nameChat), noteBuild: bindChat(noteBuild),
     conversation: bindChat(conversation), attachedDocs: bindChat(attachedDocs),
     P: () => project,
     playMake: bindChat(playMake), playDeck: bindChat(playDeck), autopilot: bindChat(autopilot),
@@ -753,12 +754,26 @@ function titleFor(brief: string): string {
 const ATTACH_MAX_BYTES = 40 * 1024 * 1024;
 
 type Attachment = { id: string; filename: string; eph: boolean; conv?: string; local?: string };
-interface TurnState { attached: Attachment[]; lastMake: { brief: string; deliverable: "web_app" | "diagram" } | null; lastTurn: { prompt: string; el: HTMLElement | null; at?: number } }
+interface TurnState { attached: Attachment[]; lastBuild: LastBuild | null; lastTurn: { prompt: string; el: HTMLElement | null; at?: number } }
 const turns = new Map<string, TurnState>();
 function turnState(): TurnState {
   const id = chatScope(); let state = turns.get(id);
-  if (!state) { state = { attached: [], lastMake: null, lastTurn: { prompt: "", el: null } }; turns.set(id, state); }
+  if (!state) { state = { attached: [], lastBuild: null, lastTurn: { prompt: "", el: null } }; turns.set(id, state); }
   return state;
+}
+// the chat's last build: brief, kind, id, outcome and error, saved with the chat
+const lastBuild = (): LastBuild | null => turnState().lastBuild ?? chatLastBuild() ?? null;
+function noteBuild(b: LastBuild): void {
+  turnState().lastBuild = b;
+  setChatLastBuild(b);
+}
+// A failed build in Nexy's own turn log, which outlives the build's files: no brief text, only its length.
+function logBuildFailure(f: { build: string; kind: string; brief: string; ms: number; error: string; builder: "own-build" | "engine" }): void {
+  if (isPrivate()) return;
+  fetch("/api/v1/build-log", { method: "POST", keepalive: true, headers: { "content-type": "application/json" },
+    body: JSON.stringify({ build: f.build, kind: f.kind, briefChars: f.brief.length, ms: f.ms, error: plainError(f.error).slice(0, 300), builder: f.builder }) })
+    .then((r) => { if (!r.ok) console.warn("[nexy] build failure not logged", r.status); })
+    .catch((e) => console.warn("[nexy] build failure not logged", e));
 }
 
 async function attachedDocs(priv: boolean): Promise<{ filename: string; text: string }[]> {
@@ -977,16 +992,18 @@ function followBuild(id: string, onStep: (text: string) => void): Promise<LocalE
   });
 }
 
-async function playLocalMake(brief: string): Promise<void> {
-  const localTurn = turnState();
-  const { push, generating, saveChat } = captureWork();
-  localTurn.lastMake = { brief, deliverable: "web_app" };
+type Again = { error: string } | undefined;
+async function playLocalMake(brief: string, again?: Again): Promise<void> {
+  const { push, generating, saveChat, noteBuild } = captureWork();
+  noteBuild({ brief, deliverable: "web_app", outcome: "running" });
   const game = gameBrief(brief);
-  const holder = push("ai", "Building that on this computer, not in a datacentre. It will open when it is ready.");
+  const holder = push("ai", again
+    ? (again.error ? "Building it again on this computer, and fixing the error it hit…" : "Building it again on this computer…")
+    : "Building that on this computer, not in a datacentre. It will open when it is ready.");
   const gen = generating(titleFor(brief), game ? "game" : "html", "Writing it on this computer", LOCAL_BUILD_MS);
   status(holder, "Starting…", LOCAL_BUILD_MS);
   const t0 = Date.now();
-  let fix = "", why = "", checked = false;
+  let fix = again?.error ?? "", why = "", checked = false, buildId = "";
   try {
     for (let attempt = 1; attempt <= 2; attempt++) {
       if (attempt === 2) { status(holder, "That version did not pass my checks. Trying once more…"); gen.live("Trying once more"); }
@@ -994,16 +1011,19 @@ async function playLocalMake(brief: string): Promise<void> {
         method: "POST", body: JSON.stringify({ brief, fix }),
       }), retrying(holder, gen));
       if (!started.id) throw new Error(started.error ?? "the builder did not start");
+      buildId = `build:local-${started.id}`;
       const r = await followBuild(started.id, (t) => { status(holder, `${t}…`); gen.live(t); });
-      if (r.type === "failed") { why = r.error; checked ||= r.check; fix = r.check ? r.error : ""; continue; }
+      const failed = (error: string) => logBuildFailure({ build: buildId, kind: game ? "game" : "web_app", brief, ms: Date.now() - t0, error, builder: "engine" });
+      if (r.type === "failed") { why = r.error; checked ||= r.check; fix = r.check ? r.error : ""; failed(r.error); continue; }
       status(holder, "Running it to check it works…");
       gen.live("Running it to check it works");
       const g = await renderGate(r.html);
-      if (!g.ok) { why = fix = g.why; checked = true; continue; }
+      if (!g.ok) { why = fix = g.why; checked = true; failed(g.why); continue; }
       const secs = Math.round((Date.now() - t0) / 1000);
       const made = { title: (r.title || titleFor(brief)).replace(/\s+/g, " ").trim().slice(0, 48) || "Your build", meta: `Built on this computer · ${secs}s`, html: r.html };
       const output = game ? gameArtifact(made) : htmlArtifact({ ...made, url: siteHost });
-      output.id = `build:local-${started.id}`;
+      output.id = buildId;
+      noteBuild({ brief, deliverable: "web_app", id: buildId, outcome: "done" });
       gen.replaceWith(output);
       push("ai", `Done. It is ${ON_RIGHT} and it runs. Built on this computer in ${secs}s.`);
       window.dispatchEvent(new CustomEvent("nexy:files-changed"));
@@ -1012,35 +1032,41 @@ async function playLocalMake(brief: string): Promise<void> {
     }
     throw new Error(why || "the build did not finish");
   } catch (e) {
-    const detail = errText(e);
+    const detail = plainError(errText(e));
+    noteBuild({ brief, deliverable: "web_app", ...(buildId ? { id: buildId } : {}), outcome: "failed", error: (why || detail).slice(0, ERROR_MAX) });
     gen.fail("It did not work this time");
     failedReply(holder.querySelector(".bub")!, checked
       ? "I could not build that well enough to show you. I tried twice and neither version passed my checks, so I kept them back. Try again, or describe it a little differently."
       : "I could not build that: the builder on this computer did not finish. It usually works on a second try.",
-      detail, () => void playLocalMake(brief));
+      detail, () => void playLocalMake(brief, again));
   } finally {
     settle(holder);
   }
 }
 
-async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web_app", mode?: "phaser"): Promise<void> {
-  if (buildsHere && deliverable === "web_app") return playLocalMake(brief);
-  const localTurn = turnState();
-  const { push, generating, saveChat } = captureWork();
-  localTurn.lastMake = { brief, deliverable };
+// again: a rebuild of the chat's last build, with the error it hit (empty when it ran)
+async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web_app", mode?: "phaser", again?: Again): Promise<void> {
+  if (buildsHere && deliverable === "web_app") return playLocalMake(brief, again);
+  const { push, generating, saveChat, noteBuild } = captureWork();
+  noteBuild({ brief, deliverable, outcome: "running" });
   const holder = push(
     "ai",
-    `${deliverable === "diagram" ? "Drawing that" : "Building that"} on this machine, not in a datacentre. You can watch it come together ${ON_RIGHT}.`,
+    again
+      ? `${deliverable === "diagram" ? "Drawing it again" : "Building it again"}${again.error ? ", and fixing the error it hit…" : "…"}`
+      : `${deliverable === "diagram" ? "Drawing that" : "Building that"} on this machine, not in a datacentre. You can watch it come together ${ON_RIGHT}.`,
   );
+  const t0 = Date.now();
+  let buildId = "";
   const gen = generating(titleFor(brief), deliverable === "diagram" ? "diagram" : "html",
     deliverable === "diagram" ? "Drawing it on this machine" : "Writing it on this machine", typicalMs(deliverable === "diagram" ? "diagram" : "site"));
   status(holder, "Starting…", typicalMs(deliverable === "diagram" ? "diagram" : "site"));
   try {
     const started = await patient(() => api<{ buildId?: string; error?: string }>("/api/apps/build/api/build", {
       method: "POST",
-      body: JSON.stringify({ kind: deliverable, title: titleFor(brief), description: brief, ...(mode ? { mode } : {}) }),
+      body: JSON.stringify({ kind: deliverable, title: titleFor(brief), description: again?.error ? `${brief}\n\n${fixNote(again.error)}` : brief, ...(mode ? { mode } : {}) }),
     }), retrying(holder, gen));
     if (!started.buildId) throw new Error(started.error ?? "own-build did not start the build");
+    buildId = `build:${started.buildId}`;
 
     let done: BuildDone | undefined;
     let heard = Date.now();
@@ -1070,14 +1096,20 @@ async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web
     let fault = "";
     const onMsg = (e: MessageEvent) => { if (!fault && e.data?.nexyRunError) fault = String(e.data.nexyRunError); };
     addEventListener("message", onMsg);
+    const id = done.runId ? `build:${done.runId}` : buildId;
+    noteBuild({ brief, deliverable, id, outcome: "done" });
     setTimeout(() => {
       removeEventListener("message", onMsg);
+      if (fault) {
+        noteBuild({ brief, deliverable, id, outcome: "failed", error: fault.slice(0, ERROR_MAX) });
+        logBuildFailure({ build: id, kind: isGame ? "game" : deliverable, brief, ms: Date.now() - t0, error: fault, builder: "own-build" });
+      }
       const unmet = (done!.artifact?.produces?.unmet ?? []).filter(Boolean);
       const note = unmet.length
         ? `<div class="feednote" style="margin-top:8px">Not in it yet: ${unmet.map(esc).join(", ")}. Say “add the rest” and I will build them in.</div>`
         : "";
       bub.innerHTML = (fault
-        ? `Done in ${secs}s, but it throws when it runs: <code>${esc(fault)}</code>. That is a fault in the generated code — ask me to build it again.`
+        ? `Done in ${secs}s, but it throws when it runs: <code>${esc(plainError(fault))}</code>. That is a fault in the generated code — ask me to build it again.`
         : `Done — it is ${ON_RIGHT} and it runs. Built on this machine in ${secs}s.`) + note;
       saveChat();
     }, RUN_CHECK_MS);
@@ -1089,17 +1121,19 @@ async function playMake(brief: string, deliverable: "web_app" | "diagram" = "web
       href: done.runId ? `/api/apps/build/api/director/runs/${encodeURIComponent(done.runId)}/preview` : undefined,
     };
     const output = isGame ? gameArtifact(made) : htmlArtifact({ ...made, url: siteHost });
-    output.id = done.runId ? `build:${done.runId}` : `build:${started.buildId}`;
+    output.id = id;
     gen.replaceWith(output);
     window.dispatchEvent(new CustomEvent("nexy:files-changed"));
   } catch (e) {
-    const why = errText(e);
+    const full = errText(e), why = plainError(full);
+    noteBuild({ brief, deliverable, ...(buildId ? { id: buildId } : {}), outcome: "failed", error: full.slice(0, ERROR_MAX) });
+    logBuildFailure({ build: buildId || "not-started", kind: deliverable, brief, ms: Date.now() - t0, error: full, builder: "own-build" });
     gen.fail(`Own Build stopped: ${why}`);
     // a generated page that fails the checks is the model's mistake, not a fault in the machine
     failedReply(holder.querySelector(".bub")!, /render gate|not playable|looks broken|cannot draw|not a readable/i.test(why)
       ? "I could not build that well enough to show you: the version I made did not pass my checks, so I kept it back."
       : "I could not build that: Own Build did not finish. It usually works on a second try.",
-      why, () => void playMake(brief, deliverable, mode));
+      why, () => void playMake(brief, deliverable, mode, again));
   } finally {
     settle(holder);
   }
@@ -2141,10 +2175,10 @@ const seenFaults = new Set<string>();
 addEventListener("message", (e: MessageEvent) => {
   const err = e.data?.nexyRunError;
   if (!err) return;
-  const key = `${turnState().lastMake?.brief ?? ""}|${err}`;
+  const key = `${lastBuild()?.brief ?? ""}|${err}`;
   if (seenFaults.has(key)) return;
   seenFaults.add(key);
-  feedback("runError", { prompt: turnState().lastMake?.brief ?? turnState().lastTurn.prompt, error: String(err).slice(0, 300), artifact: "app" });
+  feedback("runError", { prompt: lastBuild()?.brief ?? turnState().lastTurn.prompt, error: String(err).slice(0, 300), artifact: "app" });
 });
 
 async function playFeedbackLog(what: "show" | "clear"): Promise<void> {
@@ -2308,7 +2342,9 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
   const localTurn = turnState();
   const { push, pushBlock, showArtifact, P, saveChat, nameChat, noteUserMessage, onReply, typingOff,
     attachSample, playMemory, playSocial, playConnect, instant, autopilot, addRole, playMake,
-    playChart, playWorkLog, playBoardEdit, playGenerate, playBuild, playChat, playFeedbackLog, visible } = captureWork();
+    playChart, playWorkLog, playBoardEdit, playGenerate, playBuild, playChat, playFeedbackLog, visible, noteBuild } = captureWork();
+  const lastOfChat = bindChat(lastBuild);
+  let built = false;
   if (S.busy) {
     const inp = $<HTMLTextAreaElement>("#input");
     if (S.running && classify(text).kind === "pausePlan") {
@@ -2388,8 +2424,13 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     if (soc) { await playSocial(soc, { push, showArtifact, project: P()?.name, block: (t, r, rows) => void pushBlock(summaryBlock(t, r, rows)) }); return; }
 
     const conn = connectIntent(text);
-    const intent = classify(text);
-    if (conn) {
+    const intent = retryOf(text, lastOfChat()) ?? classify(text);
+    if (intent.kind === "rebuild") {
+      built = true;
+      S.job = "build"; S.eta = { start: Date.now(), ms: typicalMs(intent.deliverable === "diagram" ? "diagram" : "site") };
+      await playMake(intent.brief, intent.deliverable, undefined, { error: intent.error });
+      madeIt(`I built ${intent.deliverable === "diagram" ? "a diagram" : "it"} again: ${titleFor(intent.brief)}. It is open in the work pane.`);
+    } else if (conn) {
       await playConnect(conn, { block: pushBlock, say: (h) => void push("ai", h) });
     } else if (connectorAsk(text, conversation(nowPrivate) ?? [])) {
       // the owner's own mail or files: read through the connected app, never a chart search or a build
@@ -2414,7 +2455,9 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     } else if (intent.kind === "addRole") {
       await addRole(intent.role);
     } else if (intent.kind === "customRebuild") {
-      if (localTurn.lastMake) await playMake(localTurn.lastMake.brief, localTurn.lastMake.deliverable, "phaser");
+      const lb = lastBuild();
+      built = !!lb;
+      if (lb) await playMake(lb.brief, lb.deliverable, "phaser");
       else push("ai", "There is nothing built in this chat yet to redo. Tell me what to make.");
     } else if (intent.kind === "chart") {
       await playChart(text, nowPrivate);
@@ -2454,10 +2497,12 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     } else if (intent.kind === "unavailable") {
       push("ai", esc(intent.say));
     } else if (intent.kind === "make") {
+      built = true;
       S.job = "build"; S.eta = { start: Date.now(), ms: typicalMs(intent.deliverable === "diagram" ? "diagram" : "site") };
       // a site goes across the owner's devices when this Own 1 can; otherwise the normal builder
       if (intent.deliverable === "diagram" || !(await playSwarm(intent.brief, (el) => pushBlock(el))))
         await playMake(intent.brief, intent.deliverable);
+      else noteBuild({ brief: intent.brief, deliverable: intent.deliverable, outcome: "done" });
       madeIt(`I built ${intent.deliverable === "diagram" ? "a diagram" : "it"}: ${titleFor(intent.brief)}. It is open in the work pane.`);
     } else if (intent.kind === "build") {
       S.job = "build"; S.eta = { start: Date.now(), ms: typicalMs("site") };
@@ -2475,6 +2520,9 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     for (; el; el = el.nextElementSibling) if (el.classList.contains("ai")) last = el as HTMLElement;
     if (last) rateBar(last, text);
     localTurn.lastTurn = { prompt: text, el: last, at: Date.now() };
+    // a turn after a build: a bare "try again" no longer means that build
+    const lb = lastOfChat();
+    if (!built && lb && !lb.next) noteBuild({ ...lb, next: true });
     if (last && visible()) { if (!nowPrivate) void onReply(last.querySelector(".bub")?.textContent ?? ""); }
     // finished in a chat the person has left: say so where they are now
     else if (last) toast(`Done in another chat: “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`);
