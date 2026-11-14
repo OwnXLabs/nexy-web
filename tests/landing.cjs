@@ -51,7 +51,7 @@ test('a computer without an Own1: only what works here', async () => {
     await page.locator('#exList [data-ex]').first().waitFor({ timeout: 10000 });
     const ex = await page.locator('#exList').innerText();
     assert.match(ex, /Drawing app/);
-    assert.doesNotMatch(ex, /Website|Online store|Project board|Game|Image|Launch plan|Mario|Flappy|Diagram/);
+    assert.doesNotMatch(ex, /Website|Online store|Project board|Game|Image|Launch plan|platformer|Star flyer|Diagram/);
 
     assert.equal((await page.locator('#privBtn').innerText()).trim(), 'Private');
 
