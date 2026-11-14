@@ -105,3 +105,28 @@ test("a refused token, a missing gateway and a stall all throw (the chat then fa
   finally { empty.close(); }
   assert.equal(oc.openclawEngine("", TOKEN).available(), false);
 });
+
+test("a slow first turn: 120 s before the plain model takes over, and its own words while it waits", () => {
+  const e = oc.openclawEngine(gw.url, TOKEN);
+  assert.equal(e.quietMs, 120_000);
+  assert.equal(e.waitNote, "OpenClaw is getting ready\u2026");
+});
+
+test("a 500 just after a restart is asked once more about 3 s later; a second 500 throws, so the chat falls back", async () => {
+  const flaky = await openclawStandin({ token: TOKEN, fail500: 1 });
+  try {
+    const t0 = Date.now();
+    const r = await oc.openclawEngine(flaky.url, TOKEN).chat("hi", [], "S", undefined, "c1");
+    assert.equal(r.reply, "answer from openclaw to hi");
+    assert.equal(flaky.seen.filter((x: any) => x.path === "/v1/chat/completions").length, 2);
+    assert(Date.now() - t0 >= 2500, `waited before asking again (${Date.now() - t0} ms)`);
+    flaky.state.fail500 = 2;
+    await assert.rejects(oc.openclawEngine(flaky.url, TOKEN).chat("hi", [], "S", undefined, "c1"), /openclaw gateway 500/);
+    assert.equal(flaky.state.fail500, 0, "asked twice, not more");
+    // the caller's budget runs out during the wait: stopped then, not after it
+    flaky.state.fail500 = 1;
+    const t1 = Date.now();
+    await assert.rejects(oc.openclawEngine(flaky.url, TOKEN).chat("hi", [], "S", AbortSignal.timeout(500), "c1"));
+    assert(Date.now() - t1 < 2000);
+  } finally { flaky.close(); }
+});

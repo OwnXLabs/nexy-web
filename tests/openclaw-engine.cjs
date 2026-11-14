@@ -1,6 +1,8 @@
 // OpenClaw as the third agent engine, in the browser: Settings lists Hermes, Nexy Engine and
 // OpenClaw; the pick survives a reload; a chat is answered by OpenClaw (via=openclaw); memory and
 // routine controls are not offered for it, and nothing asks it for sessions it does not have.
+// A slow first turn shows that it is getting ready; a 500 after a restart is asked again once;
+// a gateway that stays broken gives way to the plain model.
 // Stand-in gateways only. Run after `npm run build`: node --test tests/openclaw-engine.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -115,6 +117,54 @@ test('OpenClaw in Settings and in chat: listed, kept across a reload, answers, n
     assert.deepEqual(errors, []);
   } finally {
     await browser.close(); s.p.kill(); hermes.srv.close(); nexy.srv.close(); oc.close();
+    fs.rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test('a slow first turn says OpenClaw is getting ready, then answers; a restart\'s 500 is asked again; a broken gateway gives way to the plain model', { timeout: 150000 }, async () => {
+  const oc = await openclawStandin({ token: TOKEN, delayMs: 5000 });
+  const llm = await gateway('the plain model');
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-openclaw-'));
+  const keyFile = path.join(data, 'openclaw.key'); fs.writeFileSync(keyFile, TOKEN + '\n', { mode: 0o600 });
+  // OpenClaw is the only agent here, so every chat goes to it
+  const s = await start({
+    NEXY_DATA_DIR: data, NEXY_BOX_FEATURES: 'open', NEXY_SCREEN: 'none', NEXY_LLM_URL: llm.url,
+    NEXY_ENGINES: 'openclaw', NEXY_ENGINE_OPENCLAW_URL: oc.url, NEXY_ENGINE_OPENCLAW_KEY_FILE: keyFile,
+  });
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    const errors = []; page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(s.base + '/');
+    await page.locator('#input').waitFor({ timeout: 20000 });
+    const t0 = Date.now();
+    await page.fill('#input', 'a slow question');
+    await page.press('#input', 'Enter');
+    const last = page.locator('#thread .msg.ai').last();
+    await last.locator('.wait').waitFor({ timeout: 2000 });
+    assert.doesNotMatch(await last.innerText(), /answer from openclaw/, 'still waiting');
+    await page.waitForFunction(() => [...document.querySelectorAll('#thread .msg.ai .wait .wl')].some((w) => w.textContent === 'OpenClaw is getting ready\u2026'), null, { timeout: 5000 });
+    assert(Date.now() - t0 < 5000, 'said before the reply came');
+    await page.waitForFunction(() => /answer from openclaw to a slow question/.test(document.querySelector('#thread')?.textContent || ''), null, { timeout: 20000 });
+    assert(Date.now() - t0 >= 5000, 'the reply came after the delay');
+    assert.equal(await last.locator('.wait').count(), 0, 'the waiting line is gone once it answers');
+
+    oc.state.fail500 = 1;
+    const ask = (text) => page.evaluate(async (text) => (await fetch('/api/v1/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat: 'oc-chat-2', messages: [{ role: 'user', content: text }] }) })).json(), text);
+    const before = oc.seen.length;
+    const again = await ask('after a restart');
+    assert.equal(again.via, 'openclaw');
+    assert.match(again.choices[0].message.content, /answer from openclaw to after a restart/);
+    assert.equal(oc.seen.length - before, 2, 'asked once more after the 500');
+
+    oc.state.fail500 = 2;
+    const fell = await ask('while it is broken');
+    assert.equal(fell.fallback, true);
+    assert.match(fell.choices[0].message.content, /answer from the plain model/);
+    assert(llm.seen.some((p) => p.startsWith('/v1/chat')), 'the plain model answered');
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close(); s.p.kill(); oc.close(); llm.srv.close();
     fs.rmSync(data, { recursive: true, force: true });
   }
 });

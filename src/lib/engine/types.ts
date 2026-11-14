@@ -36,6 +36,10 @@ export interface NexyEngine {
   readonly id: string;
   // where a turn goes and what keeps it, said in a reply's `upstream`
   readonly upstream?: string;
+  // the longest it may stay silent before the plain model answers instead; the agent default otherwise
+  readonly quietMs?: number;
+  // shown while a turn has no words yet, after a few seconds: a slow first turn is not a stuck one
+  readonly waitNote?: string;
   available(): boolean;
   // session: a stable id per chat, so the agent keeps one browser (and its own history) across turns
   chat(message: string, history: ChatTurn[], system: string, signal?: AbortSignal, session?: string, onText?: (delta: string) => void, opts?: ChatOpts): Promise<ChatResult>;

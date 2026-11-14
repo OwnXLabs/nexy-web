@@ -349,7 +349,7 @@ export const POST: APIRoute = async (ctx) => {
       else if ("error" in opened) console.warn(`[nexy] could not open ${new URL(page).hostname} on the agent's screen: ${opened.error}`);
     }
     // always streamed from the engine, so its progress is seen even when this request is not
-    const b = budget(use === localEngine ? LOCAL_BUDGET_MS : research ? RESEARCH_BUDGET_MS : AGENT_BUDGET_MS);
+    const b = budget(use === localEngine ? LOCAL_BUDGET_MS : research ? Math.max(RESEARCH_BUDGET_MS, use.quietMs ?? 0) : use.quietMs ?? AGENT_BUDGET_MS);
     const heard = (d: string) => { b.heard(d); onText?.(d); };
     try {
       const r = await use.chat(
@@ -449,7 +449,7 @@ export const POST: APIRoute = async (ctx) => {
     // the person stopped following: the turn goes on, and can be picked up again
     let left = false;
     const gone = () => { if (!left) { left = true; log({ result: "client-left", via: eng.id, ms: Date.now() - startedAt }); } };
-    return sse(startTurn(picker, turn, { id: tid, key, left: gone }), picker)!;
+    return sse(startTurn(picker, turn, { id: tid, key, left: gone, wait: eng.waitNote }), picker)!;
   }
   const r = await turn();
   return json(r.body, r.status);

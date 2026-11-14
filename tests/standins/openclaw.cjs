@@ -1,16 +1,18 @@
 // A stand-in OpenClaw gateway: the OpenAI chat API only, behind a bearer token. It refuses a
 // wrong token or a missing session key, answers whole or as SSE, and records every request
-// (any /api/sessions call among them: the real gateway has none).
+// (any /api/sessions call among them: the real gateway has none). delayMs: a cold first turn;
+// fail500: that many chat calls answer 500 first, as the real one does just after a restart.
 const http = require('node:http');
 
-function openclawStandin({ token, reply = (body) => `answer from openclaw to ${body.messages.at(-1).content}`, stall = false } = {}) {
+function openclawStandin({ token, reply = (body) => `answer from openclaw to ${body.messages.at(-1).content}`, stall = false, delayMs = 0, fail500 = 0 } = {}) {
   const seen = [];
+  const state = { fail500 };
   const srv = http.createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => { raw += c; });
     req.on('end', () => {
       let body = null;
-      try { body = raw ? JSON.parse(raw) : null; } catch { body = null; }
+      try { body = raw ? JSON.parse(raw) : null; } catch (e) { console.warn('openclaw stand-in: body is not JSON', e.message); }
       const hit = { method: req.method, path: req.url, auth: req.headers.authorization || '', session: req.headers['x-openclaw-session-key'] || '', hermes: req.headers['x-hermes-session-id'] || '', body };
       seen.push(hit);
       const send = (status, b) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
@@ -20,6 +22,11 @@ function openclawStandin({ token, reply = (body) => `answer from openclaw to ${b
       if (!body || !/^openclaw\/[A-Za-z0-9_-]+$/.test(body.model || '') || !Array.isArray(body.messages)) return send(400, { error: { message: 'bad request' } });
       if (!/^nexy-[A-Za-z0-9_-]+$/.test(hit.session) || body.user !== hit.session) return send(400, { error: { message: 'no session key' } });
       if (stall) return; // never answers
+      if (state.fail500 > 0) { state.fail500--; return send(500, { error: { message: 'internal error', type: 'api_error' } }); }
+      setTimeout(() => answer(body), delayMs);
+    });
+    const answer = (body) => {
+      const send = (status, b) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
       const text = reply(body);
       if (!body.stream) return send(200, { id: 'c1', object: 'chat.completion', model: body.model, choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }] });
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
@@ -34,9 +41,9 @@ function openclawStandin({ token, reply = (body) => `answer from openclaw to ${b
         res.end('data: [DONE]\n\n');
       };
       next();
-    });
+    };
   });
-  return new Promise((r) => srv.listen(0, '127.0.0.1', () => r({ srv, seen, url: `http://127.0.0.1:${srv.address().port}`, close: () => { srv.closeAllConnections?.(); srv.close(); } })));
+  return new Promise((r) => srv.listen(0, '127.0.0.1', () => r({ srv, seen, state, url: `http://127.0.0.1:${srv.address().port}`, close: () => { srv.closeAllConnections?.(); srv.close(); } })));
 }
 
 module.exports = { openclawStandin };

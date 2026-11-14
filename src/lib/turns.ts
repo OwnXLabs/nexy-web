@@ -6,7 +6,7 @@ import { visible } from "./stream-guard";
 export type TurnEvent = { reset: string } | { done: { status: number; body: unknown } };
 // key: the client's id for the question, so the same question sent again joins this turn
 // left: called when the last person following it goes before it is done
-type Turn = { who: string; key: string; raw: string; shown: string; done?: { status: number; body: unknown }; subs: Set<(e: TurnEvent) => void>; at: number; timer?: ReturnType<typeof setTimeout>; left?: () => void };
+type Turn = { who: string; key: string; wait?: string; raw: string; shown: string; done?: { status: number; body: unknown }; subs: Set<(e: TurnEvent) => void>; at: number; timer?: ReturnType<typeof setTimeout>; left?: () => void };
 
 const TURNS = new Map<string, Turn>();
 const KEEP_MS = 10 * 60_000;
@@ -36,9 +36,9 @@ export function rejoin(who: string, key: string): string | null {
 }
 
 export function startTurn(who: string, run: (onText: (d: string) => void, restart: () => void) => Promise<{ status: number; body: unknown }>,
-  opts: { id?: string; key?: string; left?: () => void } = {}): string {
+  opts: { id?: string; key?: string; left?: () => void; wait?: string } = {}): string {
   const id = opts.id ?? randomUUID();
-  const t: Turn = { who, key: opts.key ?? "", raw: "", shown: "", subs: new Set(), at: Date.now(), left: opts.left };
+  const t: Turn = { who, key: opts.key ?? "", wait: opts.wait, raw: "", shown: "", subs: new Set(), at: Date.now(), left: opts.left };
   TURNS.set(id, t);
   const emit = (e: TurnEvent) => { for (const s of t.subs) s(e); };
   const flush = () => {
@@ -82,7 +82,7 @@ export function sse(id: string, who: string): Response | null {
     start(c) {
       const send = (s: string) => { try { c.enqueue(enc.encode(s)); } catch { end(); } };
       const end = () => { stop?.(); clearInterval(ping); try { c.close(); } catch { /* already closed */ } };
-      send(`event: turn\ndata: ${JSON.stringify({ id })}\n\n`);
+      send(`event: turn\ndata: ${JSON.stringify({ id, ...(t.wait ? { wait: t.wait } : {}) })}\n\n`);
       ping = setInterval(() => send(": ping\n\n"), 15_000);
       stop = follow(id, who, (e) => {
         if ("reset" in e) send(`event: text\ndata: ${JSON.stringify({ text: e.reset })}\n\n`);
