@@ -46,6 +46,8 @@ check "the default engine: NEXY_DEFAULT_ENGINE for no pick and no owner, a pick 
 check "a computer without an Own1: no studio it lacks, no Own1 wording" node --test --test-timeout=180000 tests/local-mode.cjs
 check "building on this computer: names, subject, no outside files" ts tests/local-build.test.ts
 check "search for charts: results come through, no search said plainly" ts tests/research-search.test.ts
+check "what this computer's model can do: requests sorted by kind of job, verdicts read from the app" ts tests/capability.test.ts
+check "what this computer's model can do, in the browser: a chat-only model's build is one card and no build call, the app's buttons only in the app, a simple-only build says so first, an unstyled page is readable in the work pane, a near-empty build says it came out thin" node --test --test-timeout=240000 tests/capability-gating.cjs
 check "building on this computer: engine builder, checks, one retry, plain no; Own1 still uses Own Build" node --test --test-timeout=180000 tests/local-build.cjs
 check "build again: the last brief rerun with its error, only right after a build, asked what to build when there is none" ts tests/rebuild-intent.test.ts
 check "build again in the browser: Own Build and the engine builder get the original brief and the run-check error, never \"again\"" node --test --test-timeout=180000 tests/rebuild-last-brief.cjs

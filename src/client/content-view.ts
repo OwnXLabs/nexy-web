@@ -23,15 +23,19 @@ const PROBE =
   `<script>${STORAGE_SHIM}(function(){function r(m){try{parent.postMessage({nexyRunError:String(m).slice(0,200)},"*")}catch(_){}}` +
   `addEventListener("error",function(e){r((e.message||e.error)+(e.lineno?" (line "+e.lineno+(e.colno?":"+e.colno:"")+")":""))});` +
   `addEventListener("unhandledrejection",function(e){r(e.reason&&e.reason.message||e.reason)})})()</script>`;
-export function withProbe(html: string): string {
-  // the picker rides with the probe, so Select works on any page Nexy shows
-  const head = PROBE + PICK;
+// A page with no background of its own showed the app's dark background through the frame, under
+// black text (tester's PC, 2026-11-16). First in the head, so the page's own styles still win.
+const READABLE = "<style>html{background:#fff;color:#111}</style>";
+function atHead(html: string, head: string): string {
   for (const re of [/<head[^>]*>/i, /<html[^>]*>/i, /<!doctype[^>]*>/i]) {
     const m = re.exec(html);
     if (m) return html.slice(0, m.index + m[0].length) + head + html.slice(m.index + m[0].length);
   }
   return head + html;
 }
+export const readable = (html: string): string => atHead(html, READABLE);
+// the picker rides with the probe, so Select works on any page Nexy shows
+export const withProbe = (html: string): string => atHead(html, READABLE + PROBE + PICK);
 
 export interface Made {
   title: string;
