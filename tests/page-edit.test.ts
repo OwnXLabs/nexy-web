@@ -92,6 +92,17 @@ test("an edit left unclosed before css, with the css repeated to the limit: the 
   assert.deepEqual(r.unmet, ["7am", "6pm", "Monday", "Friday"]);
 });
 
+test("a second edit opened with [ (qwen3:8b): both edits, the css and the say are kept, and it is done", async () => {
+  mode = "ollama";
+  answer = '{"edits":[{"find":"background:#fffaf2;color:#3b2a1a","replace":"background:#0b1a3a;color:#3b2a1a"}],["find":"<footer>","replace":"<section id=\\"hours\\"><h2>Opening hours</h2><p>Monday to Friday, 7am to 6pm.</p></section>\\n<footer>"}],"css":"body{background:#0b1a3a !important;color:#e6d5bf !important}","say":"Changed the background to dark navy and added a section for opening hours."}';
+  const r = await revise(PAGE, CHANGE);
+  assert.equal(r.applied, 3);
+  assert.match(r.html, /<h2>Opening hours<\/h2>/);
+  assert.match(r.html, /color:#e6d5bf !important/);
+  assert.equal(r.say, "Changed the background to dark navy and added a section for opening hours.");
+  assert.deepEqual(r.unmet, []);
+});
+
 test("what counts as missing, on known-good and known-broken changes", () => {
   const withHours = (p: string) => PAGE.replace("<footer>", `<section><h2>Opening hours</h2><p>${p}</p></section><footer>`);
   const navy = PAGE.replace("background:#fffaf2;color:#3b2a1a", "background:#0b1a3a;color:#f5efe6");

@@ -62,9 +62,11 @@ export function parsePlan(raw: string): Plan | null {
   // A reply cut off at the length limit (the model sometimes repeats an edit until it runs out),
   // or an edit left unclosed before "css" (qwen3:8b, 2026-11-17): keep every complete edit.
   if (!j) {
-    const pairs = [...text.matchAll(/\{\s*"find"\s*:\s*("(?:[^"\\]|\\.)*")\s*,\s*"replace"\s*:\s*("(?:[^"\\]|\\.)*")\s*[},]/g)];
+    // or an edit opened with "[" (qwen3:8b: ],["find":…}); the css and say strings are kept too
+    const pairs = [...text.matchAll(/[{[]\s*"find"\s*:\s*("(?:[^"\\]|\\.)*")\s*,\s*"replace"\s*:\s*("(?:[^"\\]|\\.)*")\s*[},\]]/g)];
     if (!pairs.length) return null;
-    j = { edits: pairs.map((p) => { try { return { find: JSON.parse(p[1]), replace: JSON.parse(p[2]) }; } catch { return null; } }).filter(Boolean) };
+    const str = (k: string) => { const m = new RegExp(`"${k}"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*")`).exec(text); try { return m ? JSON.parse(m[1]) : ""; } catch { return ""; } };
+    j = { edits: pairs.map((p) => { try { return { find: JSON.parse(p[1]), replace: JSON.parse(p[2]) }; } catch { return null; } }).filter(Boolean), css: str("css"), say: str("say") };
   }
   const seen = new Set<string>();
   const edits = (Array.isArray(j?.edits) ? j.edits : [])
