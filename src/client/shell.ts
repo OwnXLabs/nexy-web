@@ -774,7 +774,7 @@ function discardRecording(): void {
 
 // Hold to talk: the words appear in the message box while the user speaks; on letting go they stay
 // there to check and edit, and nothing is sent until Send (Enter). Redo (Esc) discards and listens again.
-let vphase: "idle" | "listen" | "finish" | "review" = "idle", vbase = "", live: Partials | null = null, pressAt = 0, vabort = false;
+let vphase: "idle" | "listen" | "finish" | "review" = "idle", vbase = "", live: Partials | null = null, pressAt = 0, upAt = 0, vabort = false;
 const QUICK_MS = 400, LIVE_EVERY = 1000, LIVE_WINDOW_S = 28;
 const vin = () => $<HTMLTextAreaElement>("#input");
 function setComposer(t: string): void {
@@ -875,7 +875,8 @@ function redoV(): void {
   vin()?.blur();
   void startV();
 }
-const releaseV = () => (performance.now() - pressAt < QUICK_MS ? cancelV() : void stopV());
+// judged by when the key or finger came up, not when the microphone finished starting
+const releaseV = (at = performance.now()) => (at - pressAt < QUICK_MS ? cancelV() : void stopV());
 
 const VM = { on: false, state: "idle" as "idle" | "listen" | "think" | "speak", audio: null as HTMLAudioElement | null };
 function vmState(st: typeof VM.state, label: string): void {
@@ -1066,7 +1067,7 @@ export function initShell(hooks: ShellHooks): void {
       if (listening) { if (!spaceHeld) void stopV(); return; } // started by a tap or Redo: Space ends it
       spaceHeld = true;
       pressAt = performance.now();
-      void startV().then((ok) => { if (ok && !spaceHeld) releaseV(); });
+      void startV().then((ok) => { if (ok && !spaceHeld) releaseV(upAt); });
       return;
     }
     if (e.key === "[") { e.preventDefault(); toggleRail(); }
@@ -1075,6 +1076,7 @@ export function initShell(hooks: ShellHooks): void {
   addEventListener("keyup", (e) => {
     if (e.code !== "Space" || !spaceHeld) return;
     spaceHeld = false;
+    upAt = performance.now();
     e.preventDefault();
     if (listening) releaseV();
   });
@@ -1088,11 +1090,12 @@ export function initShell(hooks: ShellHooks): void {
     mic.setPointerCapture(e.pointerId);
     micHeld = true;
     pressAt = performance.now();
-    void startV().then((ok) => { if (ok && !micHeld && performance.now() - pressAt >= QUICK_MS) void stopV(); });
+    void startV().then((ok) => { if (ok && !micHeld && upAt - pressAt >= QUICK_MS) void stopV(); });
   });
   const micUp = () => {
     if (!micHeld) return;
     micHeld = false;
+    upAt = performance.now();
     if (listening && performance.now() - pressAt >= QUICK_MS) void stopV(); // a quick tap keeps listening
   };
   mic?.addEventListener("pointerup", micUp);
