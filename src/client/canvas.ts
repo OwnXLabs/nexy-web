@@ -218,8 +218,14 @@ function wide(): void {
   pulse();
 }
 function fitNarrow(): void {
-  const c = pane();
-  if (c) c.classList.toggle("narrow", c.clientWidth < 520);
+  const c = pane(), h = c?.querySelector<HTMLElement>(".cvhead");
+  if (!c) return;
+  c.classList.toggle("narrow", c.clientWidth < 520);
+  // when the header's buttons do not fit beside the title, their words go, then Open: Close was cut off at the default width
+  const over = () => !!h && h.scrollWidth > h.clientWidth + 1;
+  c.classList.remove("tight", "tighter");
+  if (over()) c.classList.add("tight");
+  if (over()) c.classList.add("tighter");
 }
 export function full(on: boolean): void {
   pane()?.classList.toggle("full", on);
@@ -462,6 +468,7 @@ function paint(): void {
     };
   }
 
+  fitNarrow();
   const body = $("#cvBody");
   if (body) {
     body.innerHTML = "";

@@ -607,9 +607,9 @@ body[data-theme=win95] .composer{border-top-color:#808080}
 .vm-btn .i{width:20px;height:20px}
 .vmode.listening .vm-btn{background:#FF8C68;border-color:#FF8C68;color:#1a0c08;box-shadow:0 0 0 8px rgba(255,140,104,.2)}
 .vm-ctl .btn{background:rgba(0,0,0,.5)}
-.canvas.narrow .cvhead .acts .txt{display:none}
-.canvas.narrow #cvEdit{padding:0 8px}
-.canvas.narrow #cvOpenApp{display:none}
+.canvas.narrow .cvhead .acts .txt,.canvas.tight .cvhead .acts .btn:not(#cvOpenApp) .txt{display:none}
+.canvas.narrow #cvEdit,.canvas.tight #cvEdit{padding:0 8px}
+.canvas.narrow #cvOpenApp,.canvas.tighter #cvOpenApp{display:none}
 .frame iframe{transform-origin:top left}
 .frame.tall{overflow:hidden}
 body[data-theme=win95] .vmode{background:rgba(0,0,0,.35)}
