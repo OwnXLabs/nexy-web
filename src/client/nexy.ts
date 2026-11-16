@@ -29,6 +29,7 @@ import { initPrivate, guard, conversation as privateConversation, isPrivate, pri
 import { matchSocial, playSocial } from "./social";
 import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff } from "./place";
 import { renderGate } from "./build-gate";
+import { caps, gameBrief, taskOf, verdictFor, gateCard, warnsFor, WARN_NOTE, THIN } from "./capability";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, engineSlot, chatLastBuild, setChatLastBuild, type ExampleOpen } from "./shell";
 import { engineItems, initEngineChat, labelReply, renderEngineChip } from "./engine-chat";
 import { loadEngines, pickedEngine } from "./engines";
@@ -964,9 +965,6 @@ function failedReply(bub: Element, sentence: string, detail: string, retry: () =
 // On a computer the engine's builder writes the page: the server checks it is what was asked,
 // the browser runs it unseen, and a failed check gets one more try, then a plain no.
 const LOCAL_BUILD_MS = 90_000;
-// "a ping pong ball business" is a shop, not a game; no lookbehind, which Safari before 16.4 cannot parse
-const GAME_WORD = /\b(?:game|pong|snake|tetris|breakout|asteroids|platformer|arcade|flappy)\b/i;
-const gameBrief = (t: string) => GAME_WORD.test(t.replace(/\bping[\s-]pong\b/gi, " "));
 type LocalEnd = { type: "done"; html: string; title: string; secs: number } | { type: "failed"; error: string; check: boolean; secs: number };
 
 function followBuild(id: string, onStep: (text: string) => void): Promise<LocalEnd> {
@@ -1025,7 +1023,7 @@ async function playLocalMake(brief: string, again?: Again): Promise<void> {
       output.id = buildId;
       noteBuild({ brief, deliverable: "web_app", id: buildId, outcome: "done" });
       gen.replaceWith(output);
-      push("ai", `Done. It is ${ON_RIGHT} and it runs. Built on this computer in ${secs}s.`);
+      push("ai", g.thin ? esc(THIN) : `Done. It is ${ON_RIGHT} and it runs. Built on this computer in ${secs}s.`);
       window.dispatchEvent(new CustomEvent("nexy:files-changed"));
       saveChat();
       return;
@@ -2425,6 +2423,14 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
 
     const conn = connectIntent(text);
     const intent = retryOf(text, lastOfChat()) ?? classify(text);
+    // what this computer's model can't do is held back before it runs (src/client/capability.ts)
+    if (caps && !conn) {
+      const revises = !!(pickedFor(editablePage()?.id) && isOpen()) || revisesOpenPage(text, intent.kind);
+      const task = taskOf(intent, text, revises);
+      const v = verdictFor(caps, task);
+      if (v === "block") { pushBlock(gateCard(task, caps)); return; }
+      if (v === "warn" && warnsFor(task)) push("ai", esc(WARN_NOTE));
+    }
     if (intent.kind === "rebuild") {
       built = true;
       S.job = "build"; S.eta = { start: Date.now(), ms: typicalMs(intent.deliverable === "diagram" ? "diagram" : "site") };

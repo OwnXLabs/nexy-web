@@ -14,10 +14,22 @@ const PROBE = `<script>${STORAGE_SHIM}(function(){var E=[],B=[];function add(a,m
   `var a=r[i],b=r[j];if(!a.width||!b.width||els[i].contains(els[j])||els[j].contains(els[i]))continue;` +
   `var w=Math.min(a.right,b.right)-Math.max(a.left,b.left),h=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top);` +
   `if(w>4&&h>4&&w*h>0.3*Math.min(a.width*a.height,b.width*b.height))k++}return k}` +
-  `addEventListener("message",function(e){var q=e.data&&e.data.nexyGateAsk;if(!q)return;var b=document.body;` +
-  `parent.postMessage({nexyGate:q,errors:E,blocked:B,text:b?b.innerText.trim().length:0,drawn:document.querySelectorAll("canvas,svg,img,input,button,textarea,select").length,overlaps:overlaps()},"*")})})()</script>`;
+  // a canvas nothing was drawn on: every pixel the same (a WebGL one can't be read, so it counts as drawn)
+  `function blank(c){try{var x=c.getContext("2d");if(!x||!c.width||!c.height)return !x?false:true;var w=Math.min(c.width,800),h=Math.min(c.height,600),d=x.getImageData(0,0,w,h).data;` +
+  `for(var i=4;i<d.length;i+=4)if(d[i]!==d[0]||d[i+1]!==d[1]||d[i+2]!==d[2]||d[i+3]!==d[3])return false;return true}catch(_){return false}}` +
+  `function seen(){var b=document.body,c=[].slice.call(document.querySelectorAll("canvas"));` +
+  `return{text:b?b.innerText.trim().length:0,drawn:document.querySelectorAll("canvas,svg,img,input,button,textarea,select").length,` +
+  `shown:document.querySelectorAll("svg,img,input,button,textarea,select").length+c.filter(function(x){return !blank(x)}).length,canvases:c.length}}` +
+  // a game waiting for its start: one key press and a click, then look again
+  `function start(){["keydown","keyup"].forEach(function(t){[" ","Enter"].forEach(function(k){document.dispatchEvent(new KeyboardEvent(t,{key:k,code:k===" "?"Space":k,bubbles:true}))})});` +
+  `var t=document.querySelector("canvas,button");if(t)t.dispatchEvent(new MouseEvent("click",{bubbles:true,clientX:10,clientY:10}))}` +
+  `addEventListener("message",function(e){var q=e.data&&e.data.nexyGateAsk;if(!q)return;var s=seen();` +
+  `function send(s){s.nexyGate=q;s.errors=E;s.blocked=B;s.overlaps=overlaps();parent.postMessage(s,"*")}` +
+  `if(s.canvases&&!s.shown){try{start()}catch(_){}setTimeout(function(){send(seen())},700)}else send(s)})})()</script>`;
 
-export interface GateResult { ok: boolean; why: string; overlaps: number }
+// thin: it runs, but next to nothing shows (a heading alone, a game whose canvas stays blank after its start)
+export interface GateResult { ok: boolean; why: string; overlaps: number; thin?: boolean }
+const THIN_TEXT = 40;
 
 const SETTLE_MS = 2500, ANSWER_MS = 2000, LOAD_MS = 15_000;
 
@@ -53,7 +65,7 @@ export function renderGate(html: string): Promise<GateResult> {
       if (d.errors?.length) return finish({ ok: false, why: `it throws an error when it runs: ${String(d.errors[0]).slice(0, 160)}`, overlaps });
       // a small app is a heading and a few controls; nothing at all is the failure
       if (d.text < 3 && !d.drawn) return finish({ ok: false, why: "it shows nothing when it runs", overlaps });
-      finish({ ok: true, why: "", overlaps });
+      finish({ ok: true, why: "", overlaps, thin: d.text < THIN_TEXT && !d.shown });
     };
     addEventListener("message", onMsg);
     const noLoad = setTimeout(() => finish({ ok: false, why: "it did not finish loading", overlaps: 0 }), LOAD_MS);

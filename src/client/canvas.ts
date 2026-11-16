@@ -3,7 +3,7 @@ import { hasStudio } from "./place";
 import { pickFor } from "./pick";
 import { chatScope, visibleChat, inChat } from "./chat-scope";
 import type { ChatOutput } from "../lib/chat-output";
-import { htmlArtifact, gameArtifact, markdownArtifact } from "./content-view";
+import { htmlArtifact, gameArtifact, markdownArtifact, readable } from "./content-view";
 import { imageArtifact } from "./image-tools";
 import { sheetArtifact } from "./sheet-view";
 import { artifactFor } from "./artifacts";
@@ -311,7 +311,7 @@ export function generating(title: string, kind: ArtifactKind, label: string, typ
     };
     // the frame runs no scripts (half-written code must not run), so leave them out rather than
     // have every partial page log "Blocked script execution" into the console
-    f.srcdoc = liveHtml.replace(/<script\b[\s\S]*?(?:<\/script>|$)/gi, "");
+    f.srcdoc = readable(liveHtml).replace(/<script\b[\s\S]*?(?:<\/script>|$)/gi, "");
     box.append(f);
   };
   show({
