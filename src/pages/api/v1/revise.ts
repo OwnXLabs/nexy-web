@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { Busy, revise } from "../../../lib/revise";
+import { Busy, NoChange, revise } from "../../../lib/revise";
 
 export const prerender = false;
 
@@ -22,6 +22,7 @@ export const POST: APIRoute = async ({ request }) => {
     return json(r);
   } catch (e) {
     if (e instanceof Busy) return json({ error: e.message }, 429);
+    if (e instanceof NoChange) return json({ error: e.message }, 422);
     return json({ error: (e as Error).message }, 502);
   }
 };

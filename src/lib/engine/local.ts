@@ -1,5 +1,6 @@
 import type { ChatResult, ChatTurn, NexyEngine } from "./types";
 import { readCompletion } from "./sse";
+import { quietChat } from "../quiet.ts";
 
 const URL_ = (process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080").replace(/\/+$/, "");
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
@@ -18,18 +19,7 @@ export const localEngine: NexyEngine = {
       { role: "user", content: message },
     ];
 
-    const res = await fetch(`${URL_}/v1/chat/completions`, {
-      method: "POST",
-      signal: signal ?? AbortSignal.timeout(240_000),
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        messages,
-        max_tokens: MAX_TOKENS,
-        chat_template_kwargs: { enable_thinking: false },
-        stream: !!onText,
-      }),
-    });
+    const res = await quietChat(URL_, { model: MODEL, messages, max_tokens: MAX_TOKENS, stream: !!onText }, signal ?? AbortSignal.timeout(240_000));
 
     if (!res.ok) throw new Error(`llama-swap ${res.status}`);
     const { content, last } = await readCompletion(res, onText);

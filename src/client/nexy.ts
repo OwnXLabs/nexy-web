@@ -2259,10 +2259,19 @@ async function playRevise(text: string, priv: boolean, part?: Picked | null): Pr
     : text;
   const bub = holder.querySelector(".bub")!;
   try {
-    type Revised = { html?: string; say?: string; missed?: number; error?: string };
+    type Revised = { html?: string; say?: string; missed?: number; unmet?: string[]; error?: string };
     const d = await patient(() => api<Revised>("/api/v1/revise", { method: "POST", body: JSON.stringify({ html: page.source, instruction, kind: page.kind }) }),
       (n, secs, of) => status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`));
     if (!d.html || !applyRevision(page.id, d.html, "that change")) throw new Error("the page changed or closed while I was working, so I left it as it is");
+    // the model said it was done but what was asked is not on the page: say so, never "Done"
+    const left = (d.unmet ?? []).filter(Boolean);
+    if (left.length) {
+      const list = left.length === 1 ? left[0] : `${left.slice(0, -1).join(", ")} and ${left[left.length - 1]}`;
+      bub.innerHTML = `Only part of that worked: ${esc(list)} did not make it onto the page. Whatever did change is ${ON_RIGHT}; say “undo” to put it back. ` +
+        "Ask again, perhaps saying where on the page it should go.";
+      conversation(priv).push({ role: "user", content: text }, { role: "assistant", content: `I tried to change the page in the work pane, but ${list} did not make it onto the page.` });
+      return;
+    }
     const say = (d.say || "Changed it.").replace(/\.?$/, ".");
     bub.innerHTML = `Done — ${esc(say)} It is ${ON_RIGHT}; say “undo” to put it back.` +
       (d.missed ? `<div class="feednote" style="margin-top:6px">${d.missed} part${d.missed === 1 ? "" : "s"} of the change did not match the page and ${d.missed === 1 ? "was" : "were"} skipped.</div>` : "");

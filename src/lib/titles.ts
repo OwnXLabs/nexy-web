@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import { guardIdentity } from "./engine/identity-guard";
+import { answerOf, quietChat } from "./quiet.ts";
 
 const LLM = (process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080").replace(/\/+$/, "");
 const MODEL = process.env.NEXY_MODEL ?? "txt2txt";
@@ -12,16 +13,12 @@ const SYSTEM =
 
 // a short title from the local model, or null if it is busy or says nothing useful
 export async function shortTitle(text: string): Promise<string | null> {
-  const res = await fetch(`${LLM}/v1/chat/completions`, {
-    method: "POST", signal: AbortSignal.timeout(60_000), headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model: MODEL, max_tokens: 24, temperature: 0.2, chat_template_kwargs: { enable_thinking: false },
-      messages: [{ role: "system", content: SYSTEM }, { role: "user", content: text.slice(0, 1200) }],
-    }),
-  });
+  const res = await quietChat(LLM, {
+    model: MODEL, max_tokens: 24, temperature: 0.2,
+    messages: [{ role: "system", content: SYSTEM }, { role: "user", content: text.slice(0, 1200) }],
+  }, AbortSignal.timeout(60_000));
   if (!res.ok) return null;
-  const out = String((await res.json())?.choices?.[0]?.message?.content ?? "")
-    .replace(/<think>[\s\S]*?<\/think>/g, "").split("\n")[0].replace(/^["'“”\s]+|["'“”.\s]+$/g, "").trim();
+  const out = answerOf(await res.json()).split("\n")[0].replace(/^["'“”\s]+|["'“”.\s]+$/g, "").trim();
   // a title is shown in the sidebar: the same rule as a reply
   const safe = guardIdentity(out).reply;
   return safe && safe.length <= 48 && safe.split(/\s+/).length <= 7 ? safe : null;

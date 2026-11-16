@@ -1,5 +1,6 @@
 import type { Complete } from "./draft.ts";
 import { guardIdentity } from "../engine/identity-guard.ts";
+import { quietChat } from "../quiet.ts";
 
 const GATEWAY = process.env.NEXY_AGENT_URL ?? "";
 const GATEWAY_KEY = process.env.NEXY_AGENT_KEY ?? "";
@@ -20,14 +21,9 @@ export const complete: Complete = async ({ system, user, maxTokens }) => {
     max_tokens: Math.max(1024, maxTokens),
     stream: false,
   };
-  if (!GATEWAY) body.chat_template_kwargs = { enable_thinking: false };
-
-  const r = await fetch(`${base}/v1/chat/completions`, {
+  const r = !GATEWAY ? await quietChat(base, body, AbortSignal.timeout(240_000)) : await fetch(`${base}/v1/chat/completions`, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(GATEWAY && GATEWAY_KEY ? { authorization: `Bearer ${GATEWAY_KEY}` } : {}),
-    },
+    headers: { "content-type": "application/json", ...(GATEWAY_KEY ? { authorization: `Bearer ${GATEWAY_KEY}` } : {}) },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(240_000),
   });

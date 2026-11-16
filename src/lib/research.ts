@@ -1,3 +1,4 @@
+import { answerOf, quietChat } from "./quiet.ts";
 const SEARXNG = (process.env.NEXY_SEARXNG_URL ?? "").replace(/\/+$/, "");
 const LLM = (process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080").replace(/\/+$/, "");
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
@@ -66,21 +67,17 @@ If the request is about change over time (growth, expansion, trend, "last N mont
   let res: Response | null = null;
   const tries = Number(process.env.OWN_BUSY_TRIES ?? 20);
   for (let i = 0; i < tries; i++) {
-    res = await fetch(`${LLM}/v1/chat/completions`, {
-      method: "POST", signal: AbortSignal.timeout(180_000), headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL, max_tokens: 1200, temperature: 0.1,
-        chat_template_kwargs: { enable_thinking: false },
-        messages: [{ role: "system", content: system }, { role: "user", content: `Chart request: ${question}\n\nSnippets:\n${numbered}` }],
-      }),
-    });
+    res = await quietChat(LLM, {
+      model: MODEL, max_tokens: 1200, temperature: 0.1,
+      messages: [{ role: "system", content: system }, { role: "user", content: `Chart request: ${question}\n\nSnippets:\n${numbered}` }],
+    }, AbortSignal.timeout(180_000));
     if (res.status !== 429 && res.status !== 503) break;
     const after = Number(res.headers.get("retry-after")) * 1000;
     await new Promise((r) => setTimeout(r, after > 0 ? Math.min(after, 15_000) : 6_000));
   }
   if (!res || !res.ok) throw new Error(res?.status === 429 || res?.status === 503 ? "the model is busy with other requests; try again in a minute" : `model ${res?.status}`);
   const body = await res.json();
-  const text = String(body?.choices?.[0]?.message?.content ?? "{}");
+  const text = answerOf(body) || "{}";
   const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1) || "{}");
   return { title: String(json.title ?? ""), unit: "", kind: String(json.kind ?? "bar"), points: Array.isArray(json.points) ? json.points : [] };
 }
