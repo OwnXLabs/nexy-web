@@ -1,7 +1,7 @@
 // What this computer's model can do, from the desktop app (NEXY_CAPS, from the capability file it ships).
 // A job the model can't do here is held back before it runs: one plain card, and where it can run instead.
 import { routineAsk } from "../lib/routine-ask.ts";
-import { gameBrief, BUILD_REFUSED } from "../lib/caps.ts";
+import { gameBrief, buildKind, BUILD_REFUSED } from "../lib/caps.ts";
 import type { Intent } from "./intent";
 
 export type Task = "chat" | "research" | "summarise" | "routine" | "build_site" | "build_game" | "diagram" | "edit_page";
@@ -21,7 +21,7 @@ export function readCaps(raw: string | undefined | null): Caps | null {
 
 export const caps: Caps | null = typeof document === "undefined" ? null : readCaps(document.documentElement.dataset.caps);
 
-export { gameBrief };
+export { gameBrief, buildKind };
 const RESEARCH = /\b(?:research|compare|competitors?|look up|find out about)\b/i;
 const SUMMARISE = /\b(?:summari[sz]e|sum up|tl;?dr)\b/i;
 

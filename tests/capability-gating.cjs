@@ -1,7 +1,7 @@
 // What this computer's model can do (NEXY_CAPS from the desktop app's capability file) decides what
 // Nexy runs. A build on a chat-only model shows one plain card and never reaches the builder; a build
 // it can only do simply says so first; a page with no background of its own is readable; a build that
-// runs but shows next to nothing says it came out thin. The model is a stand-in. Run after `npm run build`:
+// does not work (no words, a blank or still game) is never called done, and a bare small app says it came out thin. The model is a stand-in. Run after `npm run build`:
 //   PLAYWRIGHT_MODULE=<path to playwright> node --test tests/capability-gating.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -18,11 +18,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // no background or colour of its own, as the tester's lakes page had
 const PAD = '<style>/* a page that sets only its font and spacing, never a background or a text colour */ h1{font-size:2em} p{line-height:1.4}</style>';
 const page = (title, body, script = '') => `<!doctype html><html><head><title>${title}</title>${PAD}</head><body>${body}<script>${script}</script></body></html>`;
-const LAKES = page('Fishing in Lithuanian Lakes', '<h1>Fishing in Lithuanian Lakes</h1><p>Lithuania has more than 2,800 lakes. Pike, perch and bream bite from spring to autumn.</p>');
+const LAKES = page('Fishing in Lithuanian Lakes', '<h1>Fishing in Lithuanian Lakes</h1><p>Lithuania has more than 2,800 lakes. Pike, perch and bream bite from spring to autumn.</p><p>Most lakes need a simple permit, bought online or at a post office. Boats can be hired at the larger lakes, and many have small wooden piers.</p>');
 const THIN = page('Lakes', '<h1>Fishing lakes</h1>');
 const BLANK_GAME = page('Snake', '<h1>Snake</h1><canvas id="c" width="300" height="200"></canvas>', 'addEventListener("keydown", function () {});');
-const GAME = page('Snake', '<h1>Snake</h1><canvas id="c" width="300" height="200"></canvas>',
-  'document.addEventListener("keydown", function () { var x = document.getElementById("c").getContext("2d"); x.fillStyle = "#0a0"; x.fillRect(10, 10, 40, 40); });');
 
 const tasks = (o) => JSON.stringify({ model: 'koiiLlama:latest', tier: 'cpu', tested: false, class: 'chat-only', cloud: null,
   tasks: { chat: 'allow', research: 'allow', summarise: 'allow', routine: 'block', build_site: 'block', build_game: 'block', diagram: 'block', edit_page: 'block', ...o } });
@@ -32,7 +30,7 @@ const FULL = tasks({ routine: 'allow', build_site: 'allow', build_game: 'allow',
 
 // the engine: its builder writes the page the brief picks; chat gets a short answer
 function engine(pick) {
-  const asked = [], chats = [], sessions = new Map();
+  const asked = [], chats = [], edits = [], sessions = new Map();
   const srv = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => { body += c; });
@@ -40,6 +38,18 @@ function engine(pick) {
       const authed = req.headers.authorization === `Bearer ${KEY}`;
       res.setHeader('content-type', 'application/json');
       if (req.url === '/health') return res.end(JSON.stringify(authed ? { ok: true, bots: ['nexy', 'builder'] } : { ok: true }));
+      // the model itself (NEXY_LLM_URL) takes no key. A page edit, answered as Ollama does: it ignores chat_template_kwargs and thinks until the
+      // budget runs out unless reasoning_effort is "none"; then, like a small model, it claims the
+      // hours and adds only a style
+      if (/You change an existing single-file HTML page/.test(body)) {
+        const b = JSON.parse(body), change = b.messages.at(-1).content.split('The change: ').pop();
+        edits.push(b);
+        if (b.reasoning_effort !== 'none') return res.end(JSON.stringify({ choices: [{ finish_reason: 'length', message: { content: '', reasoning: 'Let me think. '.repeat(400) } }] }));
+        const plan = /hours/.test(change)
+          ? { edits: [], css: 'body{background:#0b1a3a !important} section#hours{padding:24px}', say: 'Changed the background and added the opening hours section.' }
+          : { edits: [], css: 'body{background:#0b1a3a !important;color:#f5efe6 !important}', say: 'Made the background dark navy.' };
+        return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(plan) } }] }));
+      }
       if (!authed) { res.statusCode = 401; return res.end('{"error":"missing or wrong key"}'); }
       const m = /^\/p\/builder\/api\/sessions\/([^/]+)\/messages/.exec(req.url);
       if (m) {
@@ -68,7 +78,7 @@ function engine(pick) {
       res.end(JSON.stringify({ choices: [{ message: { content: 'Pike and perch, mostly.' }, finish_reason: 'stop' }] }));
     });
   });
-  return new Promise((r) => srv.listen(0, '127.0.0.1', () => r({ srv, asked, chats, url: `http://127.0.0.1:${srv.address().port}` })));
+  return new Promise((r) => srv.listen(0, '127.0.0.1', () => r({ srv, asked, chats, edits, url: `http://127.0.0.1:${srv.address().port}` })));
 }
 
 async function start(env) {
@@ -194,23 +204,72 @@ test('a page with no background of its own is readable in the work pane', async 
   } finally { await b.close(); s.p.kill(); e.srv.close(); }
 });
 
-test('a build that runs but shows next to nothing says it came out thin', async () => {
-  const e = await engine((prompt) => /snake/i.test(prompt) ? (/drawn/.test(prompt) ? GAME : BLANK_GAME) : THIN);
+// what a tester saw: a black screen with one button that does nothing
+const BLACK_GAME = page('Street Fighter', '<style>body{background:#000;margin:0}</style><button>Start</button><canvas id="c" width="800" height="500"></canvas>',
+  'var x = document.getElementById("c").getContext("2d"); x.fillStyle = "#000"; x.fillRect(0, 0, 800, 500);');
+// a game that plays: a loop redraws the arena and a player the arrow keys move
+const PLAYS = page('Street Fighter', '<style>body{background:#000;margin:0}</style><canvas id="c" width="800" height="500"></canvas>',
+  'var c = document.getElementById("c"), x = c.getContext("2d"), p = 100, t = 0, keys = {};' +
+  'addEventListener("keydown", function (e) { keys[e.key] = true; }); addEventListener("keyup", function (e) { keys[e.key] = false; });' +
+  'function loop() { t++; if (keys.ArrowRight) p += 6; if (keys.ArrowLeft) p -= 6;' +
+  ' x.fillStyle = "#123"; x.fillRect(0, 0, 800, 500); x.fillStyle = "#2a5"; x.fillRect(0, 420, 800, 80);' +
+  ' x.fillStyle = "#e33"; x.fillRect(p, 300 + Math.sin(t / 5) * 4, 60, 120); x.fillStyle = "#39f"; x.fillRect(600, 300, 60, 120);' +
+  ' x.fillStyle = "#fd0"; x.fillRect(20, 20, 300, 24); x.fillRect(480, 20, 300, 24); requestAnimationFrame(loop); } loop();');
+const TIMER = page('Timer', '<h1>Timer</h1>');
+
+test('a build that does not work is never called done: a website with no words, a blank game, a black screen; a small app that shows little says it came out thin', async () => {
+  const e = await engine((prompt) => /timer/i.test(prompt) ? TIMER : /street fighter/i.test(prompt) ? (/that plays/.test(prompt) ? PLAYS : BLACK_GAME) : /snake/i.test(prompt) ? BLANK_GAME : THIN);
   const s = await local(e, FULL);
   const b = await chromium.launch();
   try {
     const pg = await b.newPage({ viewport: { width: 1400, height: 900 } });
     await pg.goto(s.base + '/');
     await pg.locator('#input').waitFor({ timeout: 20000 });
-    const thin = 'It ran, but came out very thin. This computer’s AI is too small for this.';
+    const broken = pg.getByText(/^It did not come out working/);
     await ask(pg, 'build me a website about fishing lakes');
-    await pg.getByText(thin).waitFor({ timeout: 30000 });
+    await broken.waitFor({ timeout: 40000 });
+    assert.match(await broken.innerText(), /the website has almost no words on it/);
+    // the second try is told what was wrong
+    assert.equal(e.asked.length, 2);
+    assert.match(e.asked[1], /almost no words on it: \d+ characters/);
+    await broken.locator('[data-retry]').waitFor();
     await ask(pg, 'build me a snake game');
-    await pg.getByText(thin).nth(1).waitFor({ timeout: 30000 });
+    await broken.nth(1).waitFor({ timeout: 40000 });
+    assert.match(await broken.nth(1).innerText(), /the game opens on a blank screen/);
+    await ask(pg, 'make a street fighter game');
+    await broken.nth(2).waitFor({ timeout: 50000 });
+    assert.match(await broken.nth(2).innerText(), /the game (?:opens on a blank screen|shows almost nothing to play)/);
     assert.equal(await pg.getByText(/Done\. It is on the right/).count(), 0);
-    // a game that draws once it is started is not thin
-    await ask(pg, 'build me a snake game that is drawn');
+    for (let i = 0; i < 3; i++) assert.equal(await broken.nth(i).locator('[data-retry]').count(), 1);
+    // a game that draws, moves and answers the keys is done
+    await ask(pg, 'make a street fighter game that plays');
+    await pg.getByText(/Done\. It is on the right/).waitFor({ timeout: 40000 });
+    // a small app is a heading and a few controls; with only a heading it says it came out thin
+    await ask(pg, 'build me a timer app');
+    await pg.getByText('It ran, but came out very thin. This computer’s AI is too small for this.').waitFor({ timeout: 30000 });
+    assert.equal(await pg.getByText(/Done\. It is on the right/).count(), 1);
+  } finally { await b.close(); s.p.kill(); e.srv.close(); }
+});
+
+test('changing a built page: thinking is off, and a change that did not land is said plainly, never "Done"', async () => {
+  const e = await engine(() => LAKES);
+  const s = await local(e, FULL);
+  const b = await chromium.launch();
+  try {
+    const pg = await b.newPage({ viewport: { width: 1400, height: 900 } });
+    await pg.goto(s.base + '/');
+    await pg.locator('#input').waitFor({ timeout: 20000 });
+    await ask(pg, 'Build me a website for fishing in Lithuanian lakes');
     await pg.getByText(/Done\. It is on the right/).waitFor({ timeout: 30000 });
-    assert.equal(await pg.getByText(thin).count(), 2);
+    await ask(pg, 'Make the background dark navy and add a section with our opening hours: Monday to Friday, 7am to 6pm.');
+    const part = pg.getByText(/^Only part of that worked/);
+    await part.waitFor({ timeout: 30000 });
+    assert.match(await part.innerText(), /7am, 6pm, Monday and Friday did not make it onto the page/);
+    assert.equal(e.edits.length, 1);
+    assert.equal(e.edits[0].reasoning_effort, 'none');
+    assert.equal(await pg.getByText(/^Done — /).count(), 0);
+    // a change of look only: done
+    await ask(pg, 'make the background dark navy');
+    await pg.getByText(/^Done — Made the background dark navy\./).waitFor({ timeout: 30000 });
   } finally { await b.close(); s.p.kill(); e.srv.close(); }
 });

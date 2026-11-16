@@ -18,7 +18,8 @@ const BRIEF = 'Build a simple landing website for a game developer called Pixel 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const page = (body, script = '') => `<!doctype html><html><head><title>Pixel Forge</title><style>body{font-family:sans-serif;margin:0 auto;max-width:720px}</style></head><body>${body}<script>${script}</script></body></html>`;
 const BROKEN = page('<h1>Pixel Forge</h1><p>Indie games made with care, from our small studio by the sea.</p><a href="#games">Our games</a>', 'var games;\ndocument.title = games.length;');
-const FIXED = page('<h1>Pixel Forge</h1><p>Indie games made with care, from our small studio by the sea.</p><a href="#games">Our games</a>');
+// a website is shown only with real words on it (200 characters or more)
+const FIXED = page('<h1>Pixel Forge</h1><p>Indie games made with care, from our small studio by the sea.</p><p>We are three people who make small, kind games for phones and computers, and we answer every message ourselves. Our newest game comes out in the spring.</p><a href="#games">Our games</a>');
 
 const EXCERPT_ERROR = "Uncaught TypeError: Cannot read properties of undefined (reading 'length') (line 214: `const n = obstacles.length;`)";
 // Own Build: the first build throws when it runs (or, with firstError, fails its own run check), the rebuild does not

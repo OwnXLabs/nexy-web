@@ -29,7 +29,7 @@ import { initPrivate, guard, conversation as privateConversation, isPrivate, pri
 import { matchSocial, playSocial } from "./social";
 import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff } from "./place";
 import { renderGate } from "./build-gate";
-import { caps, gameBrief, taskOf, verdictFor, gateCard, warnsFor, WARN_NOTE, THIN } from "./capability";
+import { caps, gameBrief, buildKind, taskOf, verdictFor, gateCard, warnsFor, WARN_NOTE, THIN } from "./capability";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, engineSlot, chatLastBuild, setChatLastBuild, type ExampleOpen } from "./shell";
 import { engineItems, initEngineChat, labelReply, renderEngineChip } from "./engine-chat";
 import { loadEngines, pickedEngine } from "./engines";
@@ -1001,7 +1001,8 @@ async function playLocalMake(brief: string, again?: Again): Promise<void> {
   const gen = generating(titleFor(brief), game ? "game" : "html", "Writing it on this computer", LOCAL_BUILD_MS);
   status(holder, "Starting…", LOCAL_BUILD_MS);
   const t0 = Date.now();
-  let fix = again?.error ?? "", why = "", checked = false, buildId = "";
+  // idle: the last version ran cleanly but did not work (no words, a blank or still game)
+  let fix = again?.error ?? "", why = "", checked = false, idle = false, buildId = "";
   try {
     for (let attempt = 1; attempt <= 2; attempt++) {
       if (attempt === 2) { status(holder, "That version did not pass my checks. Trying once more…"); gen.live("Trying once more"); }
@@ -1012,11 +1013,11 @@ async function playLocalMake(brief: string, again?: Again): Promise<void> {
       buildId = `build:local-${started.id}`;
       const r = await followBuild(started.id, (t) => { status(holder, `${t}…`); gen.live(t); });
       const failed = (error: string) => logBuildFailure({ build: buildId, kind: game ? "game" : "web_app", brief, ms: Date.now() - t0, error, builder: "engine" });
-      if (r.type === "failed") { why = r.error; checked ||= r.check; fix = r.check ? r.error : ""; failed(r.error); continue; }
+      if (r.type === "failed") { why = r.error; checked ||= r.check; idle = false; fix = r.check ? r.error : ""; failed(r.error); continue; }
       status(holder, "Running it to check it works…");
       gen.live("Running it to check it works");
-      const g = await renderGate(r.html);
-      if (!g.ok) { why = fix = g.why; checked = true; failed(g.why); continue; }
+      const g = await renderGate(r.html, buildKind(brief));
+      if (!g.ok) { why = fix = g.why; checked = true; idle = !!g.idle; failed(g.why); continue; }
       const secs = Math.round((Date.now() - t0) / 1000);
       const made = { title: (r.title || titleFor(brief)).replace(/\s+/g, " ").trim().slice(0, 48) || "Your build", meta: `Built on this computer · ${secs}s`, html: r.html };
       const output = game ? gameArtifact(made) : htmlArtifact({ ...made, url: siteHost });
@@ -1033,7 +1034,9 @@ async function playLocalMake(brief: string, again?: Again): Promise<void> {
     const detail = plainError(errText(e));
     noteBuild({ brief, deliverable: "web_app", ...(buildId ? { id: buildId } : {}), outcome: "failed", error: (why || detail).slice(0, ERROR_MAX) });
     gen.fail("It did not work this time");
-    failedReply(holder.querySelector(".bub")!, checked
+    failedReply(holder.querySelector(".bub")!, idle
+      ? `It did not come out working: ${esc(why.split(/[:;]/)[0])}. I tried twice and kept both versions back rather than show you something broken. Try again, or describe it a little differently; this computer’s AI may be too small for it.`
+      : checked
       ? "I could not build that well enough to show you. I tried twice and neither version passed my checks, so I kept them back. Try again, or describe it a little differently."
       : "I could not build that: the builder on this computer did not finish. It usually works on a second try.",
       detail, () => void playLocalMake(brief, again));

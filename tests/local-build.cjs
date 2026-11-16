@@ -18,9 +18,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const page = (title, body, script = '') =>
   `<!doctype html><html><head><title>${title}</title><style>body{font-family:sans-serif}</style></head><body>${body}<script>${script}</script></body></html>`;
 
-const FLOWERS = page('Petal &amp; Stem', '<h1>Petal &amp; Stem</h1><p>Fresh flowers and bouquets, arranged by hand every morning.</p>');
-const BAKERY = page('Crumb &amp; Co', '<h1>Crumb &amp; Co</h1><p>Sourdough bread and pastries from our bakery oven.</p>');
-const GENERIC = page('Nexus', '<h1>Trusted by forward-thinking teams</h1><p>CTO, Nexus Dynamics</p>');
+// a website is shown only with real words on it (200 characters or more)
+const WORDS = '<h2>Visit</h2><p>Open every day from early morning. Come in, look around and ask us anything; we are always happy to help you choose. Orders can be collected at the counter or sent across town the same day.</p>';
+const FLOWERS = page('Petal &amp; Stem', '<h1>Petal &amp; Stem</h1><p>Fresh flowers and bouquets, arranged by hand every morning.</p>' + WORDS);
+const BAKERY = page('Crumb &amp; Co', '<h1>Crumb &amp; Co</h1><p>Sourdough bread and pastries from our bakery oven.</p>' + WORDS);
+const GENERIC = page('Nexus', '<h1>Trusted by forward-thinking teams</h1><p>CTO, Nexus Dynamics</p>' + WORDS);
 const THROWS = page('Todo', '<h1>Todo</h1><input id="t"><ul></ul>', 'document.querySelector("#missing").addEventListener("click", function(){})');
 const CALLS_OUT = page('Pricing', '<h1>Pricing</h1><p>Basic $9, Pro $29, Team $79</p>', 'fetch("https://example.com/prices.json").then(function(){}, function(){})');
 
