@@ -59,10 +59,10 @@ export function parsePlan(raw: string): Plan | null {
   const start = text.indexOf("{"), end = text.lastIndexOf("}");
   let j: any = null;
   if (start >= 0 && end > start) { try { j = JSON.parse(text.slice(start, end + 1)); } catch { j = null; } }
-  // A reply cut off at the length limit (the model sometimes repeats an edit until it runs out):
-  // keep every complete edit rather than discarding the lot.
+  // A reply cut off at the length limit (the model sometimes repeats an edit until it runs out),
+  // or an edit left unclosed before "css" (qwen3:8b, 2026-11-17): keep every complete edit.
   if (!j) {
-    const pairs = [...text.matchAll(/\{\s*"find"\s*:\s*("(?:[^"\\]|\\.)*")\s*,\s*"replace"\s*:\s*("(?:[^"\\]|\\.)*")\s*\}/g)];
+    const pairs = [...text.matchAll(/\{\s*"find"\s*:\s*("(?:[^"\\]|\\.)*")\s*,\s*"replace"\s*:\s*("(?:[^"\\]|\\.)*")\s*[},]/g)];
     if (!pairs.length) return null;
     j = { edits: pairs.map((p) => { try { return { find: JSON.parse(p[1]), replace: JSON.parse(p[2]) }; } catch { return null; } }).filter(Boolean) };
   }
@@ -149,6 +149,8 @@ const ADDS_WORDS = /\b(?:add(?:s|ed|ing)?|insert(?:s|ed)?|include[sd]?|put|write
 // words from the request (times, days, quoted text, prices, an email or phone number), and
 // new text at all when the request or the model's own summary says words were added. Small
 // models often say "added opening hours" and add only a style rule (capability test, 2026-11-17).
+// in unmet(): the change left the text almost the colour of its new background
+export const UNREADABLE = "readable text";
 export function unmet(before: string, after: string, change: string, say = ""): string[] {
   const was = visibleText(before), now = visibleText(after);
   const has = (page: string, x: string) => page.includes(x);
@@ -165,7 +167,59 @@ export function unmet(before: string, after: string, change: string, say = ""): 
     want(x, low(was).includes(low(x)), low(now).includes(low(x)));
   }
   if (!missing.length && was === now && (ADDS_WORDS.test(change) || ADDS_WORDS.test(say))) missing.push("the new text");
+  // a change that gives other text a colour that reads (header,p{color:#cde8f5}) is not judged by the body's colours
+  if (reads(before) !== false && reads(after) === false && !newColourReads(before, after)) missing.push(UNREADABLE);
   return missing.slice(0, 6);
+}
+
+// The page's own text colour and background, as its body rules leave them (a later rule wins,
+// !important over plain), and whether they read: contrast 2 or more. Unknown is null.
+// qwen3:1.7b set black text on a near-black page and Nexy said "Done" (2026-11-17).
+const NAMED: Record<string, string> = { black: "#000000", white: "#ffffff", navy: "#000080", darkblue: "#00008b", midnightblue: "#191970" };
+function rgb(v: string): number[] | null {
+  const c = (NAMED[v.toLowerCase()] ?? v).match(/^#([0-9a-f]{3}|[0-9a-f]{6})\b/i)?.[1];
+  if (!c) return null;
+  const h = c.length === 3 ? [...c].map((x) => x + x).join("") : c;
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+}
+function bodyColours(html: string): { fg: number[] | null; bg: number[] | null } {
+  const css = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n");
+  const decls: string[] = [];
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) if (m[1].split(",").some((x) => /^\s*(?:html\s+)?body\s*$/i.test(x))) decls.push(m[2]);
+  const inline = /<body\b[^>]*\bstyle\s*=\s*["']([^"']*)["']/i.exec(html)?.[1];
+  if (inline) decls.push(inline.replace(/;?\s*$/, " !important"));
+  const pick = (re: RegExp) => {
+    let plain: number[] | null = null, strong: number[] | null = null;
+    for (const d of decls) for (const m of d.matchAll(re)) {
+      const v = rgb(m[1].trim().split(/\s+/).find((w) => rgb(w)) ?? "");
+      if (v) { if (/!important/.test(m[0])) strong = v; else plain = v; }
+    }
+    return strong ?? plain;
+  };
+  return { fg: pick(/(?:^|;)\s*color\s*:\s*([^;]+)/gi), bg: pick(/(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/gi) };
+}
+// text colours set on the page's running text, as written
+function textColours(html: string): string[] {
+  const css = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n");
+  const out: string[] = [];
+  // the page's running text: not the body itself, and not only headings, links, buttons or the footer
+  const prose = (sel: string) => sel.split(",").some((x) => { const last = x.trim().split(/[\s>+~]+/).pop() ?? ""; return !!last && !/^(?:html|body|h[1-6]|a|button|footer|nav|label|strong|em|b|i)(?:[:.#\[]|$)/i.test(last); });
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) if (prose(m[1])) for (const c of m[2].matchAll(/(?:^|;)\s*color\s*:\s*([^;!]+)/gi)) out.push(c[1].trim().toLowerCase());
+  for (const m of html.matchAll(/<(?!body\b|h[1-6]\b|a\b|footer\b|button\b)[a-z][^>]*\bstyle\s*=\s*["']([^"']*)["']/gi)) for (const c of m[1].matchAll(/(?:^|;)\s*color\s*:\s*([^;!]+)/gi)) out.push(c[1].trim().toLowerCase());
+  return out;
+}
+function newColourReads(before: string, after: string): boolean {
+  const bg = bodyColours(after).bg, had = new Set(textColours(before));
+  return !!bg && textColours(after).some((c) => !had.has(c) && !!rgb(c) && contrast(rgb(c)!, bg) >= 2);
+}
+const contrast = (x: number[], y: number[]) => {
+  const lum = (c: number[]) => { const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const [a, b] = [lum(x), lum(y)].sort((p, q) => q - p);
+  return (a + 0.05) / (b + 0.05);
+};
+function reads(html: string): boolean | null {
+  const { fg, bg } = bodyColours(html);
+  return fg && bg ? contrast(fg, bg) >= 2 : null;
 }
 
 export class Busy extends Error {}

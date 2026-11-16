@@ -2267,12 +2267,17 @@ async function playRevise(text: string, priv: boolean, part?: Picked | null): Pr
       (n, secs, of) => status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`));
     if (!d.html || !applyRevision(page.id, d.html, "that change")) throw new Error("the page changed or closed while I was working, so I left it as it is");
     // the model said it was done but what was asked is not on the page: say so, never "Done"
-    const left = (d.unmet ?? []).filter(Boolean);
-    if (left.length) {
-      const list = left.length === 1 ? left[0] : `${left.slice(0, -1).join(", ")} and ${left[left.length - 1]}`;
-      bub.innerHTML = `Only part of that worked: ${esc(list)} did not make it onto the page. Whatever did change is ${ON_RIGHT}; say “undo” to put it back. ` +
-        "Ask again, perhaps saying where on the page it should go.";
-      conversation(priv).push({ role: "user", content: text }, { role: "assistant", content: `I tried to change the page in the work pane, but ${list} did not make it onto the page.` });
+    // "readable text" (src/lib/revise.ts UNREADABLE): the words are now the colour of the background
+    const all = (d.unmet ?? []).filter(Boolean), dim = all.includes("readable text"), left = all.filter((x) => x !== "readable text");
+    if (all.length) {
+      const list = left.length <= 1 ? left[0] ?? "" : `${left.slice(0, -1).join(", ")} and ${left[left.length - 1]}`;
+      const said = [
+        list && `${list} did not make it onto the page`,
+        dim && "the words are now almost the colour of the background, so the page is hard to read",
+      ].filter(Boolean).join(", and ");
+      bub.innerHTML = `Only part of that worked: ${esc(said)}. Whatever did change is ${ON_RIGHT}; say “undo” to put it back. ` +
+        (list ? "Ask again, perhaps saying where on the page it should go." : "Ask again, perhaps naming the text colour too.");
+      conversation(priv).push({ role: "user", content: text }, { role: "assistant", content: `I tried to change the page in the work pane, but ${said}.` });
       return;
     }
     const say = (d.say || "Changed it.").replace(/\.?$/, ".");

@@ -83,9 +83,18 @@ test("a part picked on the page: only the words after 'The change:' are looked f
   assert.deepEqual((await revise(PAGE, wrapped)).unmet, []);
 });
 
+test("an edit left unclosed before css, with the css repeated to the limit: the edit is kept, the missing hours reported", async () => {
+  mode = "ollama";
+  answer = '{"edits":[{"find":"background:#fffaf2;color:#3b2a1a","replace":"background:#0b1a3a;color:#f5efe6","css":"' + "section{padding:24px}".repeat(150);
+  const r = await revise(PAGE, CHANGE);
+  assert.equal(r.applied, 1);
+  assert.match(r.html, /background:#0b1a3a;color:#f5efe6/);
+  assert.deepEqual(r.unmet, ["7am", "6pm", "Monday", "Friday"]);
+});
+
 test("what counts as missing, on known-good and known-broken changes", () => {
   const withHours = (p: string) => PAGE.replace("<footer>", `<section><h2>Opening hours</h2><p>${p}</p></section><footer>`);
-  const navy = PAGE.replace("#fffaf2", "#0b1a3a");
+  const navy = PAGE.replace("background:#fffaf2;color:#3b2a1a", "background:#0b1a3a;color:#f5efe6");
   // known-good: the hours are there, however they are written
   assert.deepEqual(unmet(PAGE, withHours("Monday to Friday, 7am to 6pm"), CHANGE), []);
   assert.deepEqual(unmet(PAGE, withHours("Mon–Fri: 7:00 AM – 6:00 PM"), CHANGE), []);
@@ -93,6 +102,15 @@ test("what counts as missing, on known-good and known-broken changes", () => {
   // known-broken: only the colour changed
   assert.deepEqual(unmet(PAGE, navy, CHANGE), ["7am", "6pm", "Monday", "Friday"]);
   assert.deepEqual(unmet(PAGE, withHours("Monday to Friday"), CHANGE), ["7am", "6pm"]);
+  // the words arrived, but the text is now the colour of the new background (qwen3:1.7b, 2026-11-17)
+  const dark = withHours("Monday to Friday, 7am to 6pm").replace("background:#fffaf2;color:#3b2a1a", "background:#0a0a0a;color:#000000");
+  assert.deepEqual(unmet(PAGE, dark, CHANGE), ["readable text"]);
+  assert.deepEqual(unmet(PAGE, dark.replace("</head>", "<style>body{color:#f5efe6 !important}</style></head>"), CHANGE), []);
+  assert.deepEqual(unmet(PAGE, PAGE.replace("<body>", '<body style="background-color: #03055b; color: #03055b">'), "make the background navy"), ["readable text"]);
+  // a heading colour that reads does not make the paragraphs readable; a paragraph colour that reads does
+  const brown = PAGE.replace("background:#fffaf2;color:#3b2a1a", "background:#0a0a0a;color:#3b2a1a");
+  assert.deepEqual(unmet(PAGE, brown.replace("</head>", "<style>h1{color:#a4441f}footer{color:#6b5440}</style></head>"), "make the background black"), ["readable text"]);
+  assert.deepEqual(unmet(PAGE, brown.replace("</head>", "<style>header,p{color:#cde8f5}</style></head>"), "make the background black"), []);
   // a change of look only asks for no new words
   assert.deepEqual(unmet(PAGE, navy, "Make the background dark navy", "Changed the background to dark navy."), []);
   assert.deepEqual(unmet(PAGE, PAGE.replace("</style>", "button{box-shadow:0 2px 4px #0003}</style>"), "add a shadow to the buttons", "Added a shadow to the buttons."), []);
