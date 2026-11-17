@@ -59,7 +59,7 @@ export function parsePlan(raw: string): Plan | null {
   let j: any = null;
   if (start >= 0 && end > start) { try { j = JSON.parse(text.slice(start, end + 1)); } catch { j = null; } }
   // A reply cut off at the length limit (the model sometimes repeats an edit until it runs out),
-  // or an edit left unclosed before "css" (qwen3:8b, 2026-11-17): keep every complete edit.
+  // or an edit left unclosed before "css" (qwen3:8b): keep every complete edit.
   if (!j) {
     // or an edit opened with "[" (qwen3:8b: ],["find":…}); the css and say strings are kept too
     const pairs = [...text.matchAll(/[{[]\s*"find"\s*:\s*("(?:[^"\\]|\\.)*")\s*,\s*"replace"\s*:\s*("(?:[^"\\]|\\.)*")\s*[},\]]/g)];
@@ -149,7 +149,7 @@ const ADDS_WORDS = /\b(?:add(?:s|ed|ing)?|insert(?:s|ed)?|include[sd]?|put|write
 // What the person asked to see on the page that is not on it after the change: concrete
 // words from the request (times, days, quoted text, prices, an email or phone number), and
 // new text at all when the request or the model's own summary says words were added. Small
-// models often say "added opening hours" and add only a style rule (capability test, 2026-11-17).
+// models often say "added opening hours" and add only a style rule.
 // in unmet(): the change left the text almost the colour of its new background
 export const UNREADABLE = "readable text";
 export function unmet(before: string, after: string, change: string, say = ""): string[] {
@@ -175,7 +175,7 @@ export function unmet(before: string, after: string, change: string, say = ""): 
 
 // The page's own text colour and background, as its body rules leave them (a later rule wins,
 // !important over plain), and whether they read: contrast 2 or more. Unknown is null.
-// qwen3:1.7b set black text on a near-black page and Nexy said "Done" (2026-11-17).
+// qwen3:1.7b set black text on a near-black page and Nexy said "Done".
 const NAMED: Record<string, string> = { black: "#000000", white: "#ffffff", navy: "#000080", darkblue: "#00008b", midnightblue: "#191970" };
 function rgb(v: string): number[] | null {
   const c = (NAMED[v.toLowerCase()] ?? v).match(/^#([0-9a-f]{3}|[0-9a-f]{6})\b/i)?.[1];

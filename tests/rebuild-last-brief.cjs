@@ -1,6 +1,6 @@
 // "build again" after a build that failed its run check: Nexy reruns the original brief, the
-// same kind, and tells the builder the error; it never builds a page called "again" (demo,
-// 2026-11-13). The failure goes in Nexy's turn log with the brief's length, never its text.
+// same kind, and tells the builder the error; it never builds a page called "again".
+// The failure goes in Nexy's turn log with the brief's length, never its text.
 // Own Build and the engine's builder are stand-ins. Run after `npm run build`:
 //   PLAYWRIGHT_MODULE=<path to playwright> node --test tests/rebuild-last-brief.cjs
 const test = require('node:test');

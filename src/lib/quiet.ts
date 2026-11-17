@@ -1,7 +1,7 @@
 // A short job for the local model, with thinking off on every server Nexy meets: llama-server
 // reads chat_template_kwargs; Ollama's OpenAI endpoint ignores that and reads reasoning_effort
 // "none". With neither, a qwen3 model spent all of a 1500-token edit on thinking and wrote no
-// change (capability test, 2026-11-17). A server that refuses the field is asked again without it.
+// change. A server that refuses the field is asked again without it.
 export const QUIET = { chat_template_kwargs: { enable_thinking: false }, reasoning_effort: "none" } as const;
 
 export async function quietChat(base: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {

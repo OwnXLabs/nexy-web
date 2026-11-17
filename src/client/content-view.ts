@@ -24,7 +24,7 @@ const PROBE =
   `addEventListener("error",function(e){r((e.message||e.error)+(e.lineno?" (line "+e.lineno+(e.colno?":"+e.colno:"")+")":""))});` +
   `addEventListener("unhandledrejection",function(e){r(e.reason&&e.reason.message||e.reason)})})()</script>`;
 // A page with no background of its own showed the app's dark background through the frame, under
-// black text (tester's PC, 2026-11-16). First in the head, so the page's own styles still win.
+// black text. First in the head, so the page's own styles still win.
 const READABLE = "<style>html{background:#fff;color:#111}</style>";
 function atHead(html: string, head: string): string {
   for (const re of [/<head[^>]*>/i, /<html[^>]*>/i, /<!doctype[^>]*>/i]) {

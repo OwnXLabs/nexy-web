@@ -113,7 +113,7 @@ test("what counts as missing, on known-good and known-broken changes", () => {
   // known-broken: only the colour changed
   assert.deepEqual(unmet(PAGE, navy, CHANGE), ["7am", "6pm", "Monday", "Friday"]);
   assert.deepEqual(unmet(PAGE, withHours("Monday to Friday"), CHANGE), ["7am", "6pm"]);
-  // the words arrived, but the text is now the colour of the new background (qwen3:1.7b, 2026-11-17)
+  // the words arrived, but the text is now the colour of the new background (qwen3:1.7b)
   const dark = withHours("Monday to Friday, 7am to 6pm").replace("background:#fffaf2;color:#3b2a1a", "background:#0a0a0a;color:#000000");
   assert.deepEqual(unmet(PAGE, dark, CHANGE), ["readable text"]);
   assert.deepEqual(unmet(PAGE, dark.replace("</head>", "<style>body{color:#f5efe6 !important}</style></head>"), CHANGE), []);

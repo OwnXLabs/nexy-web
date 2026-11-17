@@ -1,5 +1,5 @@
 // "build again" right after a build reruns that build's brief, told what went wrong; never a
-// new build of the word "again" (demo, 2026-11-13).
+// new build of the word "again".
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clientModule } from "./client-module.ts";

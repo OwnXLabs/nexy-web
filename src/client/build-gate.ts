@@ -1,7 +1,7 @@
 // Before a page built on this computer is shown: run it unseen in the same sandbox the canvas
 // uses and refuse it if it reaches for the network, logs an error, freezes, or does not work:
 // a website with next to no words, a game that stays blank, never moves or ignores the keys.
-// The capability test grades builds from screenshots the same way (2026-11-17: the old check,
+// The capability test grades builds from screenshots the same way (the old check,
 // "some text or any button", passed 49 of 78 builds and 38 of those did not work).
 import { STORAGE_SHIM } from "./content-view";
 
