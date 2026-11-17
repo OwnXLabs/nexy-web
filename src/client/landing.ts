@@ -66,6 +66,30 @@ function paintChip(): void {
   $<HTMLElement>(".dlbar i", c)!.style.width = `${model.progress ?? 0}%`;
 }
 
+// ---- web search installing in the background (a computer's first start) ----
+// Shown with its progress until it is ready: never an offer to download it, which would start a
+// second install of the one already running.
+async function pollSearch(): Promise<void> {
+  let st: { state?: string; progress?: number } = {};
+  try {
+    const r = await fetch("/api/v1/search-status");
+    if (!r.ok) throw new Error(httpMsg(r.status));
+    st = await r.json() as typeof st;
+  } catch (e) { console.warn("[nexy] search status unavailable", e); }
+  let c = $("#searchchip");
+  if (st.state !== "installing") { c?.remove(); return; }
+  if (!c) {
+    c = document.createElement("span");
+    c.className = "dlchip"; c.id = "searchchip"; c.setAttribute("role", "status");
+    c.innerHTML = `<span class="led"></span><span class="sl"></span><span class="dlbar"><i></i></span>`;
+    const row = $(".tabrow");
+    row?.insertBefore(c, $(".tabtools", row));
+  }
+  $(".sl", c)!.textContent = `Setting up web search… ${st.progress ?? 0}%`;
+  $<HTMLElement>(".dlbar i", c)!.style.width = `${st.progress ?? 0}%`;
+  setTimeout(() => void pollSearch(), 3000);
+}
+
 // ---- greeting and suggestions ----
 function suggestions(): [string, string][] {
   // a routine starter only where routines are allowed
@@ -236,6 +260,8 @@ export function initLanding(h: LandingHooks): void {
   addEventListener("nexy:private", () => { closeTip(); paintList(); });
   rotatePlaceholder();
   void pollModel();
+  // a computer's own search installs in the background on its first start
+  if (!onOwn1 && !inCloud && document.documentElement.dataset.search === "1") void pollSearch();
   // the design opens the voice tip once, a moment after landing
   setTimeout(() => {
     const b = $<HTMLElement>('#gs [data-g="voice"]');

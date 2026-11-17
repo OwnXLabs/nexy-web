@@ -36,6 +36,7 @@ import { overlayLines } from "../../../lib/overlay";
 import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/browse-intent";
 import { connectorAsk, connectorTurn } from "../../../lib/connectors";
 import { byId } from "../../../lib/apps";
+import { SEARCH_NOT_SET_UP, SEARCH_SETTING_UP, searchStatus } from "../../../lib/research";
 import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
 import { boxAllowed, enginesShown, pickAllowed } from "../../../lib/box";
@@ -360,14 +361,20 @@ export const POST: APIRoute = async (ctx) => {
     // routines are the box owner's: a visitor's ask never reaches an agent that could make one
     const noRoutine = !box && routineAsk(String(said ?? ""));
     const conn = priv || noRoutine ? null : await connectorTurn(String(said ?? ""), byId("hub")?.base, history);
+    // A search asked for while this computer's search is still installing (or its install failed):
+    // said plainly, never answered from the chat's history as if it had searched
+    const search = research && !priv && !noRoutine && !page && !conn ? await searchStatus() : null;
+    const noSearch = search?.state === "installing" ? SEARCH_SETTING_UP
+      : search?.state === "failed" || search?.state === "missing" ? SEARCH_NOT_SET_UP : null;
     const plain = noRoutine ? ROUTINES_ELSEWHERE
       : conn && conn.outcome !== "read" ? conn.reply
       : priv && asksApp ? `This chat is ultra-private, so connected apps like ${asksApp.label} are off. Ask in a regular chat and I'll search it.`
-      : null;
+      : noSearch;
     if (plain !== null) {
       answered(plain);
-      const via = noRoutine ? "box" : "connector";
-      log({ result: "answered", via, ms: Date.now() - startedAt, replyChars: plain.length, ...(noRoutine ? {} : { connector: asksApp?.id, connectorOutcome: conn?.outcome ?? "private" }) });
+      const via = noRoutine ? "box" : noSearch ? "search-setup" : "connector";
+      log({ result: "answered", via, ms: Date.now() - startedAt, replyChars: plain.length,
+        ...(noRoutine ? {} : noSearch ? { searchState: search!.state } : { connector: asksApp?.id, connectorOutcome: conn?.outcome ?? "private" }) });
       return { status: 200, body: { choices: [{ message: { role: "assistant", content: plain } }], via, grounded: false, private: priv || undefined } };
     }
     const connPrompt = conn?.outcome === "read" ? conn.prompt : "";

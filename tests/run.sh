@@ -45,6 +45,7 @@ check "who speaks: Nexy Engine as Nexy, Hermes and OpenClaw as themselves, a vis
 check "the default engine: NEXY_DEFAULT_ENGINE for no pick and no owner, a pick wins, missing or unset as before, one engine in the apps" ts tests/default-engine.test.ts
 check "a computer without an Own1: no studio it lacks, no Own1 wording" node --test --test-timeout=180000 tests/local-mode.cjs
 check "building on this computer: names, subject, no outside files" ts tests/local-build.test.ts
+check "web search installing on a computer: Setting up with progress and no Download, a search asked meanwhile said plainly, never answered as if searched; an Own1 search as before" node --test --test-timeout=180000 tests/search-setup.cjs
 check "search for charts: results come through, no search said plainly" ts tests/research-search.test.ts
 check "what this computer's model can do: requests sorted by kind of job, verdicts read from the app" ts tests/capability.test.ts
 check "what this computer's model can do, in the browser: a chat-only model's build is one card and no build call, the app's buttons only in the app, a simple-only build says so first, an unstyled page is readable in the work pane, a build that does not work is never called done, a bare app says it came out thin, a page edit with thinking off and a change that did not land said plainly" node --test --test-timeout=240000 tests/capability-gating.cjs

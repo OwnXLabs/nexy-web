@@ -23,6 +23,28 @@ export function buildQuery(question: string): string {
 export const NO_SEARCH = "Web search isn't on this computer yet.";
 export const searchHere = (): boolean => !!SEARXNG;
 
+// Where this computer's search stands, from the desktop app's front door (/status): installing in
+// the background on a first start, failed, or ready. An Own1's SearXNG and older apps have no
+// /status; their search is taken as ready, as before.
+export type SearchState = { state: "ready" | "installing" | "failed" | "missing" | "unsupported" | "none"; progress?: number };
+export const SEARCH_SETTING_UP = "Web search is still setting up on this computer; try again in a minute.";
+export const SEARCH_NOT_SET_UP = "Web search couldn't be set up on this computer yet. Nexy sets it up again the next time it opens while online; ask me again after that.";
+export async function searchStatus(): Promise<SearchState> {
+  if (!SEARXNG) return { state: "none" };
+  try {
+    const r = await fetch(`${SEARXNG}/status`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(2000) });
+    if (!r.ok) return { state: "ready" };
+    const j = (await r.json()) as { state?: string; completed?: unknown; total?: unknown };
+    const state = ["ready", "installing", "failed", "missing", "unsupported"].includes(String(j.state)) ? (j.state as SearchState["state"]) : "ready";
+    const total = Number(j.total) || 0, done = Number(j.completed) || 0;
+    return state === "installing" ? { state, progress: total > 0 ? Math.max(0, Math.min(99, Math.floor((done / total) * 100))) : 0 } : { state };
+  } catch (e) {
+    // the front door always answers on loopback; no answer means it is busy, not that search is gone
+    console.warn("[nexy] search status unavailable:", (e as Error).message);
+    return { state: "ready" };
+  }
+}
+
 export async function search(query: string, limit = 8): Promise<Snippet[]> {
   if (!SEARXNG) throw new Error(NO_SEARCH);
   const res = await fetch(`${SEARXNG}/search?q=${encodeURIComponent(query)}&format=json&safesearch=1`, {
