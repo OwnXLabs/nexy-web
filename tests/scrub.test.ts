@@ -52,3 +52,34 @@ test("ordinary log lines are left alone", () => {
     "The keyboard shortcut does not work",
   ]) assert.equal(scrubLog(l), l);
 });
+
+// a log line that is JSON stays JSON: only values go, never the brackets, quotes or commas around them
+test("JSON log lines stay valid JSON", () => {
+  const cases: [string, string][] = [
+    ['{"result":"answered","contextKeys":["projects","apps","memory"],"turns":3}', '{"result":"answered","contextKeys":["projects","apps","memory"],"turns":3}'],
+    ['{"usage":{"prompt_tokens":812,"max_tokens":4096},"cached":true,"session":null}', '{"usage":{"prompt_tokens":812,"max_tokens":4096},"cached":true,"session":null}'],
+    ['{"password":"hunter 2, really","next":1}', '{"password":"[removed]","next":1}'],
+    ['{"apiKey":"it\'s a secret","x":[1,2]}', '{"apiKey":"[removed]","x":[1,2]}'],
+    ['{"auth":{"token":"abc123def","user":"me"}}', '{"auth":{"token":"[removed]","user":"me"}}'],
+    ['{"msg":"sent Cookie: sid=abc; theme=dark","ok":true}', '{"msg":"sent Cookie: [removed]","ok":true}'],
+    ['{"msg":"Authorization: Bearer abcdef123456","n":2}', '{"msg":"Authorization: [removed]","n":2}'],
+    ['{"line":"{\\"password\\":\\"hunter 2\\"}","ok":true}', '{"line":"{\\"password\\":\\"[removed]\\"}","ok":true}'],
+    ['{"from":"jane@example.com","peer":"192.168.1.20","home":"/Users/jane/x"}', '{"from":"[removed]","peer":"[removed]","home":"/Users/[user]/x"}'],
+    [`{"wallet":"${W}","keys":[]}`, '{"wallet":"[removed]","keys":[]}'],
+  ];
+  for (const [i, want] of cases) {
+    JSON.parse(i);
+    const got = scrubLog(i);
+    assert.equal(got, want, i);
+    assert.doesNotThrow(() => JSON.parse(got), `still JSON: ${got}`);
+    assert.equal(scrubLog(got), got, `twice: ${i}`);
+    assert.doesNotThrow(() => JSON.parse(scrub(i)), `scrub keeps JSON: ${i}`);
+  }
+});
+
+test("a turn log line as the server writes it stays JSON and keeps its counts", () => {
+  const line = JSON.stringify({ t: "2026-11-17T09:15:22.123Z", kind: "chat", turn: "ab12cd34", result: "answered", via: "nexy",
+    contextKeys: ["projects", "apps"], tools: [], sources: "unknown", cited: 0, searchAsked: true, replyChars: 812, research: true });
+  const got = scrubLog(line);
+  assert.deepEqual(JSON.parse(got), JSON.parse(line));
+});

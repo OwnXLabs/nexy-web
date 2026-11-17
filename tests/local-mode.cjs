@@ -35,6 +35,7 @@ test('a computer without an Own1: missing studios answer plainly, nothing says O
     const page = await b.newPage();
     const errors = []; page.on('pageerror', (e) => errors.push(e.message));
     const appCalls = []; page.on('request', (r) => { if (r.url().includes('/api/apps/')) appCalls.push(r.url()); });
+    const notFound = []; page.on('response', (r) => { if (r.status() === 404) notFound.push(r.url()); });
     await page.goto(s.base + '/');
     await page.locator('#input').waitFor({ timeout: 20000 });
     assert.equal((await page.locator('#pmWsName').textContent()).trim(), 'This computer');
@@ -64,7 +65,9 @@ test('a computer without an Own1: missing studios answer plainly, nothing says O
     }
     const body = await page.locator('.msgs, #msgs, main').first().innerText().catch(() => '');
     assert.doesNotMatch(body, /unknown app|stopped/i);
-    assert.deepEqual(appCalls.filter((u) => !/\/api\/apps\/(startup|build)\/api\/(pm\/projects|director\/runs)/.test(u)), [], 'no requests to missing studios beyond the quiet history checks');
+    // no history asked of a studio that isn't here: those 404s filled beta reports' failed requests
+    assert.deepEqual(appCalls, [], 'no requests to missing studios');
+    assert.deepEqual(notFound, [], 'no 404s');
     assert.deepEqual(errors, []);
   } finally { await b.close(); s.p.kill(); }
 });

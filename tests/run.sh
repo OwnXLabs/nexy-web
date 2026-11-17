@@ -53,6 +53,7 @@ check "who speaks: Nexy Engine as Nexy, Hermes and OpenClaw as themselves, a vis
 check "the default engine: NEXY_DEFAULT_ENGINE for no pick and no owner, a pick wins, missing or unset as before, one engine in the apps" ts tests/default-engine.test.ts
 check "a computer without an Own1: no studio it lacks, no Own1 wording" node --test --test-timeout=180000 tests/local-mode.cjs
 check "building on this computer: names, subject, no outside files" ts tests/local-build.test.ts
+check "web search installing on a computer: Setting up with progress and no Download, a search asked meanwhile said plainly, never answered as if searched; an Own1 search as before" node --test --test-timeout=180000 tests/search-setup.cjs
 check "search for charts: results come through, no search said plainly" ts tests/research-search.test.ts
 check "what this computer's model can do: requests sorted by kind of job, verdicts read from the app" ts tests/capability.test.ts
 check "what this computer's model can do, in the browser: a chat-only model's build is one card and no build call, the app's buttons only in the app, a simple-only build says so first, an unstyled page is readable in the work pane, a build that does not work is never called done, a bare app says it came out thin, a page edit with thinking off and a change that did not land said plainly" node --test --test-timeout=240000 tests/capability-gating.cjs
@@ -83,8 +84,9 @@ check "routine times: the device's zone reaches the agent, UTC fallback, local t
 check "one request, one routine: a reminder said in chat is made once, at the asked time, and its first run says that time" node --test --test-timeout=180000 tests/one-routine.cjs
 check "routines on events: trigger words and chips, domains and subject words, unknown ones quoted as they are" ts tests/trigger-words.test.ts
 check "routines on events in the browser: plain card, read-only line, waits for Turn on, one list with chips, results, Pause and Resume, hostile text stays text" node --test --test-timeout=180000 tests/trigger-routines.cjs
-check "what leaves in a report: keys, tokens, passwords, cookies and wallets everywhere; emails, phones, home folders, IP and MAC addresses in logs and chats" ts tests/scrub.test.ts
-check "beta reports: the preview is the body, each switch changes both, hardware without identifiers, Report this chat sends that thread only, choices kept but never the chat, a kept draft, five screenshots by paste or drop within the limits, private sends nothing, https only, no badge off beta" node --test --test-timeout=240000 tests/beta-report.cjs
+check "what leaves in a report: keys, tokens, passwords, cookies and wallets everywhere; emails, phones, home folders, IP and MAC addresses in logs and chats; a JSON log line stays JSON" ts tests/scrub.test.ts
+check "beta reports: the preview is the body, each switch changes both, hardware without identifiers, Report this chat sends that thread only, choices kept but never the chat, a kept draft, five screenshots by paste or drop within the limits, Add a screenshot is the app's picture of its window or a file (never screen capture), private sends nothing, https only, no badge off beta" node --test --test-timeout=240000 tests/beta-report.cjs
+check "a 50 s image on an Own1: one request, past the usual time said plainly, no Try again until it really fails, a busy studio waited for" node --test --test-timeout=200000 tests/slow-image.cjs
 check "a computer that stops answering: plain words, no countdown, never the browser's wording" node --test --test-timeout=180000 tests/computer-away.cjs
 check "two devices on one chat: an older copy never saves over newer turns" node --test --test-timeout=180000 tests/chat-two-devices.cjs
 check "tables, lists and emails are chat answers, not projects" ts tests/intent-text-answers.test.ts

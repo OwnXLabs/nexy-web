@@ -2,9 +2,16 @@
 // device. Runs in the browser (the preview) and again on the server (the send); applying it twice
 // changes nothing, so what was previewed is what is sent.
 const R = "[removed]";
-const HEADER = /\b(set-cookie|cookie|authorization|proxy-authorization)(\s*:\s*)[^\n]+/gi;
+// a header's whole value, up to a quote that ends the JSON string holding it
+const HEADER = /\b(set-cookie|cookie|authorization|proxy-authorization)(\s*:\s*)(?!\[removed\])[^\s"\\][^\n"\\]*/gi;
 const SCHEME = /\b(bearer|basic|token)\s+(?!\[removed\])[A-Za-z0-9._~+/=-]{8,}/gi;
-const NAMED = /([A-Za-z0-9_.-]*(?:token|secret|passwd|password|pwd|cookie|auth|credential|session|signature|key)s?)(\\?["']?\s*[:=]\s*\\?["']?)(?!\[removed\])[^\s"'&,;}\]\\]+/gi;
+// name=value or "name": "value". Only the value goes, so JSON stays JSON: a quoted value up to its
+// closing quote, a bare one up to its end; a list or object after the name is left for its own
+// items, and a number, true, false or null after a quoted name ("tokens": 4096) is not a secret.
+const NAMED = /([A-Za-z0-9_.-]*(?:token|secret|passwd|password|pwd|cookie|auth|credential|session|signature|key)s?)(\\?["']?)(\s*[:=]\s*)(?:(\\?")(?!\[removed\])([^"\\\n]+)|(')(?!\[removed\])([^'\\\n]+)|(?![\[{"'\\]|\[removed\])([^\s"'&,;}\]\\]+))/gi;
+const LITERAL = /^(?:-?\d[\d.eE+-]*|true|false|null)$/;
+const named = (m: string, name: string, close: string, sep: string, dq?: string, _d?: string, sq?: string, _s?: string, bare?: string): string =>
+  bare === undefined ? `${name}${close}${sep}${dq ?? sq}${R}` : close && LITERAL.test(bare) ? m : `${name}${close}${sep}${R}`;
 const JWT = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g;
 // a wallet address or private key: 0x and 40 or more hex digits
 const WALLET = /\b0x[0-9a-fA-F]{40,}\b/g;
@@ -16,7 +23,7 @@ export function scrub(s: string): string {
     .replace(WALLET, R)
     .replace(HEADER, `$1$2${R}`)
     .replace(SCHEME, `$1 ${R}`)
-    .replace(NAMED, `$1$2${R}`)
+    .replace(NAMED, named)
     // a long run of letters and digits together is likely a key; plain long words are left alone
     .replace(LONG, (t) => (/\d/.test(t) && /[A-Za-z]/.test(t) ? R : t));
 }
