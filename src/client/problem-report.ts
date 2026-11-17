@@ -299,7 +299,7 @@ export function openReporter(thread?: ReportThread | null): void {
       <ul class="what" id="prpWhat"><li>Getting this device's details…</li></ul>
       <details><summary>Exactly what is sent</summary><pre id="prpPreview"></pre></details>
     </div>
-    <p class="fine">${LOCK}<span>Nothing is sent until you press Send. Kept 90 days at most, then deleted. Never sold or used to train models. A copy stays on this computer.</span></p>`
+    <p class="fine">${LOCK}<span>Nothing is sent until you press Send. Kept 90 days at most, then deleted. A copy stays on this computer.</span></p>`
     : `<div class="secs">${sec("prpState", "Include what the app was doing", `Recent errors, failed requests${o.snapshot ? " and what is open" : ""}.`, def.state)}</div>`}
     <div class="msg" aria-live="polite"></div>
     <div class="foot">

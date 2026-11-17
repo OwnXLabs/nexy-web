@@ -118,7 +118,7 @@ test('beta: the modal, the preview is exactly what the team receives, secrets an
     assert.match(await dlg.innerText(), /To help us ship faster, please share the information below:/);
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'prpText', 'the comment box has the focus');
     for (const [id, on] of [['prpState', true], ['prpLogs', true], ['prpHw', true], ['prpConv', false]]) assert.equal(await page.isChecked(`#${id}`), on, `${id} starts ${on ? 'on' : 'off'}`);
-    assert.match(await dlg.innerText(), /Kept 90 days at most, then deleted\. Never sold or used to train models\./);
+    assert.match(await dlg.innerText(), /Kept 90 days at most, then deleted\. A copy stays on this computer\./);
     assert.equal(f.got.length, 0, 'nothing sent on opening');
     await page.fill('#prpText', 'Share did nothing. password: typedsecret and sk-A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6q7');
     const chooser = page.waitForEvent('filechooser');
