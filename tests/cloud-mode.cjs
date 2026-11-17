@@ -33,7 +33,7 @@ function engine(name, reply = `answer from ${name}`) {
 async function start(env) {
   const port = 20000 + Math.floor(Math.random() * 20000);
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-cloud-'));
-  const p = spawn(process.execPath, [ENTRY], { env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), NEXY_DATA_DIR: data, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const p = spawn(process.execPath, [ENTRY], { env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), NEXY_DATA_DIR: data, NEXY_INSECURE_TRUST_ON_TCP: '1', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; p.stdout.on('data', (d) => { log += d; }); p.stderr.on('data', (d) => { log += d; });
   const base = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 80; i++) { try { await fetch(base + '/api/v1/health'); return { p, base, data, log: () => log }; } catch { await new Promise((r) => setTimeout(r, 150)); } }

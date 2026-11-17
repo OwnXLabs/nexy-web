@@ -10,8 +10,7 @@ const DATA_DIR =
 const OWNER_FILE = path.join(DATA_DIR, "autopilot.json");
 export const evalScope = new AsyncLocalStorage<boolean>();
 const EVAL_FILE = path.join(DATA_DIR, "autopilot-eval.json");
-// One autopilot per owner. It was one file for the whole box, so every demo visitor saw and
-// edited the same drafts (one user's test campaigns surfaced in another user's session, 2026-10-23).
+// One autopilot per owner: nobody sees or edits another owner's drafts.
 export const ownerScope = new AsyncLocalStorage<string>();
 const OWNER_ID = /^o_[a-z0-9_]{1,48}$/;
 const file = () => {

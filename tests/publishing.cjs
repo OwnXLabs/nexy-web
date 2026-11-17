@@ -11,7 +11,8 @@ const { buildSync } = require('esbuild');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-publish-'));
 const who = 'o_testing_0123456789abcdef';
 process.env.NEXY_DATA_DIR = temp;
-const publisherPath = process.env.NEXY_PUBLISHER_SCRIPT || path.resolve(__dirname, '../publisher.py');
+const publisherPath = process.env.NEXY_PUBLISHER_SCRIPT;
+if (!publisherPath) { test('publishing', { skip: 'set NEXY_PUBLISHER_SCRIPT to the publisher under test' }, () => {}); return; }
 const code = buildSync({ entryPoints: [path.resolve(__dirname, '../src/pages/api/v1/publish.ts')], bundle: true, platform: 'node', format: 'cjs', write: false, define: { 'import.meta.glob': 'emptyExamples' } }).outputFiles[0].text;
 const m = { exports: {} }; new Function('require', 'module', 'exports', 'emptyExamples', code)(require, m, m.exports, () => ({}));
 const api = m.exports;

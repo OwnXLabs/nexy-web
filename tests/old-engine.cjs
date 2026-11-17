@@ -1,6 +1,5 @@
 // Chat in a browser without the APIs Android WebView 91 (the phone app) and Safari 15 lack: they
 // are deleted before the page loads. A message must still reach the model and the answer show.
-// 0.2.8: Array.prototype.at threw before the request left, and the phone said "Thinking…" for good.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/old-engine.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');

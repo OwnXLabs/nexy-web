@@ -77,6 +77,7 @@ check "beta reports: the preview is the body, each switch changes both, hardware
 check "a computer that stops answering: plain words, no countdown, never the browser's wording" node --test --test-timeout=180000 tests/computer-away.cjs
 check "two devices on one chat: an older copy never saves over newer turns" node --test --test-timeout=180000 tests/chat-two-devices.cjs
 check "tables, lists and emails are chat answers, not projects" ts tests/intent-text-answers.test.ts
+check "assigning a task to me or to the name set in Settings goes to the owner" ts tests/assign-owner.test.ts
 check "Continue is never taken as a search" ts tests/continue-not-search.test.ts
 check "the model dies mid-answer: words kept, Continue" node --test --test-timeout=180000 tests/model-dies.cjs
 check "killed mid-answer: question and partial answer kept, marked interrupted, asked again once" node --test --test-timeout=180000 tests/interrupted-chat.cjs
@@ -95,7 +96,7 @@ check "the owner's own mail never searched on the web: paused, missing or failin
 check "Gmail with an app password in WebKit: three steps, sent once to the hub, kept nowhere in the browser, pause, resume, disconnect says revoke at Google, a refusal stays on the card" node --test --test-timeout=180000 tests/gmail-app-password.cjs
 check "settings in WebKit: engine names only with a real choice, search only where there is one, panel hides the chat" node --test --test-timeout=180000 tests/settings-wording.cjs
 check "phone in the Android app: the last message ends above the floating Nexy button" node --test --test-timeout=180000 tests/phone-layout.cjs
-check "before routing: a foreign Host gets 421, an oversized body 413, full chat storage 507, NEXY_SOCKET answers on the socket only" node --test --test-timeout=120000 tests/request-gate.cjs
+check "before routing: a foreign Host gets 421, an oversized body 413, full chat storage 507, NEXY_SOCKET answers on the socket only, a trust flag without it refuses to start" node --test --test-timeout=120000 tests/request-gate.cjs
 check "chat home: greeting, Get started, model download, computer-only offers" node --test --test-timeout=180000 tests/landing.cjs
 check "box features: shown only where the server allows them, no button leads to a refusal, a routine ask said plainly" node --test --test-timeout=180000 tests/box-features.cjs
 check "what counts as a routine ask" ts tests/routine-ask.test.ts

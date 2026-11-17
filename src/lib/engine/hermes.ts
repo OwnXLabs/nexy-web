@@ -1,7 +1,8 @@
 import type { ChatResult, ChatTurn, MemoryItem, NexyEngine, Routine } from "./types";
 import { readCompletion } from "./sse";
+import { AGENT_KEY } from "./key";
 
-const DEFAULT_KEY = process.env.NEXY_AGENT_KEY ?? "";
+const DEFAULT_KEY = AGENT_KEY;
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
 
 // where a turn goes, by engine; Hermes' wording for any other gateway
@@ -65,8 +66,8 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           "content-type": "application/json",
           ...(KEY ? { authorization: `Bearer ${KEY}` } : {}),
           // without it the gateway derives the session from the system prompt, which changes every
-          // turn, so each turn opened a fresh browser on about:blank. It needs the key to be honoured.
-          ...(KEY && session ? { "X-Hermes-Session-Id": `nexy-${session}` } : {}),
+          // turn. It needs the key to be honoured. Hermes reads only its own header name.
+          ...(KEY && session ? { "x-session-id": `nexy-${session}`, "X-Hermes-Session-Id": `nexy-${session}` } : {}),
           ...(opts?.user ? { "x-nexy-user": opts.user } : {}),
         },
         // vouch for the system message only when the caller says it holds nothing from outside
@@ -77,9 +78,8 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
         throw new Error(`agent gateway ${res.status}`);
       }
       const { content: reply, last: body } = await readCompletion(res, onText);
-      // 0.22 marks a failed turn in the response itself; its reply text changes between
-      // versions (an overload read "…send /retry, or switch models with /model…", which
-      // reached a visitor on 2026-10-24), so trust the flag before the wording
+      // the engine marks a failed turn in the response itself; its reply text changes between
+      // versions, so trust the flag before the wording
       if (body?.choices?.[0]?.finish_reason === "error" || body?.hermes?.failed === true) {
         const why = `${body?.hermes?.error ?? ""} ${reply}`;
         throw new Error(/\b429\b|too many requests|rate.?limit/i.test(why)
@@ -87,7 +87,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           : `agent gateway upstream failed: ${String(body?.hermes?.error ?? "the turn failed").slice(0, 120)}`);
       }
       // The engine reports its own faults as an ordinary reply: "API call failed after
-      // 3 retries: …", or "⚠ Provider authentication failed: /var/lib/hermes/…". Never a
+      // 3 retries: …", or "⚠ Provider authentication failed: …". Never a
       // reply to show anyone.
       const fault = /^API call failed after \d+ retries?: (.*)$/s.exec(reply.trim())?.[1]
         ?? /^\s*⚠\uFE0F?\s*(.*)$/s.exec(reply)?.[1];

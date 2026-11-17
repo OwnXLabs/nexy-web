@@ -55,7 +55,7 @@ export async function get(owner: string, id: string): Promise<SavedChat | null> 
 // stamp: the engine a new chat gets when its save names none (the owner's pick at the time)
 // A save says which version it was made from (`base`: the saved ts, 0 for a new chat).
 // A device holding an older copy is refused, so it cannot overwrite turns another
-// device added since (a phone left open erased the Mac's answer, 2026-11-12).
+// device added since.
 export class Conflict extends Error { constructor(readonly current: number) { super("this chat changed on another device"); } }
 // Saved chats per owner stop at NEXY_CHAT_STORAGE_MB (default 512): a save that grows past it is
 // refused; one that shrinks a chat always goes through, so a full owner can still tidy up.
@@ -122,7 +122,7 @@ const EXAMPLES = path.join(DIR, "..", "examples");
 const SHIPPED = Object.values(import.meta.glob<SavedChat>("../../examples/*.json", { eager: true, import: "default" }));
 
 // An image result kept inline (a data: URI) made the example list 600 KB, so the sidebar
-// stayed empty for 6 s (2026-10-20). The list carries a link; the image loads on open.
+// stayed empty for 6 s. The list carries a link; the image loads on open.
 // A plan example carries a snapshot of its project, for machines that never had it; that stays
 // out of the list too, and is read with the example when opened.
 const lean = (c: SavedChat): SavedChat["open"] => {

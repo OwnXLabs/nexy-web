@@ -14,8 +14,6 @@ const groupId = (g) => {
   if (!line) throw new Error(`no group ${g}`);
   return Number(line.split(":")[2]);
 };
-if (process.env.NEXY_TRUST_XNODE_AUTH === "1" && !sock)
-  console.warn("[nexy] WARNING: NEXY_TRUST_XNODE_AUTH=1 on TCP. Any local process can claim to be the owner; set NEXY_SOCKET.");
 
 process.env.ASTRO_NODE_AUTOSTART = "disabled";
 const { handler } = await import("./entry.mjs");

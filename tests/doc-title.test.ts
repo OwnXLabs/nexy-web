@@ -1,5 +1,5 @@
 // The name of the document an answer goes into: what it is about, cut on a word, without the
-// words of the request (QA 2026-11-12: "write a detailed 1500 word g").
+// words of the request.
 // node --experimental-strip-types --test tests/doc-title.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";

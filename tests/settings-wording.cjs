@@ -67,7 +67,7 @@ test('a real choice of engines is the one place their names show', { timeout: 60
   assert.match(t.security, /own search/, 'an Own1 has its own search');
 });
 
-// QA 0.2.9 on Windows: About named no version and said nothing of updates
+// About names the version and says how updates arrive
 test('About on a computer: the app version and what its last update check found; an Own1 shows neither', { timeout: 90000 }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-about-'));
   const status = path.join(dir, 'update-status.json');

@@ -1,6 +1,6 @@
 // A person who asks the agent to open a site wants to watch it on the agent's screen. Left to
 // itself the model sometimes says "I'll navigate to kernel.org" and runs a web search instead,
-// and the screen stays empty (2026-10-27). So Nexy opens the page on the agent's screen itself
+// and the screen stays empty. So Nexy opens the page on the agent's screen itself
 // (nexy-screen-open, as the agent's user, through the same proxy and policies) and hands the
 // agent the page's text; the agent goes further with its own browser.
 import { readFile, writeFile } from "node:fs/promises";

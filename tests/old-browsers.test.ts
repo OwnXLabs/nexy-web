@@ -1,6 +1,6 @@
 // What the browser gets runs on the oldest engines Nexy meets: Android WebView 91 (the phone app)
 // and Safari 15. The build lowers syntax for them; an API they lack throws at run time, so the
-// built client is scanned for each one. 0.2.8: Array.prototype.at left the phone on "Thinking…".
+// built client is scanned for each one (Array.prototype.at, for one).
 // Run after `npm run build`. NEXY_DIST points at another build (default dist).
 import { test } from "node:test";
 import assert from "node:assert/strict";

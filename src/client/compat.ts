@@ -1,6 +1,6 @@
 // Stand-ins for browser APIs newer than the oldest engine Nexy runs in: Android WebView 91 (the
 // phone app) and Safari 15. The build transpiles syntax only; a missing API throws at run time
-// (Array.prototype.at left the phone on "Thinking…" for good, 0.2.8). tests/old-browsers.test.ts
+// (Array.prototype.at, for one). tests/old-browsers.test.ts
 // keeps the newer ones out of the bundle.
 
 /** The last item, or undefined: `xs.at(-1)` without Array.prototype.at (Chrome 92). */

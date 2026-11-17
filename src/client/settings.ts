@@ -235,7 +235,7 @@ export async function renderSettings(sec = "general"): Promise<void> {
 }
 
 const close = () => $("#ovSet")?.classList.remove("open");
-// Telegram: the owner's own bot, wired into the agent (Hermes' Telegram platform). Only shown
+// Telegram: the owner's own bot, wired into the agent. Only shown
 // where the server enables it (a private, signed-in Nexy); the token is never shown back.
 type Tg = { enabled?: boolean; connected?: boolean; bot?: string; users?: string; error?: string };
 const TG = "/api/v1/connections/telegram";
@@ -280,7 +280,7 @@ function appPasswordRow(c: CatalogEntry, granted: string[] | null): string {
 }
 
 // Gmail's refusal stays on the card until the owner edits a field or tries again: as a toast it
-// was gone in 3 s, before it could be read (QA 2026-11-12)
+// was gone in 3 s, before it could be read
 function apNote(text: string): void {
   const el = $<HTMLElement>("#apNote");
   if (!el) return;

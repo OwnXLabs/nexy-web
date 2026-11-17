@@ -27,7 +27,7 @@ async function serve({ trust = false, session = DESK, local = false } = {}) {
   mkdirSync(join(dir, "control"));
   const p = spawn(process.execPath, [ENTRY], {
     env: { ...process.env, HOST: "127.0.0.1", PORT: String(PORT), NEXY_DATA_DIR: join(dir, "data"), NEXY_SCREEN_DIR: dir,
-      NEXY_DEMO_SESSION_URL: session, NEXY_TRUST_XNODE_AUTH: trust ? "1" : "", NEXY_SCREEN_LOCAL: local ? "1" : "" },
+      NEXY_DEMO_SESSION_URL: session, NEXY_TRUST_XNODE_AUTH: trust ? "1" : "", NEXY_INSECURE_TRUST_ON_TCP: "1", NEXY_SCREEN_LOCAL: local ? "1" : "" },
     stdio: "ignore",
   });
   for (let i = 0; i < 50; i++) { if (await fetch(B + "/api/v1/screen").then(() => true, () => false)) break; await sleep(200); }

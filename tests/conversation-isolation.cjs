@@ -87,7 +87,7 @@ const revised = [];
   await page.click('#newChat');
   p=await panel(); assert.doesNotMatch(p.files+p.apps+p.tabs,/Apple|Banana/); assert.doesNotMatch(p.thread,/Saved response|Done/);
   console.log('PASS New chat starts with empty transcript, lists and preview tabs');
-  // a change to the page open on the right edits it in place instead of rebuilding (design feedback, 2026-10-23)
+  // a change to the page open on the right edits it in place instead of rebuilding
   await pick('ctestapple');
   await wait(()=>[...document.querySelectorAll('#cvBody iframe')].some(f=>f.srcdoc.includes('Apple background result')));
   const buildsBefore=builds;

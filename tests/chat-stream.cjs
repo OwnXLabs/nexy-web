@@ -126,7 +126,7 @@ test('streamed replies survive a dropped connection and never show what the guar
 
     // 5. an error after words were shown: they stand, marked stopped, with Continue in the app.
     // Starting again from scratch lost them and, with the model itself gone (Ollama killed), kept
-    // the person waiting up to 150 s for nothing (QA 2026-11-12). The fallback is for a turn that showed nothing.
+    // the person waiting up to 150 s for nothing. The fallback is for a turn that showed nothing.
     const mid = await events(await ask(s, 'midfail'));
     const midText = mid.filter((e) => e.ev === 'text').map((e) => e.data.text);
     assert(midText.some((t) => t.startsWith('Half')), 'the partial words were shown');

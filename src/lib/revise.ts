@@ -1,6 +1,6 @@
 // Change a page that is already built, in place. Before this, any follow-up to a built page
 // ("make the background darker", "add a pricing section") either rebuilt the whole site from
-// scratch or went to chat, which cannot touch the page (design feedback, 2026-10-23).
+// scratch or went to chat, which cannot touch the page.
 //
 // The model returns small find/replace edits plus optional CSS, never the whole page: a full
 // rewrite of a 30 KB page would take minutes on this machine and could change everything else.
@@ -29,8 +29,7 @@ export interface Plan { edits: Edit[]; css: string; say: string }
 // What the model reads: inlined images (and, on a page, long scripts) become numbered
 // placeholders. They can be most of a page's bytes and are noise for a visual or copy change.
 // Edits apply to exactly this masked text, so a `find` copied across a placeholder still
-// matches, and unmask() puts the originals back. (Applying to the original instead missed on a
-// game whose settings sit on one line with its images, 2026-10-23.)
+// matches, and unmask() puts the originals back.
 export function mask(html: string, keepScripts = false): { text: string; kept: string[] } {
   const kept: string[] = [];
   let text = html.replace(/data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{100,}/gi, (m) => `data:…[${kept.push(m) - 1}]`);

@@ -6,7 +6,7 @@ import { where, row } from "../src/client/swarm-view.ts";
 test("where a piece ran reads like a place", () => {
   assert.equal(where("box"), "your Own 1");
   assert.equal(where(undefined), "your Own 1");
-  assert.equal(where("device:Nexy on AGENTWARE (Windows)"), "AGENTWARE (Windows)");
+  assert.equal(where("device:Nexy on DESKTOP-1 (Windows)"), "DESKTOP-1 (Windows)");
   assert.equal(where("device:0x1111111111111111111111111111111111111111"), "device 0x1111…");
   assert.equal(where("device:0xabc", { "0xabc": "Gaming PC" }), "Gaming PC");
 });

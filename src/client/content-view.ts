@@ -12,9 +12,9 @@ const esc = (s: unknown) =>
 // allow-forms: generated apps submit forms (add a card, sign up); still no same-origin.
 const SANDBOX = 'sandbox="allow-scripts allow-forms"';
 
-// The sandbox has no allow-same-origin, so a built app touching localStorage threw
-// "SecurityError: ... the document is sandboxed" and died (a kanban board, 2026-10-08 feedback).
-// An in-memory stand-in keeps it working for the session; nothing is stored.
+// The sandbox has no allow-same-origin, so a built app touching localStorage throws
+// "SecurityError: ... the document is sandboxed". An in-memory stand-in keeps it working for the
+// session; nothing is stored.
 export const STORAGE_SHIM =
   `(function(){try{localStorage.getItem("_")}catch(_){var m=function(){var d={};return{getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},` +
   `setItem:function(k,v){d[k]=String(v)},removeItem:function(k){delete d[k]},clear:function(){d={}},key:function(i){return Object.keys(d)[i]||null},` +
@@ -204,11 +204,11 @@ export function csvRows(text: string): Cell[][] {
 }
 
 // each markdown table in a reply, in order: a run of "|" lines with a separator under its header.
-// Two tables one after the other are two tables: read as one, the second's rows were added into
-// the first's total (0.2.8)
+// Two tables one after the other are two tables: the second's rows never count toward the
+// first's total
 function pipeTables(text: string): Cell[][][] {
   // a separator has dashes: a header of blank cells ("| | |") is a header, not a separator; taken
-  // for one, the first data row became the header (2026-10-28)
+  // for one, the first data row became the header
   const sep = (l: string) => /^\s*\|[\s:|-]*-[\s:|-]*\|\s*$/.test(l);
   const cells = (l: string) => l.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => numify(c.trim().replace(/\*\*(.*?)\*\*/g, "$1").replace(/^\*\*|\*\*$/g, "")));
   const runs: string[][] = [];
@@ -263,7 +263,7 @@ export function fromReply(reply: string, hint = ""): Lifted | null {
   if (!fence) {
     const tables = pipeTables(reply).map(checkTotals);
     // Two tables are not one sheet: joined, the second header became a row and the sheet's total
-    // added both (QA 2026-11-12). They stay as written, in a document; a wrong total is pointed out.
+    // added both. They stay as written, in a document; a wrong total is pointed out.
     if (tables.length > 1) {
       const wrong = tables.flatMap((t) => t.fixes);
       return {

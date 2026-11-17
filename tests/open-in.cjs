@@ -1,5 +1,4 @@
-// The work pane's Open button shows only when the click opens that exact item (QA 2026-11-13:
-// "Open in Docs" opened the Docs home and said it "cannot jump straight to" the document).
+// The work pane's Open button shows only when the click opens that exact item, never an app's home.
 // A chat document goes to Own Docs once, then opens as ?doc=<id>, and only when Own Docs says it
 // can ("doc-link" in its health). Own Docs, the model and the Docs page are stand-ins.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/open-in.cjs

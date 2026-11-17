@@ -40,10 +40,9 @@ async function paused(base: string, ids: readonly string[]): Promise<boolean> {
 
 // Read: the prompt hands the model what came back, as data. Not read (paused, not connected,
 // failed): the reply is the whole answer, said as it is, with no model and no agent. Opened
-// ("open it"): the message itself is the reply; asked to open it, the model answered nothing,
-// "[[open-url: …]]" or 'open_url("…")' 3 times in 4 (QA 0.2.11). Handed to the
-// agent, a paused Gmail became a public web search for site:mail.google.com "Acme Billing"
-// (QA 2026-11-12).
+// ("open it"): the message itself is the reply, since a model asked to open it often answers
+// nothing or a made-up tool call. Never handed to the agent, which could turn a paused app into
+// a public web search.
 export type ConnectorTurn =
   | { id: string; outcome: "read"; prompt: string }
   | { id: string; outcome: "opened" | "paused" | "not-connected" | "failed"; reply: string };

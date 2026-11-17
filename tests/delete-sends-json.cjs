@@ -1,7 +1,7 @@
 // Every delete from the browser says it is JSON. Behind the box's TLS proxy the server sees
 // http while the browser's Origin is https, so the framework's cross-site form check refuses
-// a request with no JSON content type: deleting a saved chat answered 403 and the chat stayed
-// (2026-11-02). Calls through a helper that sets the header (call, api) pass.
+// a request with no JSON content type with 403. Calls through a helper that sets the header
+// (call, api) pass.
 // node --test tests/delete-sends-json.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');

@@ -47,7 +47,7 @@ export function mountPublishing(body: HTMLElement): void {
       `<div class="srow"><div><b>${pubs.length ? "Public" : "Not published"}</b><div class="ss">${pubs.length ? `Anyone with a link can open this website.${until(pubs[0].expiresAt)} To publish later edits, unpublish and publish again.` : "Publishing makes this website publicly accessible."}</div></div><button type="button" class="btn small${pubs.length ? "" : " primary"}" id="deployToggle" role="switch" aria-checked="${pubs.length > 0}" aria-label="Public website">${pubs.length ? "Unpublish" : "Publish website"}</button></div>` +
       (pubs.length ? pubs.map((p) => `<p><a style="color:inherit;overflow-wrap:anywhere" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${esc(p.url)}</a></p>`).join("") :
         `<label class="sl" for="deployName">Website address name (optional)</label><input id="deployName" class="inp" style="width:100%;box-sizing:border-box;margin-top:8px" maxlength="41" placeholder="my-website" value="${esc(previousName)}"><p class="faint">Use 2–41 letters, numbers or hyphens. Leave blank for an automatic address.</p>`)) +
-      // the demo publishes what Own Build made, never the browser's copy (hardening, 2026-10-19)
+      // publish what Own Build made, never the browser's copy
       (data.enabled && data.servesBuild && wasEdited(target.output) ? `<p class="faint">On this demo, publishing uses the website as Own Build made it. The changes you made here are not included.</p>` : "") +
       `<p role="alert" style="color:var(--red,#ff8888)">${esc(error)}</p>`;
     body.querySelector<HTMLButtonElement>("#deployToggle")?.addEventListener("click", async () => {

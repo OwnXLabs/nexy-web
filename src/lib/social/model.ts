@@ -1,9 +1,10 @@
 import type { Complete } from "./draft.ts";
 import { guardIdentity } from "../engine/identity-guard.ts";
 import { quietChat } from "../quiet.ts";
+import { AGENT_KEY } from "../engine/key.ts";
 
 const GATEWAY = process.env.NEXY_AGENT_URL ?? "";
-const GATEWAY_KEY = process.env.NEXY_AGENT_KEY ?? "";
+const GATEWAY_KEY = AGENT_KEY;
 const FALLBACK = process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080";
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
 
@@ -36,7 +37,7 @@ export const complete: Complete = async ({ system, user, maxTokens }) => {
   const text = [m?.content, m?.reasoning_content].filter(Boolean).join("\n\n").trim();
   if (!text) throw new Error(`${via()} returned an empty message`);
   // The agent reports its own faults as an ordinary 200 reply; these were saved as draft
-  // posts reading "API call failed after 3 retries: HTTP 429" (2026-10-23).
+  // posts reading "API call failed after 3 retries: HTTP 429".
   const fault = /^API call failed after \d+ retries?: (.*)$/s.exec(text)?.[1] ?? /^\s*⚠️?\s*(.*)$/s.exec(text)?.[1];
   if (fault !== undefined) {
     throw new Error(/\b429\b/.test(fault) ? "the model is busy with other requests; try again shortly" : `${via()} failed: ${fault.slice(0, 120)}`);

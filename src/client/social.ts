@@ -358,7 +358,7 @@ export function matchSocial(text: string): SocialCmd | null {
     return { kind: "schedule" };
 
   // A short command to look at a view, not any sentence containing "open": a request like "create a
-  // blog ... research 3 posts on the latest open source AI models" opened the drafts (2026-10-23).
+  // blog ... research 3 posts on the latest open source AI models" opened the drafts.
   const nav = /^(?:please\s+)?(?:can you\s+|could you\s+)?(?:show|open|go to|take me to)\b/i.test(l)
     && l.split(/\s+/).length <= 12 && !/\bopen[- ]source\b/i.test(l);
   if (nav && !/\b(project|plan|board|tasks?|agents?|files?)\b/i.test(l)) {

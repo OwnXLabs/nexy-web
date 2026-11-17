@@ -17,7 +17,7 @@ import { offersProject } from "./promote";
 import { fromReply, htmlArtifact, gameArtifact, markdownArtifact } from "./content-view";
 import { slidesFrom, monthIn, subjectIn, type DocSource } from "./deck";
 import { planBlock, markStarted, agentsBlock, consentBlock, resumeBlock, summaryBlock, autopilotBlock } from "./blocks";
-import { classify, splitTasks, asksToChangePage, retryOf, fixNote } from "./intent";
+import { classify, splitTasks, asksToChangePage, retryOf, fixNote, meansOwner } from "./intent";
 import { ERROR_MAX, plainError, type LastBuild } from "../lib/chat-output";
 import { connectIntent, playConnect } from "./perm";
 import { handleEdit, editablePage, applyRevision } from "./edit-loop";
@@ -35,7 +35,7 @@ import { engineItems, initEngineChat, labelReply, renderEngineChip } from "./eng
 import { loadEngines, pickedEngine } from "./engines";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine, deviceZone, showWaitingRoutines } from "./memory";
-import { initSettings, notify, openSettings } from "./settings";
+import { initSettings, notify, openSettings, prefs } from "./settings";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
@@ -46,7 +46,7 @@ import { readLocally } from "../lib/file-text.ts";
 import { slugOf } from "./doc-title";
 
 // "on the right" is true only where the pane sits beside the chat. On a phone the pane covers the
-// chat, so there the words are a button that brings it back (QA 2026-11-12).
+// chat, so there the words are a button that brings it back.
 const ON_RIGHT = `<span class="wide-only">on the right</span><span class="phone-only"><button type="button" class="linkbtn" data-open-work>in the work view</button></span>`;
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s);
@@ -1340,7 +1340,7 @@ async function autopilotRun(p: Project): Promise<void> {
   let waits = 0, waitingOn = "";
   // a task this loop already ran is never picked again: the project's task list can be swapped
   // for a fresh copy mid-run, and the "done" then landed on the old object, so every task
-  // after the first ran twice (2026-10-25, local-autopilot-follow.cjs)
+  // after the first ran twice
   const ran = new Set<string>();
   for (;server === "unsupported";) {
     const t = p.tasks.find((x) => x.s !== "done" && !ran.has(x.id) && !x.human && !isPaused(p.id, x.who));
@@ -1737,7 +1737,7 @@ async function playBoardEdit(i: { kind: string; title: string; role?: string; st
         return;
       }
       const target = String(i.role ?? "").trim();
-      const toHuman = /^(me|myself|you)$/i.test(target);
+      const toHuman = meansOwner(target, prefs().name);
       if (i.kind === "completeTask" && i.state === "review") {
         bub.innerHTML = `The board has no Review column yet, so <b>${esc(match.t)}</b> is unchanged. Say “mark it doing” or “mark it done”.`;
         return;
@@ -1804,13 +1804,13 @@ function typeOut(el: HTMLElement, text: string): Promise<void> {
 }
 
 // the last 12 messages, plus the opening exchange: "what was my first question?" needs it,
-// and the agent keys a conversation by its first message (2026-10-20: forgotten by turn 10)
+// and the agent keys a conversation by its first message
 function recent<T>(thread: T[]): T[] {
   return thread.length > 14 ? [...thread.slice(0, 2), ...thread.slice(-12)] : thread;
 }
 
 // The agent's screen slides in once the agent opens its browser for this reply, never on a guess
-// from the wording: a search-only answer left it open on an empty screen (2026-10-28).
+// from the wording: a search-only answer left it open on an empty screen.
 function watchBrowsing(chat: string | null, show: () => void): { stop(browsed?: boolean): void } {
   let shown = false, done = false, since = 0, timer = 0;
   const reveal = () => {
@@ -1940,7 +1940,7 @@ const PARTIAL_SAVE_MS = 3_000;
 // a reply with no words this long gets the engine's own note, where it has one
 const WAIT_NOTE_MS = 3_000;
 // what "Continue?" sends. A continued answer keeps the question it continues: its document was
-// titled "continue-from-where-you-stop" (QA 2026-11-12) and is now the same document, grown.
+// titled "continue-from-where-you-stop" and is now the same document, grown.
 const CONTINUE = "Continue from where you stopped.";
 // per chat and title: the document an answer made, and the answer that last went into it
 const answerDocs = new Map<string, { md: string; last: string }>();
@@ -2002,7 +2002,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     // the agent asks for the person (a password, a code, a CAPTCHA) with a marker it ends the reply on
     const told = takeoverAsk([m?.content, m?.reasoning_content].filter(Boolean).join("\n\n").trim());
     const ask = told.ask;
-    // an answer cut mid-bold showed a stray "**" (QA 2026-11-12)
+    // an answer cut mid-bold showed a stray "**"
     const answer = d.cut || d.stopped ? closeBold(told.answer) : told.answer;
     const offer = () => {
       if (ask && !priv) offerTakeover(holder, ask);
@@ -2024,7 +2024,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     if (lifted) {
       showArtifact(lifted.artifact);
       // everything but the table stays in the chat: the pane holds only the table, and showing the
-      // first paragraph alone lost the price and the paragraph after it (2026-10-28)
+      // first paragraph alone lost the price and the paragraph after it
       const prose = lifted.prose.split("\n").filter((l) => !l.trim().startsWith("|")).join("\n").replace(/\n{3,}/g, "\n\n").trim();
       holder.querySelector(".bub")!.innerHTML =
         (prose ? `${bubbleText(prose.length > 2000 ? `${prose.slice(0, 2000)}…` : prose)}<br>` : "") + `<span class="faint">${esc(lifted.note).replace(/\bon the right\b/g, ON_RIGHT)}</span>`;
@@ -2047,7 +2047,7 @@ async function playChat(text: string, priv = false): Promise<void> {
   } catch (e) {
     thread.pop();
     console.warn("[nexy] the answer failed", e);
-    // Ollama killed mid-answer lost the words already shown and ended on a raw error (QA 2026-11-12)
+    // Ollama killed mid-answer lost the words already shown and ended on a raw error
     holder.querySelector(".bub")!.innerHTML = unreachable(e) ? esc(away())
       : `${kept ? bubbleText(closeBold(kept)) : ""}<div class="feednote bad" data-interrupted="1">${kept ? "This answer stopped before it finished." : "The model on this machine did not answer."} <span class="faint">(${esc((e as Error).message)})</span> <button type="button" class="btn small" data-ask-again="${esc(text)}">Ask again</button></div>`;
   } finally {
@@ -2291,8 +2291,7 @@ async function playRevise(text: string, priv: boolean, part?: Picked | null): Pr
 
 // The open page as Nexy should know it: a short map first (outline, sections, buttons,
 // colours, images, products with prices), then its words. Questions about the page are
-// answered from what is there, not from memory of the request (2026-10-25: "what colour is
-// the header?" had only the flattened text to go on).
+// answered from what is there ("what colour is the header?"), not from memory of the request.
 function openPage(): { title: string; text: string } | undefined {
   const p = isOpen() ? editablePage() : null;
   if (!p) return undefined;
@@ -2372,8 +2371,8 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     const quick = classify(text);
     if (INSTANT.has(quick.kind)) { noteUserMessage(text); push("me", esc(text)); instant(quick); saveChat(); return; }
     // A build runs on the server and is only polled here, so a question need not wait the
-    // 9-12 minutes it takes. Images still queue: image and build text at once is what ran
-    // the GPU out of memory (2026-10-17).
+    // minutes it takes. Images still queue: image and build text at once can run the GPU out of
+    // memory.
     if (S.job === "build" && quick.kind === "chat") {
       noteUserMessage(text); push("me", esc(text)); saveChat();
       void playChat(text, isPrivate()).finally(() => saveChat());

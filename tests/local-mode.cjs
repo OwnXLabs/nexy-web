@@ -46,11 +46,11 @@ test('a computer without an Own1: missing studios answer plainly, nothing says O
     await page.getByText('Making images is off. Turn on "Make images on this Mac" in Nexy Home first.', { exact: false }).waitFor({ timeout: 15000 });
     await ask(page, 'build me a website for a ping pong ball business');
     await page.getByText("Building websites and apps isn't in Nexy on this computer yet").waitFor({ timeout: 15000 });
-    // QA 0.2.9 on Windows: no search service there; a chart that needs the web says so plainly
+    // no search service on this computer: a chart that needs the web says so plainly
     const r = await fetch(s.base + '/api/v1/research', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question: 'chart solar capacity by year' }) });
     assert.equal(r.status, 409);
     assert.match((await r.json()).note, /^Web search isn't on this computer yet\./);
-    // QA 0.2.9 on Windows: the Talk with Nexy button showed where there is no speech, and did nothing
+    // no Talk with Nexy button where there is no speech
     assert.equal(await page.locator('#waveBtn').isVisible(), false, 'no Talk with Nexy button without speech');
     assert.equal(await page.getByText('Make this a project').count(), 0, 'no projects without Own Startup');
 

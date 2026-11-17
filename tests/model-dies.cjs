@@ -1,5 +1,5 @@
 // The model dies mid-answer (Ollama killed): the words already shown stay up, with Continue,
-// and continuing works (QA 2026-11-12: the words vanished and a raw error took their place).
+// and continuing works.
 // Run after `npm run build`: PLAYWRIGHT_MODULE=<path to playwright> node --test tests/model-dies.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -74,8 +74,7 @@ test('the model dies mid-answer: what arrived stays, with Continue', { timeout: 
   } finally { await b.close(); s.p.kill(); m.srv.close(); fs.rmSync(data, { recursive: true, force: true }); }
 });
 
-// QA 0.2.8: a long guide shown on the right, cut by the model dying, said so late and seemed to lose
-// its words. The notice comes at once; the guide so far is on the right, its start in the chat.
+// A long guide shown on the right, cut by the model dying: the notice comes at once; the guide so far is on the right, its start in the chat.
 test('a long guide cut off: the notice at once, the words so far on the right, Continue', { timeout: 120000 }, async () => {
   const m = await model(GUIDE);
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-model-dies-'));
