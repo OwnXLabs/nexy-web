@@ -540,7 +540,8 @@ body.rail-closed #railOpen{display:grid!important}
 .pm-i{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:9px;color:var(--fg2);font-size:13px}
 .pm-i:hover{background:rgba(255,255,255,.08);color:#fff}
 .pm-i .led{margin-left:auto}
-.pm-i.cur{color:#fff}
+.pm-i.cur{color:#fff;cursor:default}
+.pm-i.cur:hover{background:none}
 body[data-theme=win95] .pmenu{background:#c0c0c0;border:0;border-radius:0;box-shadow:inset -1px -1px #404040,inset 1px 1px #fff,inset -2px -2px #808080,inset 2px 2px #dfdfdf;color:#000}
 body[data-theme=win95] .pm-i,body[data-theme=win95] .pm-h .d,body[data-theme=win95] .pm-sec{color:#000}
 body[data-theme=win95] .pm-i:hover{background:#000080;color:#fff}

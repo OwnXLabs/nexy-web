@@ -2663,8 +2663,8 @@ function wireProfile(): void {
   $("#pmHelp")?.addEventListener("click", () => { m.classList.remove("open"); void send("What can you do?"); });
   const ws = $("#pmWs");
   if (ws) {
-    ws.innerHTML = `<button type="button" class="pm-i cur">${esc($("#pmWsName")?.textContent?.trim() || here)}<span class="led"></span></button><button type="button" class="pm-i" id="pmNewWs">New workspace</button>`;
-    $("#pmNewWs")?.addEventListener("click", () => { m.classList.remove("open"); toast("One workspace per machine for now; projects already keep their own files and history"); });
+    // the one workspace on this machine, named, not a button: there is nothing to switch to yet
+    ws.innerHTML = `<div class="pm-i cur" aria-current="true">${esc($("#pmWsName")?.textContent?.trim() || here)}<span class="led"></span></div>`;
   }
   b.addEventListener("click", (e) => { e.stopPropagation(); m.classList.toggle("open"); });
   document.addEventListener("click", () => m.classList.remove("open"));
