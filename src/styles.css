@@ -623,6 +623,8 @@ body.canvas-full .canvas{visibility:visible}
 .m.ai{position:relative}
 .macts.ai{justify-content:flex-start;margin-top:4px}
 .m.ai:hover .macts{opacity:1}
+/* no Try again on a reply whose job is still running */
+.m.working .macts{display:none}
 #vmWave{width:min(760px,92vw);height:320px}
 .vm-nexy{display:none}
 .vm-cap{min-height:36px}

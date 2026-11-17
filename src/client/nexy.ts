@@ -153,10 +153,12 @@ const api = async <T>(path: string, init?: RequestInit): Promise<T> => {
 const WAITS = [10, 20, 30, 45, 60];
 // the image engine heals itself within a minute of a failure, then reloads
 const IMAGE_WAITS = [15, 30, 45, 60, 60, 60];
-async function patient<T>(call: () => Promise<T>, waiting: (n: number, secs: number, of: number, e: unknown) => void, waits = WAITS): Promise<T> {
+// `busyOnly`: wait only when the server said it is busy (429, 502-504), so the job did not start; a
+// dropped connection may still be running there, and asking again would start a second one
+async function patient<T>(call: () => Promise<T>, waiting: (n: number, secs: number, of: number, e: unknown) => void, waits = WAITS, busyOnly = false): Promise<T> {
   for (const [n, secs] of waits.entries()) {
     try { return await call(); }
-    catch (e) { if (!transient(e)) throw e; waiting(n + 1, secs, waits.length, e); await sleep(secs * 1000); }
+    catch (e) { if (!transient(e) || (busyOnly && !(e instanceof HttpError))) throw e; waiting(n + 1, secs, waits.length, e); await sleep(secs * 1000); }
   }
   return call();
 }
@@ -177,7 +179,7 @@ const clock = (ms: number) => { const t = Math.max(0, Math.round(ms / 1000)); re
 function tick(el: HTMLElement): void {
   const t = el.querySelector(".wt"); if (!t || !el.dataset.eta) return;
   const gone = Date.now() - Number(el.dataset.t0), left = Number(el.dataset.eta) - gone;
-  t.textContent = ` · ${clock(gone)} · ${left > 10_000 ? `about ${clock(left)} left` : left > -Number(el.dataset.eta) / 2 ? "almost done" : "longer than usual, still going"}`;
+  t.textContent = ` · ${clock(gone)} · ${left > 10_000 ? `about ${clock(left)} left` : left > 0 ? "almost done" : "taking longer than usual…"}`;
 }
 setInterval(() => document.querySelectorAll<HTMLElement>("#thread .wait[data-eta]").forEach(tick), 1000);
 const settle = (holder: HTMLElement) => holder.querySelector(".bub .wait")?.remove();
@@ -188,6 +190,12 @@ function stopClock(holder: HTMLElement): void {
   delete w.dataset.eta;
   const t = w.querySelector(".wt"); if (t) t.textContent = "";
 }
+// a studio that said it is busy: the job never started, so nothing is lost by waiting for it
+const studioBusy = (holder: HTMLElement, who: string, gen?: { note(t: string): void }) => (n: number, secs: number, of: number) => {
+  const t = `${who} is busy on this machine. Waiting ${secs}s for it to be free (${n} of ${of}).`;
+  status(holder, t);
+  gen?.note(t);
+};
 const retrying = (holder: HTMLElement, gen?: { note(t: string): void }) => (n: number, secs: number, of: number) => {
   const t = `Still loading on this machine. Trying again in ${secs}s (${n} of ${of}).`;
   status(holder, t);
@@ -1616,13 +1624,17 @@ async function playGenerate(medium: "image" | "audio", prompt: string): Promise<
   let gen: ReturnType<typeof generating> | undefined;
   try {
     if (medium === "image") {
-      gen = generating(prompt.slice(0, 60), "image", `${who} is painting it on this machine`, typicalMs("image"));
+      const est = typicalMs("image");
+      gen = generating(prompt.slice(0, 60), "image", `${who} is painting it on this machine`, est);
       const paintStart = Date.now();
       const seed = () => Math.floor(Math.random() * 2_000_000_000);
+      // One request, given the studio's usual time and a wide margin. Nothing offers Try again while it
+      // runs: a cold image (about 50 s) once showed it at 36 s and then came back fine.
+      holder.classList.add("working");
       const d = await patient(() => api<{ image_b64?: string; error?: string }>(
         "/api/apps/images/api/generate",
-        { method: "POST", body: JSON.stringify({ prompt: sharpen(prompt), size: "512x512", seed: seed() }) },
-      ), retrying(holder, gen), IMAGE_WAITS);
+        { method: "POST", body: JSON.stringify({ prompt: sharpen(prompt), size: "512x512", seed: seed() }), signal: timeoutSignal(imageLimit(est)) },
+      ), studioBusy(holder, who, gen), IMAGE_WAITS, true);
       if (!d.image_b64) throw new Error(d.error ?? "no image came back");
       let src = `data:image/png;base64,${d.image_b64}`;
       let q = await imageQuality(src);
@@ -1683,10 +1695,14 @@ async function playGenerate(medium: "image" | "audio", prompt: string): Promise<
 
     showArtifact({ ...beatStudioArtifact({ title: `${shortTitle(prompt, "Beat")}.studio`, bpm, preset: pat.genre ?? prompt, steps: pat.pattern }), meta: `${who} · ${bits} · on device` });
   } catch (e) {
+    holder.classList.remove("working");
+    // our own time limit ran out: said as that, never as the browser's "signal is aborted"
+    if ((e as Error)?.name === "AbortError") e = new Error(`${who} was still working after ${clock(imageLimit(typicalMs("image")))}`);
     gen?.fail(`${who} stopped: ${errText(e)}`);
     failedReply(holder.querySelector(".bub")!, `${esc(who)} could not make that this time. It usually works on a second try.`,
       errText(e), () => void playGenerate(medium, prompt));
   } finally {
+    holder.classList.remove("working");
     settle(holder);
   }
 }
@@ -2075,6 +2091,8 @@ function typicalMs(kind: "site" | "diagram" | "image" | "chat"): number {
   const secs = median(S.builds.filter((b) => b.status === "built" && b.secs > 30 && diagram(b.prompt) === (kind === "diagram")).slice(0, 20).map((b) => b.secs));
   return secs ? secs * 1000 : kind === "diagram" ? 240_000 : 540_000;
 }
+// how long one image may take before it counts as failed: the usual time twice over, and at least a minute more
+const imageLimit = (est: number): number => Math.max(est * 2, est + 60_000);
 function noteMs(kind: "image" | "chat", ms: number): void {
   try { const k = `nexy.eta.${kind}`, xs = JSON.parse(localStorage.getItem(k) ?? "[]"); xs.unshift(ms); localStorage.setItem(k, JSON.stringify(xs.slice(0, 10))); } catch { /* storage off: the default stands */ }
 }

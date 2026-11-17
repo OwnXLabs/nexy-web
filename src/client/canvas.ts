@@ -292,7 +292,7 @@ export function generating(title: string, kind: ArtifactKind, label: string, typ
     const el = Date.now() - t0;
     // a countdown from what this kind of work has taken on this machine
     const left = typicalMs - el;
-    const tail = left > 15_000 ? `about ${mmss(left)} left` : el < typicalMs * 1.5 ? "almost done" : `taking longer than the usual ${mmss(typicalMs)}, still going`;
+    const tail = left > 15_000 ? `about ${mmss(left)} left` : left > 0 ? "almost done" : `taking longer than the usual ${mmss(typicalMs)}…`;
     return `${text} · ${mmss(el)} · ${tail}`;
   };
   const paintLine = () => {
