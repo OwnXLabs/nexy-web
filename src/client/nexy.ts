@@ -2598,7 +2598,6 @@ function wireComposer(): void {
 
 const UNBUILT: Record<string, string> = {
   pmKeys: "N new chat, ⌘K commands, [ sidebar, space talk, Esc close",
-  pmOut: "There is no sign-in to sign out of; the demo gate is in front of the whole box.",
 };
 
 function wireUnbuilt(): void {
