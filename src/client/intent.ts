@@ -1,6 +1,8 @@
 import { here, onOwn1 } from "./place";
 import { classifyEdit } from "./edit-loop";
 import type { LastBuild } from "../lib/chat-output";
+import { GAME_TERM, PLAY } from "../lib/caps.ts";
+import { routineAsk } from "../lib/routine-ask.ts";
 
 export type Intent =
   | { kind: "addTask"; title: string }
@@ -60,7 +62,7 @@ function stripLead(s: string): string {
 const MAKE_VERB = /\b(build|make|create|code|write|design|give me|i want|i need)\b/i;
 // a build verb as an ask: at the start of a sentence, or after "can you", "please", "I want you to"
 // (2026-10-28: "each cup costs $1.20 to make", "how do I set up my router?" started builds)
-const ASKS_TO_MAKE = /(?:^|[.!?]\s+)(?:(?:hey\s+)?nexy[,\s]+)?(?:please\s+)?(?:(?:can|could|would|will) you\s+(?:please\s+)?|i(?: want|'d like| would like| need) you to\s+|help me\s+|let'?s\s+)?(?:build|create|make|set up|launch|start a project)\b/i;
+const ASKS_TO_MAKE = /(?:^|[.!?]\s+)(?:(?:hey\s+)?nexy[,\s]+)?(?:please\s+)?(?:(?:can|could|would|will) (?:you|u)\s+(?:please\s+)?|i(?: want|'d like| would like| need) you to\s+|help me\s+|let'?s\s+)?(?:build|create|make|code|program|set up|launch|start a project)\b/i;
 const REFERS_BACK = /^\s*(?:please\s+)?(?:can you\s+)?make\s+(?:it|that|this|them|those)\s+(?!(?:a|an|into|as)\b)/i;
 const OPENS_EXISTING = /^\s*(?:please\s+)?(?:can you\s+)?(?:open|visit|go to|browse|pull up|bring up|load|show me)\s+(?!(?:me\s+)?(?:up\s+)?(?:a|an|new|another)\b)/i;
 
@@ -117,6 +119,41 @@ function near(a: string, b: string): boolean {
 function namesDeliverable(s: string): boolean {
   if (DELIVERABLE.test(s)) return true;
   return s.toLowerCase().split(/[^a-z]+/).some((w) => w.length >= 5 && NOUNS.some((n) => near(w, n)));
+}
+
+// Asked for by what it is for rather than what it is: a game by name or kind ("sudoku please",
+// "make street fighter"), a website by what it does ("put my bakery on the internet", "a shop for
+// my soap"). These words also turn up in questions and writing ("tips for chess", "write a
+// product description for my shop"), so they count only in an ask to build or a request that
+// leads with the thing.
+const SITE_CUE = /\b(?:(?:online|web) ?(?:shop|store|menu|presence|portfolio|ordering|booking)|webshop|e-?shop|html (?:page|site)|(?:put|get|bring|take)\s+(?:my|our)\s+(?:[\w'-]+\s+){0,3}(?:online|on the (?:internet|web))|find (?:me|us) online|(?:something|somewhere|a place|a page)\s+(?:online\s+)?(?:where\s+(?:people|customers|clients|guests|visitors|fans)\s+can|to sell)|an?\s+(?:[\w'-]+\s+){0,2}(?:shop|store)\s+(?:for|to sell|selling|where)\b)/i;
+const BUILD_VERB = /\b(?:build|make|create|code|program|design|develop|i want|i need|i'd like|give me an?)\b/i;
+// about a game or a thing rather than asking for one: "chess openings", "the history of pong"
+const TOPIC = /\b(?:tips|history|rules|openings?|strateg(?:y|ies)|cheats?|facts|news|reviews?|guides?|tutorials?|walkthrough|lore|plot|story|ideas|names|recommend\w*|description|copy|tagline|slogan|bio)\b/i;
+// starts with a verb for words, not for a build: "list 10 game ideas", "summarise the plot of Zelda"
+const OTHER_VERB = /^\s*(?:please\s+)?(?:list|write|remember|give me (?:tips|ideas|advice|some|a list)|tell|explain|summari[sz]e|translate|review|recommend|suggest|compare|describe|name|rate|rank|find|search|look|research|teach|draft|show me how)\b/i;
+// leads with the thing: "a tower defense where…", "minesweeper please", "landing page for my game"
+const LEADS = /^\s*(?:(?:a|an|the|some|one|simple|small|little|quick|basic|new|nice|cool|fun|lil|online|something like|a thing like|like)\s+)*(\S+(?:\s+\S+){0,4})/i;
+// what follows a game named first: an ask goes on "…but", "…with", "…please"; "street fighter
+// characters" is about the game
+const ASK_GOES_ON = /^(?:[,.!:-]|$|(?:but|with|where|for|like|please|pls|plz|clone|that|which|vs|against|i|we|you|in|on)\b)/i;
+function leadsWithGame(s: string): boolean {
+  const lead = LEADS.exec(s);
+  if (!lead) return false;
+  const rest = s.slice(lead[0].length - lead[1].length);
+  const m = GAME_TERM.exec(rest);
+  return m?.index === 0 && ASK_GOES_ON.test(rest.slice(m[0].length).trimStart());
+}
+function weakAsk(s: string): boolean {
+  if (QUESTION.test(s) && !ASKS_TO_MAKE.test(s)) return false;
+  // "a site for my game studio" asks for a new thing; "my snake is sick" is about one
+  if ((ABOUT_EXISTING.test(s) && !/^\s*an?\s/i.test(s)) || OTHER_VERB.test(s) || TEXT_ANSWER.test(s) || NOT_A_DELIVERABLE.test(s) || PROJECT.test(s) || s.split(/\s+/).length > 20) return false;
+  if (SITE_CUE.test(s)) return true;
+  if (TOPIC.test(s)) return false;
+  if (PLAY.test(s)) return true;
+  const lead = LEADS.exec(s)?.[1] ?? "";
+  if (GAME_TERM.test(s) && BUILD_VERB.test(s) || leadsWithGame(s)) return true;
+  return (namesDeliverable(lead) || /\bsite\b/i.test(lead)) && s.split(/\s+/).length <= 16;
 }
 
 // a short ask with no verb ("simple wesite for apples") still asks for the thing,
@@ -191,7 +228,8 @@ export function classify(text: string): Intent {
     return { kind: "unavailable", say: NO_VIDEO };
   }
 
-  if (DIAGRAM.test(s) && !NOT_A_DELIVERABLE.test(s)) {
+  // "explain what a flowchart is used for" is a question about one
+  if (DIAGRAM.test(s) && !NOT_A_DELIVERABLE.test(s) && (!QUESTION.test(s) || /\b(?:can|could|would|will) (?:you|u)\b/i.test(s))) {
     return { kind: "make", brief: s, deliverable: "diagram" };
   }
 
@@ -207,15 +245,17 @@ export function classify(text: string): Intent {
   if (MAKE_VERB.test(s) && namesDeliverable(s) && !NOT_A_DELIVERABLE.test(s) && !PROJECT.test(s) && (!QUESTION.test(s) || ASKS_TO_MAKE.test(s))) {
     return { kind: "make", brief: s, deliverable: "web_app" };
   }
-  if (words <= 8 && namesDeliverable(s) && !QUESTION.test(s) && !ABOUT_EXISTING.test(s) && !NOT_A_DELIVERABLE.test(s) && !PROJECT.test(s)) {
+  if (words <= 8 && namesDeliverable(s) && !QUESTION.test(s) && !OTHER_VERB.test(s) && !ABOUT_EXISTING.test(s) && !NOT_A_DELIVERABLE.test(s) && !PROJECT.test(s)) {
     return { kind: "make", brief: s, deliverable: "web_app" };
   }
+  if (weakAsk(s)) return { kind: "make", brief: s, deliverable: "web_app" };
 
   // Tables, a list, an email: an answer in the chat, however long the ask. "make two small
   // tables… table 1 = …" ran past 30 words and was taken for a team project (QA 2026-11-12).
   if (ASKS_TO_MAKE.test(s) && TEXT_ANSWER.test(s) && !namesDeliverable(s) && !PROJECT.test(s)) return { kind: "chat" };
 
-  if (ASKS_TO_MAKE.test(s)) {
+  // "set up a routine that summarises my inbox" is a routine, not a page
+  if (ASKS_TO_MAKE.test(s) && !routineAsk(s)) {
     // A project only when it reads like one; a short single ask is built directly.
     if (PROJECT.test(s) || /\bstart a project\b/i.test(s) || words > 30 || NOT_A_DELIVERABLE.test(s)) return { kind: "build" };
     return { kind: "make", brief: s, deliverable: "web_app" };
