@@ -83,6 +83,8 @@ test('a chat works without the APIs an old phone web view lacks', { timeout: 900
     // the reply's markdown is rendered in the bubble, its HTML is not
     const bub = page.locator('.m.ai .bub').last();
     await bub.locator('h4', { hasText: 'Hello from an old phone.' }).waitFor();
+    // the reply types itself out; read it once the cursor is gone
+    await bub.locator('.cur').waitFor({ state: 'detached' });
     const a = bub.locator('a', { hasText: 'the site' });
     assert.equal(await a.getAttribute('href'), 'https://example.com/a?b=1');
     assert.equal(await a.getAttribute('target'), '_blank');
