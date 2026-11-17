@@ -24,11 +24,13 @@ const beta = process.env.NEXY_BETA === "1";
 const search = !local || !!process.env.NEXY_SEARXNG_URL;
 // the desktop app's version, for problem reports and About
 const version = process.env.NEXY_APP_VERSION || undefined;
+// the desktop app takes pictures of its own window for reports (api/v1/screenshot)
+const shot = !!process.env.NEXY_LOG_TAIL_URL;
 // what this computer's model can do (the desktop app's capability file): the page holds back the rest
 const caps = local ? process.env.NEXY_CAPS || undefined : undefined;
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined} data-caps={caps}>
+<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-app-shot={shot ? "1" : undefined} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined} data-caps={caps}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

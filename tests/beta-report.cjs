@@ -46,6 +46,7 @@ function fake() {
         return res.end(JSON.stringify({ ok: true, ref: 'NXR-7Q2F' }));
       }
       if (req.url === `/${TAIL}`) { res.writeHead(200); return res.end(LOGS); }
+      if (req.url === `/${TAIL}/shot`) { res.writeHead(200, { 'content-type': 'image/png' }); return res.end(PNG); }
       if (req.url === `/${TAIL}/hardware`) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(HW)); }
       res.writeHead(500); res.end('no model here');
     });
@@ -121,9 +122,8 @@ test('beta: the modal, the preview is exactly what the team receives, secrets an
     assert.match(await dlg.innerText(), /Kept 90 days at most, then deleted\. A copy stays on this computer\./);
     assert.equal(f.got.length, 0, 'nothing sent on opening');
     await page.fill('#prpText', 'Share did nothing. password: typedsecret and sk-A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6q7');
-    const chooser = page.waitForEvent('filechooser');
-    await page.click('[data-shot]');
-    await (await chooser).setFiles({ name: 'shot.png', mimeType: 'image/png', buffer: PNG });
+    // in the desktop app the button adds the app's picture of its window
+    await page.click('.prp [data-shot]');
     await page.waitForSelector('.prp .shots figure img');
     await page.fill('#prpEmail', 'tester@example.com');
     await ready(page);
@@ -417,4 +417,41 @@ test('not a beta: no badge, no send choice, no route', async () => {
     assert.equal(f.got.length, 0);
     assert.deepEqual(errors, []);
   } finally { await b.close(); s.stop(); f.srv.close(); }
+});
+
+// "Add a screenshot": in the desktop app, a picture of Nexy's own window from the app; without the
+// app, the file picker. Never the browser's screen-capture prompt (it named the raw local address).
+test('Add a screenshot: the app\'s picture of its window in the desktop app, a file elsewhere, never screen capture', async () => {
+  const f = await fake();
+  const b = await chromium.launch();
+  const capture = (page) => page.addInitScript(() => {
+    window.__captures = 0;
+    if (navigator.mediaDevices) navigator.mediaDevices.getDisplayMedia = async () => { window.__captures++; throw new DOMException('no', 'NotAllowedError'); };
+  });
+  for (const app of [true, false]) {
+    const s = await start(app ? betaEnv(f) : betaEnv(f, { NEXY_LOG_TAIL_URL: '' }));
+    try {
+      const ctx = await b.newContext({ viewport: { width: 1400, height: 1000 } });
+      const page = await ctx.newPage();
+      await capture(page);
+      await page.goto(s.base + '/');
+      await page.locator('#input').waitFor({ timeout: 20000 });
+      await page.locator('#betaBtn').click();
+      await page.locator('.prp [data-shot]').waitFor();
+      if (app) {
+        await page.locator('.prp [data-shot]').click();
+        await page.waitForFunction(() => document.querySelectorAll('.prp .shots figure').length === 1, null, { timeout: 10000 });
+      } else {
+        const chooser = page.waitForEvent('filechooser', { timeout: 5000 });
+        await page.locator('.prp [data-shot]').click();
+        await chooser;
+        assert.equal(await page.locator('.prp .shots figure').count(), 0);
+      }
+      assert.equal(await page.evaluate(() => window.__captures), 0, 'no browser capture prompt');
+      await ctx.close();
+      // a paired phone or any other caller without the app gets no picture
+      if (!app) assert.equal((await fetch(s.base + '/api/v1/screenshot')).status, 404);
+    } finally { s.stop(); }
+  }
+  await b.close(); f.srv.close();
 });

@@ -126,19 +126,21 @@ export function hardwareLines(h: Hw | undefined): string[] {
   return out.map((l) => scrubLog(l).slice(0, 200));
 }
 
-// one frame of this tab via the browser's screen-capture prompt (it also sees app windows
-// the page itself cannot draw); null when the browser has no screen capture, as on phones
-async function captureTab(): Promise<string | null> {
-  const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: (c: unknown) => Promise<MediaStream> };
-  if (!md?.getDisplayMedia) return null;
-  const stream = await md.getDisplayMedia({ video: { displaySurface: "browser" }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include" });
-  try {
-    const v = document.createElement("video");
-    v.srcObject = stream; v.muted = true;
-    await v.play();
-    await new Promise((r) => setTimeout(r, 250));
-    return toJpeg(v, v.videoWidth, v.videoHeight);
-  } finally { stream.getTracks().forEach((t) => t.stop()); }
+// In the desktop app, a picture of Nexy's own window, taken by the app (its server asks it): no
+// browser capture prompt, nothing outside Nexy's window. Elsewhere there is none, and the person
+// picks a file instead. null when there is no picture to be had.
+const appShot = typeof document !== "undefined" && document.documentElement.dataset.appShot === "1";
+async function captureWindow(): Promise<string | null> {
+  if (!appShot) return null;
+  // the dialog is hidden first: let the window draw without it
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await new Promise((r) => setTimeout(r, 120));
+  const r = await fetch("/api/v1/screenshot", { cache: "no-store" });
+  if (!r.ok) throw new Error(r.status === 503 ? "the app could not take a picture of the window" : httpMsg(r.status));
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  try { const img = await loadImg(url); return toJpeg(img, img.naturalWidth, img.naturalHeight); }
+  finally { URL.revokeObjectURL(url); }
 }
 
 function toJpeg(src: CanvasImageSource, w: number, h: number, maxW = MAX_W, q = 0.75): string {
@@ -379,11 +381,11 @@ export function openReporter(thread?: ReportThread | null): void {
     msg.textContent = "";
     scrim.style.visibility = "hidden";
     try {
-      const s = await captureTab();
+      const s = await captureWindow();
       if (s) { shots.push(s); shotsChanged(); } else file.click();
     } catch (e) {
-      // the person cancelled the browser's prompt, or it is blocked: offer a file instead
-      if ((e as Error)?.name !== "NotAllowedError") msg.textContent = `Could not take a screenshot: ${(e as Error).message}`;
+      // no picture this time: offer a file instead
+      msg.textContent = `Could not take a screenshot: ${(e as Error).message}. Choose a file instead.`;
       file.click();
     } finally { scrim.style.visibility = ""; }
   });
