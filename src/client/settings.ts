@@ -371,7 +371,7 @@ async function act(a: string, n?: string): Promise<void> {
   }
   if (a === "gclientoff") {
     if (!confirm("Remove your Google OAuth client? Connected apps keep working until their sign-in needs renewing.")) return;
-    const r = await fetch(`${GCLIENT}?as=nexy`, { method: "DELETE" });
+    const r = await fetch(`${GCLIENT}?as=nexy`, { method: "DELETE", headers: { "content-type": "application/json" } });
     H.toast(r.ok ? "Google OAuth client removed" : `Not removed: ${httpMsg(r.status)}`);
     void renderSettings("connections");
   }

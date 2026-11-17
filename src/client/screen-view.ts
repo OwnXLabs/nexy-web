@@ -38,7 +38,7 @@ const control = async (take: boolean): Promise<{ password?: string; error?: stri
 };
 // closing the tab mid-drive must not leave the agent paused for the rest of the session
 if (typeof window !== "undefined")
-  addEventListener("pagehide", () => { if (driving) navigator.sendBeacon("/api/v1/screen", JSON.stringify({ release: true })); });
+  addEventListener("pagehide", () => { if (driving) navigator.sendBeacon("/api/v1/screen", new Blob([JSON.stringify({ release: true })], { type: "application/json" })); });
 
 // The agent's browser closes when its turn ends, leaving the screen black. Keep the last page it
 // showed and put it back, dimmed and marked, until the browser opens again.
