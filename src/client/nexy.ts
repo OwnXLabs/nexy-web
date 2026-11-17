@@ -195,6 +195,8 @@ const retrying = (holder: HTMLElement, gen?: { note(t: string): void }) => (n: n
 };
 
 async function loadBuilds(): Promise<void> {
+  // only where Own Build runs: a computer without it has no build history to ask for
+  if (!hasStudio("build")) return;
   try {
     const d = await api<{ runs?: { prompt?: string; startedAt?: number; finishedAt?: number; steps?: { status?: string }[] }[] }>(
       "/api/apps/build/api/director/runs?limit=200",
@@ -212,7 +214,8 @@ async function loadBuilds(): Promise<void> {
 }
 
 async function loadProjects(): Promise<void> {
-  // no Own Startup on this machine (a computer without an Own1): no projects, not an error
+  // no Own Startup on this machine (a computer without an Own1): no projects, and nothing asked for
+  if (!hasStudio("startup")) { S.projects = []; return; }
   const d = await api<{ projects?: UpstreamProject[] }>("/api/apps/startup/api/pm/projects").catch((e) => {
     if (e instanceof HttpError && e.status === 404) return { projects: [] };
     throw e;
