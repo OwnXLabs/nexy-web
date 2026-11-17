@@ -1,6 +1,7 @@
 import { answerOf, quietChat } from "./quiet.ts";
 const SEARXNG = (process.env.NEXY_SEARXNG_URL ?? "").replace(/\/+$/, "");
-const LLM = (process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080").replace(/\/+$/, "");
+// a job this computer's model is held back from: the app's door to a shared Own 1 when it gives one
+const LLM = (process.env.NEXY_HEAVY_LLM_URL || (process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080")).replace(/\/+$/, "");
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
 
 export interface Snippet { title: string; url: string; text: string }

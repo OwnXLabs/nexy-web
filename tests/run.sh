@@ -69,6 +69,7 @@ check "status codes never reach the screen: httpMsg words in src/client" ts test
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
 check "studio service tokens: each studio's own token on every server-side call, rotated without a restart, a wrong or missing one said plainly, none when unset, never in a page, reply or log" node --test --test-timeout=180000 tests/studio-token.cjs
 check "a guest code on a shared Own 1: text only and an AI that is down said plainly, asked once, not a failed turn; no image attachments in the page; off a guest code unchanged" node --test --test-timeout=180000 tests/guest-code.cjs
+check "held-back jobs on a guest code: page edits and research charts through NEXY_HEAVY_LLM_URL, else NEXY_LLM_URL" ts tests/heavy-door.test.ts
 check "demo publisher: Own Build's page only, expiry, owners apart, Own Build's token when set" node --test --test-timeout=180000 tests/demo-publisher.cjs
 check "routine approval: pending routines wait for Confirm or Discard, clean context vouched for" node --test --test-timeout=180000 tests/routine-approval.cjs
 check "routine times: the device's zone reaches the agent, UTC fallback, local times in the view" node --test --test-timeout=180000 tests/routine-tz.cjs
