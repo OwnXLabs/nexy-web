@@ -142,6 +142,38 @@ test('a trusted identity header without NEXY_SOCKET refuses to start', async () 
     }
 });
 
+// a wrapper that owns the listener and sets the identity, as the Nexy app's desktop.mjs does
+const wrapper = (env) => {
+  const dir = tmp(), f = join(dir, 'wrap.mjs');
+  require('node:fs').writeFileSync(f, `await import(${JSON.stringify(require('node:url').pathToFileURL(join(DIST, 'entry.mjs')).href)}); console.log('[wrap] imported');`);
+  const p = spawn(process.execPath, [f], { env: { ...process.env, NEXY_DATA_DIR: tmp(), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  procs.push(p);
+  let log = ''; p.stdout.on('data', (d) => { log += d; }); p.stderr.on('data', (d) => { log += d; });
+  return new Promise((ok) => {
+    const t = setInterval(() => { if (log.includes('[wrap] imported')) { clearInterval(t); ok({ code: null, log }); } }, 50);
+    p.on('exit', (code) => { clearInterval(t); ok({ code, log }); });
+  });
+};
+
+test('NEXY_DOOR=desktop: a wrapper with autostart off may trust the header; without the door, or with autostart on, it may not', async () => {
+  const port = await freePort();
+  const base = { HOST: '127.0.0.1', PORT: String(port), NEXY_TRUST_XNODE_AUTH: '1' };
+  const none = await wrapper({ ...base, ASTRO_NODE_AUTOSTART: 'disabled' });
+  assert.equal(none.code, 1, 'no door: refused');
+  assert.match(none.log, /refusing to start: NEXY_TRUST_XNODE_AUTH=1 needs NEXY_SOCKET/);
+  const ok = await wrapper({ ...base, ASTRO_NODE_AUTOSTART: 'disabled', NEXY_DOOR: 'desktop' });
+  assert.ok(ok.code !== 1 && ok.log.includes('[wrap] imported'), `door + autostart off: allowed\n${ok.log}`);
+  assert.doesNotMatch(ok.log, /refusing/);
+  const on = await refused('entry.mjs', { ...base, NEXY_DOOR: 'desktop' });
+  assert.ok(on, 'door with autostart on kept running');
+  assert.equal(on.code, 1, 'door + autostart on: refused');
+  const other = await wrapper({ ...base, ASTRO_NODE_AUTOSTART: 'disabled', NEXY_DOOR: 'phone' });
+  assert.equal(other.code, 1, 'any other door value: refused');
+  const serve = await refused('serve.mjs', { ...base, NEXY_DOOR: 'desktop' });
+  assert.ok(serve, 'serve.mjs with the door kept running');
+  assert.equal(serve.code, 1, 'serve.mjs on TCP is not a wrapper door');
+});
+
 test('entry.mjs listens on TCP, so NEXY_SOCKET does not make it trust the header', async () => {
   const port = await freePort(), sock = join(tmp(), 'web.sock');
   const r = await refused('entry.mjs', { HOST: '127.0.0.1', PORT: String(port), NEXY_SOCKET: sock, NEXY_TRUST_GATE_USER: '1' });

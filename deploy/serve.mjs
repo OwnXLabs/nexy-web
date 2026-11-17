@@ -15,6 +15,8 @@ const groupId = (g) => {
   return Number(line.split(":")[2]);
 };
 
+// serve.mjs is a listener itself, so it is not a wrapper's door
+if (process.env.NEXY_DOOR === "desktop" && !sock) { console.error("[nexy] refusing to start: NEXY_DOOR=desktop is for a wrapper that imports entry.mjs; serve.mjs needs NEXY_SOCKET"); process.exit(1); }
 process.env.ASTRO_NODE_AUTOSTART = "disabled";
 const { handler } = await import("./entry.mjs");
 const server = http.createServer(handler);
