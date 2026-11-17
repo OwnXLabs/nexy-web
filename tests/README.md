@@ -8,8 +8,13 @@ separation, legacy chats, URL validation and the output size limit.
 Build with `npm run build`, then serve `HOST=127.0.0.1 PORT=4389 node dist/server/entry.mjs`.
 Run `NEXY_BASE=http://127.0.0.1:4389 PLAYWRIGHT_MODULE=/path/to/playwright node tests/conversation-isolation.cjs`.
 `tests/buttons.cjs` runs the same way. It clicks every button a person can reach (on screen, not
-under a drawer or dialog), plus each button a menu or dialog reveals, at desktop and at phone width. Each click must change the page, make a request
-or download, and throw nothing. Sign out and delete are skipped.
+under a drawer or dialog), plus each button a menu or dialog reveals. It starts from a chat with a
+built page, from the home screen and from each Settings section, on the served build (an Own1) at
+desktop and phone width, and at desktop width on its own servers for an Own1 in beta, a computer
+and Nexy Cloud, each with beta off and on. Each click must change the page, make a request,
+download, open a file picker, a confirm or a window, and throw nothing. confirm() is answered yes.
+A change sent without a content type no form can send is refused with 403, as the box's TLS
+proxy does. `PLACES='Own1,computer beta'` and `WIDTHS=1600` narrow a run.
 Playwright can also be installed normally and the module override omitted. All app/model
 API responses are simulated; these tests use no GPU and do not touch a real owner's data.
 
