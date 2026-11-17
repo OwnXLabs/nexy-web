@@ -1,4 +1,4 @@
-// Real Nexy API handlers + disk-backed chats + the private Python publisher.
+// Real Nexy API handlers + disk-backed chats + the private Python publisher (or its stand-in).
 // Local HTTP fixture stands in for Own Build; nothing is published on Own1.
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,8 +11,9 @@ const { buildSync } = require('esbuild');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexy-publish-'));
 const who = 'o_testing_0123456789abcdef';
 process.env.NEXY_DATA_DIR = temp;
-const publisherPath = process.env.NEXY_PUBLISHER_SCRIPT;
-if (!publisherPath) { test('publishing', { skip: 'set NEXY_PUBLISHER_SCRIPT to the publisher under test' }, () => {}); return; }
+// the private publisher lives with the private deployment; without it, its stand-in speaks the same API
+const publisherPath = process.env.NEXY_PUBLISHER_SCRIPT || path.join(__dirname, 'standins', 'private-publisher.py');
+if (!process.env.NEXY_PUBLISHER_SCRIPT) console.log('# private publisher: the stand-in (set NEXY_PUBLISHER_SCRIPT to test the real one)');
 const code = buildSync({ entryPoints: [path.resolve(__dirname, '../src/pages/api/v1/publish.ts')], bundle: true, platform: 'node', format: 'cjs', write: false, define: { 'import.meta.glob': 'emptyExamples' } }).outputFiles[0].text;
 const m = { exports: {} }; new Function('require', 'module', 'exports', 'emptyExamples', code)(require, m, m.exports, () => ({}));
 const api = m.exports;
