@@ -14,8 +14,12 @@ const BUILT = "<!doctype html><title>coffee</title><h1>Built by Own Build</h1>";
 const OWNER = "o_test_0123456789abcdef";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function start(ttlHours) {
+async function start(ttlHours, { want = null, tokenFile = null } = {}) {
+  const seen = [];
   const build = http.createServer((req, res) => {
+    seen.push(req.headers.authorization ?? null);
+    if (want && req.headers.authorization !== `Bearer ${want}`) { res.statusCode = 401; res.end("unauthorized"); return; }
+    if (req.url === "/api/director/runs/os-moved/preview") { res.writeHead(302, { location: `http://127.0.0.1:${build.address().port}/api/director/runs/os-good/preview` }); res.end(); return; }
     if (req.url === "/api/director/runs/os-good/preview") { res.end(BUILT); return; }
     res.statusCode = 404; res.end("no such run");
   });
@@ -24,8 +28,9 @@ async function start(ttlHours) {
   const port = 20000 + Math.floor(Math.random() * 20000);
   const proc = spawn("python3", [process.env.DEMO_PUBLISHER ?? path.join(__dirname, "../deploy/demo-publisher.py")], {
     env: { ...process.env, SITES_DIR: dir, SITES_URL: "https://sites.example", PORT: String(port),
-      OWN_BUILD_URL: `http://127.0.0.1:${build.address().port}`, PUBLISH_TTL_HOURS: String(ttlHours) },
-    stdio: "inherit",
+      OWN_BUILD_URL: `http://127.0.0.1:${build.address().port}`, PUBLISH_TTL_HOURS: String(ttlHours),
+      ...(tokenFile ? { OWN_BUILD_TOKEN_FILE: tokenFile } : {}) },
+    stdio: ["ignore", "pipe", "pipe"],
   });
   const call = async (p, body, owner = OWNER) => {
     for (let i = 0; i < 50; i++) {
@@ -40,8 +45,10 @@ async function start(ttlHours) {
     }
     throw new Error("publisher did not start");
   };
+  let log = "";
+  proc.stdout.on("data", (c) => { log += c; }); proc.stderr.on("data", (c) => { log += c; });
   const stop = () => { proc.kill(); build.close(); fs.rmSync(dir, { recursive: true, force: true }); };
-  return { dir, call, stop };
+  return { dir, call, stop, seen, log: () => log };
 }
 
 test("publishes Own Build's page, never the browser's", async () => {
@@ -102,5 +109,34 @@ test("an owner gets at most 3 live pages; an expired one does not count", async 
     const full = await s.call("publish", { run: "os-good", name: "sixth" });
     assert.equal(full.status, 429);
     assert.match(full.body.error, /3 public websites/);
+  } finally { s.stop(); }
+});
+
+test("Own Build's token from OWN_BUILD_TOKEN_FILE: sent, read again on each call, no redirect followed, a wrong one said plainly, never logged", async () => {
+  const tdir = fs.mkdtempSync(path.join(os.tmpdir(), "demo-pub-token-"));
+  const file = path.join(tdir, "build.token");
+  const token = "tok-build-" + require("node:crypto").randomBytes(12).toString("hex");
+  fs.writeFileSync(file, `${token}\n`);
+  const s = await start(6, { want: token, tokenFile: file });
+  try {
+    assert.equal((await s.call("publish", { run: "os-good", name: "tokened" })).status, 200);
+    assert.deepEqual(s.seen, [`Bearer ${token}`]);
+    // a redirect is not followed with a token on board
+    const moved = await s.call("publish", { run: "os-moved", name: "moved" });
+    assert.equal(moved.status, 422);
+    assert.equal(s.seen.length, 2, "the redirect target was not asked");
+    fs.writeFileSync(file, "wrong");
+    const r = await s.call("publish", { run: "os-two", name: "refused" });
+    assert.equal(r.status, 502);
+    assert.equal(r.body.error, "Own Build turned the publisher away: its service key on this Own 1 is missing or out of date.");
+    assert.ok(!JSON.stringify(r.body).includes("wrong") && !s.log().includes(token) && !s.log().includes("wrong"), "no token in a reply or the log");
+  } finally { s.stop(); fs.rmSync(tdir, { recursive: true, force: true }); }
+});
+
+test("no OWN_BUILD_TOKEN_FILE: no Authorization header, a redirect followed as before", async () => {
+  const s = await start(6);
+  try {
+    assert.equal((await s.call("publish", { run: "os-moved", name: "plain" })).status, 200);
+    assert.deepEqual(s.seen, [null, null]);
   } finally { s.stop(); }
 });

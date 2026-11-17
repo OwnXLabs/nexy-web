@@ -29,7 +29,7 @@ echo "PASS  build"
 check "built CSS has no range syntax (Safari before 16.4)" node --test tests/css-range.test.mjs
 check "every test file in tests/ is run here or listed with a reason" node --test tests/runner-coverage.test.mjs
 check "publishing: owner, chat and output scoped, name conflicts, restart, unpublish, the demo publisher's session and origin" node --test --test-timeout=120000 tests/publishing.cjs
-check "the demo publisher: only Own Build's page, never the browser's; expiry, owners apart, three pages each" node --test --test-timeout=180000 tests/demo-publisher.cjs
+check "the demo publisher: only Own Build's page, never the browser's; expiry, owners apart, three pages each, Own Build's token when set" node --test --test-timeout=180000 tests/demo-publisher.cjs
 check "one agent session per chat, bound to the visitor's sign-in; none for a private turn" node tests/agent-session.mjs
 check "who may watch and drive the agent's screen: the slot holder or the signed-in owner, never a forged header" node tests/screen-control.mjs
 
@@ -75,6 +75,9 @@ check "ultra-private speech: every speech request refused while private" ts test
 check "ultra-private on a computer: mic, Talk and voice tip hidden, no reply spoken, no speech call, a recording under way dropped, all back after" node --test --test-timeout=180000 tests/private-voice.cjs
 check "status codes never reach the screen: httpMsg words in src/client" ts tests/status-codes.test.ts
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
+check "studio service tokens: each studio's own token on every server-side call, rotated without a restart, a wrong or missing one said plainly, none when unset, never in a page, reply or log" node --test --test-timeout=180000 tests/studio-token.cjs
+check "a guest code on a shared Own 1: text only and an AI that is down said plainly, asked once, not a failed turn; no image attachments in the page; off a guest code unchanged" node --test --test-timeout=180000 tests/guest-code.cjs
+check "held-back jobs on a guest code: page edits and research charts through NEXY_HEAVY_LLM_URL, else NEXY_LLM_URL" ts tests/heavy-door.test.ts
 check "routine approval: pending routines wait for Confirm or Discard, clean context vouched for" node --test --test-timeout=180000 tests/routine-approval.cjs
 check "routine times: the device's zone reaches the agent, UTC fallback, local times in the view" node --test --test-timeout=180000 tests/routine-tz.cjs
 check "one request, one routine: a reminder said in chat is made once, at the asked time, and its first run says that time" node --test --test-timeout=180000 tests/one-routine.cjs

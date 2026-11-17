@@ -27,7 +27,7 @@ import { takeoverAsk } from "./takeover";
 import { pickedFor, clearPick, renderedFor, type Picked } from "./pick";
 import { initPrivate, guard, conversation as privateConversation, isPrivate, privateConversationId, noteEphemeralDoc, setPrivate } from "./private";
 import { matchSocial, playSocial } from "./social";
-import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff } from "./place";
+import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff, onGuestCode, TEXT_ONLY } from "./place";
 import { renderGate } from "./build-gate";
 import { caps, gameBrief, buildKind, taskOf, verdictFor, gateCard, warnsFor, WARN_NOTE, THIN } from "./capability";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, engineSlot, chatLastBuild, setChatLastBuild, type ExampleOpen } from "./shell";
@@ -831,7 +831,7 @@ async function attachHere(files: File[]): Promise<void> {
   for (const f of files) {
     try {
       const r = await readLocally(f.name, f.type, new Uint8Array(await f.arrayBuffer()));
-      if (r.kind === "image") { failed.push(`${f.name}: images can't be read here yet`); continue; }
+      if (r.kind === "image") { failed.push(onGuestCode ? `${f.name}: ${TEXT_ONLY}` : `${f.name}: images can't be read here yet`); continue; }
       if (r.kind === "unreadable") { failed.push(`${f.name}: ${r.why}`); continue; }
       localTurn.attached.push({ id: `here:${Date.now()}:${f.name}`, filename: f.name, eph: isPrivate(), local: r.text });
       done.push(f.name);
@@ -2588,6 +2588,11 @@ function wireComposer(): void {
   });
 
   const pick = $<HTMLInputElement>("#filePick");
+  // a shared Own 1 takes text only: the picker offers the files read here, never images
+  if (onGuestCode && pick) {
+    pick.accept = ".txt,.text,.md,.markdown,.csv,.tsv,.json,.log,.yaml,.yml,.xml,.html,.htm,.rtf,.pdf,text/*,application/pdf,application/json";
+    $("#attachBtn")?.setAttribute("title", "Attach text files (this shared Own 1 takes text only, no images)");
+  }
   $("#attachBtn")?.addEventListener("click", () => pick?.click());
   pick?.addEventListener("change", () => {
     const files = Array.from(pick.files ?? []);

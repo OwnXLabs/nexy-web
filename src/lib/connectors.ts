@@ -5,23 +5,29 @@
 // password over IMAP ("gmail-imap"). Both serve gmail_search with the same arguments.
 import { connectorAsk, type AskTurn } from "./connector-ask.ts";
 export { connectorAsk, eventAsk, type ConnectorAsk } from "./connector-ask.ts";
+import { studioAuth, wantsToken } from "./studio-token.ts";
+
+const HUB_HEADERS = () => ({ "x-own-agent-app": "nexy", ...studioAuth("hub") });
+// a hub with a token set that answers 401 refused Nexy's service key
+const answered = (what: string, status: number) =>
+  new Error(status === 401 && wantsToken("hub") ? "the connector service turned Nexy away (its service key on this Own 1 is missing or out of date)" : `${what} answered ${status}`);
 
 async function mcp(base: string, method: string, params: unknown): Promise<any> {
   const r = await fetch(`${base.replace(/\/$/, "")}/mcp`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-own-agent-app": "nexy" },
+    headers: { "content-type": "application/json", ...HUB_HEADERS() },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     signal: AbortSignal.timeout(30_000),
   });
-  if (!r.ok) throw new Error(`the connector hub answered ${r.status}`);
+  if (!r.ok) throw answered("the connector hub", r.status);
   const j = await r.json();
   if (j?.error) throw new Error(String(j.error.message ?? "refused"));
   return j?.result;
 }
 
 async function registry(base: string, path: string): Promise<any> {
-  const r = await fetch(`${base.replace(/\/$/, "")}/registry${path}`, { headers: { "x-own-agent-app": "nexy" }, signal: AbortSignal.timeout(10_000) });
-  if (!r.ok) throw new Error(`the connector registry answered ${r.status}`);
+  const r = await fetch(`${base.replace(/\/$/, "")}/registry${path}`, { headers: HUB_HEADERS(), signal: AbortSignal.timeout(10_000) });
+  if (!r.ok) throw answered("the connector registry", r.status);
   return r.json();
 }
 

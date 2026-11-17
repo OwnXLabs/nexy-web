@@ -7,7 +7,8 @@
 
 import { answerOf, quietChat, starved } from "./quiet.ts";
 
-const LLM = (process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080").replace(/\/+$/, "");
+// a job this computer's model is held back from: the app's door to a shared Own 1 when it gives one
+const LLM = (process.env.NEXY_HEAVY_LLM_URL || (process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080")).replace(/\/+$/, "");
 const MODEL = process.env.NEXY_MODEL ?? "txt2txt";
 const MAX_PAGE = 40_000;
 

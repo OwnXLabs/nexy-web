@@ -198,3 +198,23 @@ close, that screenshots come by button, paste or drop (five at most, Remove) and
 2 MB and 1.5 MB limits, the BETA button and modal at 1280, 1600 and 390 px, ultra-private chats,
 https only, and no BETA button off beta. `SHOTS_DIR` saves screenshots of the modal and button.
 `tests/scrub.test.ts` covers the scrubbing rules on their own.
+
+Studio service tokens
+=====================
+
+`node --test tests/studio-token.cjs` (after `npm run build`) serves the build against stand-in
+studios that each require their own token from `NEXY_<STUDIO>_TOKEN_FILE`. Every route (the
+`/api/apps/<id>` proxy for GET and POST, the feed and its build-page fetches, chat's connector
+step to the hub) carries that studio's token and no other; a cross-origin redirect drops it; a
+rotated file is used within seconds; a wrong or unreadable one gets plain words; unset sends no
+header. No page, response or log holds a token. `tests/demo-publisher.cjs` checks the same for
+the demo publisher's `OWN_BUILD_TOKEN_FILE`.
+
+Guest codes
+===========
+
+`node --test tests/guest-code.cjs` (after `npm run build`) runs chat with `NEXY_OWN1_GUEST=1`
+against a stand-in `/infer` that answers 400 "guests may send text only" or 503, directly and
+through a stand-in engine. Each is said plainly, the box is asked once, and the turn log names it
+apart from a failure. The page offers text files only and says so for an image; without the flag
+a 503 stays the usual failure and the picker is unchanged.

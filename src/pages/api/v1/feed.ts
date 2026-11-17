@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { withHistory, type AppTarget } from "../../../lib/apps";
 import { COOKIE, owner } from "../../../lib/owner";
 import { cachedTitles, nameLater } from "../../../lib/titles";
+import { refused, studioAuth, wantsToken } from "../../../lib/studio-token";
 
 export const prerender = false;
 
@@ -79,9 +80,10 @@ export const GET: APIRoute = async (ctx) => {
     targets.map(async (app) => {
       const res = await fetch(`${app.base}${app.history}`, {
         signal: AbortSignal.timeout(8000),
-        headers: { accept: "application/json", cookie: `${COOKIE}=${who}` },
+        headers: { accept: "application/json", cookie: `${COOKIE}=${who}`, ...studioAuth(app.id) },
       });
       if (res.status === 404) return { silent: true as const, app: { id: app.id, label: app.label } };
+      if (res.status === 401 && wantsToken(app.id)) throw new Error(refused(app.label));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return { items: normalise(app, await res.json()) };
     }),
@@ -92,7 +94,7 @@ export const GET: APIRoute = async (ctx) => {
   const degraded: Array<{ app: string; label: string; error: string }> = [];
   settled.forEach((r, i) => {
     if (r.status === "rejected") {
-      degraded.push({ app: targets[i].id, label: targets[i].label, error: String(r.reason?.message ?? r.reason).slice(0, 120) });
+      degraded.push({ app: targets[i].id, label: targets[i].label, error: String(r.reason?.message ?? r.reason).slice(0, 240) });
     } else if (r.value.silent === true) {
       silent.push(r.value.app);
     } else {
@@ -113,7 +115,8 @@ export const GET: APIRoute = async (ctx) => {
     if (!app || !it.href) continue;
     const asked = it.title;
     nameLater(key, async () => {
-      const page = await fetch(app.base + it.href!.replace(`/api/apps/${app.id}`, ""), { signal: AbortSignal.timeout(15000) }).then((r) => r.text());
+      const page = await fetch(app.base + it.href!.replace(`/api/apps/${app.id}`, ""), { headers: studioAuth(app.id), signal: AbortSignal.timeout(15000) })
+        .then((r) => (r.status === 401 && wantsToken(app.id) ? "" : r.text()));
       const own = /<title>([^<]{1,80})<\/title>/i.exec(page)?.[1]?.trim() ?? "";
       return `A ${it.kind === "game" ? "game" : "web page"}.${own ? ` Its own title: "${own}".` : ""} What was asked: "${asked}".`;
     });
