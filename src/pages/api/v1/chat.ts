@@ -36,6 +36,7 @@ import { overlayLines } from "../../../lib/overlay";
 import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/browse-intent";
 import { connectorAsk, connectorTurn } from "../../../lib/connectors";
 import { guestFault } from "../../../lib/guest";
+import { refusal } from "../../../lib/engine/plain-error";
 import { byId } from "../../../lib/apps";
 import { SEARCH_NOT_SET_UP, SEARCH_SETTING_UP, searchStatus } from "../../../lib/research";
 import { wantsEval } from "../../../lib/eval";
@@ -347,6 +348,16 @@ export const POST: APIRoute = async (ctx) => {
     log({ result: g.result, via, ms: Date.now() - startedAt });
     return { status: 200, body: { choices: [{ message: { role: "assistant", content: g.reply } }], via, grounded: false, notice: g.result } };
   };
+  // the app's router refused (offline or busy, daily limit, code expired or revoked): its own sentence
+  // is the reply, never its JSON; the raw words stay in the turn log, and the model alone is not asked
+  // again, as it would reach the same router
+  const refusedNotice = (e: unknown, via: string) => {
+    const r = refusal(e);
+    if (!r) return null;
+    answered(r.message);
+    log({ result: r.result, via, status: r.code, error: String((e as any)?.message ?? e).slice(0, 400), ms: Date.now() - startedAt });
+    return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.message } }], via, grounded: false, notice: r.result } };
+  };
   // stopped while still writing: what it wrote is kept, and the person is offered to continue
   // `broke`: the model died mid-answer (Ollama killed), rather than running past its budget
   const stoppedTurn = (b: Budget, via: string, broke = false, self = false) => {
@@ -455,6 +466,8 @@ export const POST: APIRoute = async (ctx) => {
     } catch (e: any) {
       // a shared Own 1 (guest code) that takes text only, or whose AI is down: plain words, not a
       // failed turn; the model alone would ask the same box
+      const said = !visible(b.text, self).trim() ? refusedNotice(e, use.id) : null;
+      if (said) return said;
       const shared = !visible(b.text, self).trim() ? guestFault(e) : null;
       if (shared) return guestNotice(shared, use.id);
       log({ result: "engine-failed", via: use.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
@@ -487,6 +500,8 @@ export const POST: APIRoute = async (ctx) => {
           log({ result: "fallback", via: r.via, fallback: true, ms: Date.now() - startedAt, tools: [], sources: "unknown", cited: cited(r.reply) });
           return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true, cut: r.cut || undefined } };
         } catch (e2: any) {
+          const said2 = !visible(b2.text).trim() ? refusedNotice(e2, localEngine.id) : null;
+          if (said2) return said2;
           const shared2 = !visible(b2.text).trim() ? guestFault(e2) : null;
           if (shared2) return guestNotice(shared2, localEngine.id);
           log({ result: "fallback-failed", via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ms: Date.now() - startedAt });

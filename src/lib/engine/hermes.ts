@@ -1,6 +1,7 @@
 import type { ChatResult, ChatTurn, MemoryItem, NexyEngine, Routine } from "./types";
 import { readCompletion } from "./sse";
 import { AGENT_KEY } from "./key";
+import { refusal } from "./plain-error";
 
 const DEFAULT_KEY = AGENT_KEY;
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
@@ -75,16 +76,22 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
       });
 
       if (!res.ok) {
-        throw new Error(`agent gateway ${res.status}`);
+        // the router's refusal passed on as the engine's own status keeps its words; nothing else does
+        const said = `agent gateway ${res.status}: ${(await res.text().catch(() => "")).slice(0, 400)}`;
+        throw new Error(refusal(said) ? said : `agent gateway ${res.status}`);
       }
       const { content: reply, last: body } = await readCompletion(res, onText);
       // the engine marks a failed turn in the response itself; its reply text changes between
       // versions, so trust the flag before the wording
       if (body?.choices?.[0]?.finish_reason === "error" || body?.hermes?.failed === true) {
-        const why = `${body?.hermes?.error ?? ""} ${reply}`;
+        // Hermes names its failure under "hermes", Nexy Engine under "nexy" ("model server 503: {…}")
+        const said = body?.hermes?.error ?? body?.nexy?.error;
+        const why = `${said ?? ""} ${reply}`;
+        // the app's router refusing in its own words (offline, daily limit, code expired) is kept whole
+        if (refusal(said)) throw new Error(`agent gateway upstream failed: ${String(said).slice(0, 400)}`);
         throw new Error(/\b429\b|too many requests|rate.?limit/i.test(why)
           ? "agent gateway busy: the model is serving other requests"
-          : `agent gateway upstream failed: ${String(body?.hermes?.error ?? "the turn failed").slice(0, 120)}`);
+          : `agent gateway upstream failed: ${String(said ?? "the turn failed").slice(0, 120)}`);
       }
       // The engine reports its own faults as an ordinary reply: "API call failed after
       // 3 retries: …", or "⚠ Provider authentication failed: …". Never a
@@ -92,6 +99,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
       const fault = /^API call failed after \d+ retries?: (.*)$/s.exec(reply.trim())?.[1]
         ?? /^\s*⚠\uFE0F?\s*(.*)$/s.exec(reply)?.[1];
       if (fault !== undefined) {
+        if (refusal(fault)) throw new Error(`agent gateway upstream failed: ${fault.slice(0, 400)}`);
         throw new Error(/\b429\b/.test(fault)
           ? "agent gateway busy: the model is serving other requests"
           : `agent gateway upstream failed: ${fault.slice(0, 120)}`);

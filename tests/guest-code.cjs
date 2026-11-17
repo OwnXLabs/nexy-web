@@ -30,6 +30,7 @@ async function infer() {
     if (s.answer === 'text-only') return send(400, { error: 'guests may send text only' });
     if (s.answer === 'down') return send(503, { error: 'the AI is not answering' });
     if (s.answer === 'router-503') return send(503, { error: { message: 'your Own1 answered 503', type: 'router' } });
+    if (s.answer === 'refuse') return send(s.code, { error: { message: s.say, type: 'router' } });
     send(200, { choices: [{ message: { content: 'Hello from the shared Own 1.' }, finish_reason: 'stop' }] });
   });
   s.url = await listen(srv);
@@ -152,4 +153,86 @@ test('the page on a guest code: no image attachments, an image picked anyway sai
     await other.locator('#filePick').setInputFiles([{ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('89504e470d0a1a0a', 'hex') }]);
     await other.getByText("photo.png: images can't be read here yet").waitFor({ timeout: 15000 });
   } finally { s.stop(); plain.stop(); m.answer = 'ok'; }
+});
+
+// The app's router refuses in plain words ({error:{message}}): offline or busy 503, daily limit 429,
+// code expired or revoked 403. Said as the reply, never as JSON; the raw text only in the turn log.
+const REFUSALS = [
+  [503, "The shared Own 1 is offline right now. Try again in a few minutes.", 'model-offline'],
+  [429, "You have used today's messages on this shared Own 1. They reset at midnight.", 'model-limit'],
+  [403, 'This guest code has expired or was revoked. Ask the owner for a new one.', 'model-denied'],
+];
+const lines = (log) => log.split('\n').filter((l) => l.startsWith('{')).map((l) => JSON.parse(l)).filter((j) => j.endpoint === 'chat');
+const plainOnly = (r, said, why) => {
+  assert.equal(r.status, 200, why); assert.equal(replyOf(r), said, why);
+  assert.doesNotMatch(JSON.stringify(r.body), /model server|llama-swap|\\"error\\"|\{\\"|router\b/, `${why}: no raw words: ${JSON.stringify(r.body)}`);
+};
+
+// Nexy Engine failing a turn because its model server refused: finish_reason "error", nexy.error the raw text
+async function nexyEngine(state) {
+  const srv = http.createServer(async (req, res) => {
+    let raw = ''; for await (const c of req) raw += c;
+    if (!req.url.endsWith('/chat/completions')) { res.writeHead(404).end('{}'); return; }
+    state.asked++;
+    const error = `model server ${state.code}: ${JSON.stringify({ error: { message: state.say, type: 'router' } })}`.slice(0, 213);
+    const last = { choices: [{ index: 0, delta: {}, finish_reason: 'error' }], nexy: { error } };
+    if (JSON.parse(raw || '{}').stream) {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { role: 'assistant', content: '' } }] })}\n\ndata: ${JSON.stringify(last)}\n\ndata: [DONE]\n\n`);
+    } else {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'error' }], nexy: { error } }));
+    }
+  });
+  const url = await listen(srv);
+  return { url, close: () => srv.close() };
+}
+
+test('the router refusing the model alone: its words are the reply, whole and streamed, asked once, the raw text in the turn log only', { timeout: 60000 }, async () => {
+  for (const guest of ['1', '']) {
+    const s = await start({ NEXY_OWN1_GUEST: guest, NEXY_LLM_URL: m.url });
+    try {
+      for (const [code, said, result] of REFUSALS) for (const stream of [false, true]) {
+        Object.assign(m, { answer: 'refuse', code, say: said, asked: 0 });
+        const why = `${code} guest=${guest || 'no'} stream=${stream}`;
+        plainOnly(await ask(s.base, stream), said, why);
+        assert.equal(m.asked, 1, `${why}: asked once`);
+      }
+      const got = lines(s.log());
+      for (const [code, said, result] of REFUSALS) {
+        const l = got.find((j) => j.result === result);
+        assert.ok(l, `${result} in the turn log`); assert.equal(l.status, code);
+        assert.ok(l.error.includes(JSON.stringify(said)), `the raw text kept in the log: ${l.error}`);
+      }
+      assert.ok(!got.some((j) => /failed/.test(j.result)), `no failed turn: ${got.map((j) => j.result).join(',')}`);
+    } finally { s.stop(); m.answer = 'ok'; }
+  }
+});
+
+test('Nexy Engine reporting the router\'s refusal as "model server <code>: <json>": its words are the reply, the model alone not asked again', { timeout: 60000 }, async () => {
+  const st = { asked: 0 };
+  const g = await nexyEngine(st);
+  const s = await start({ NEXY_OWN1_GUEST: '1', NEXY_ENGINE: 'gateway', NEXY_AGENT_URL: g.url, NEXY_AGENT_KEY: 'k', NEXY_LLM_URL: m.url });
+  try {
+    for (const [code, said, result] of REFUSALS) for (const stream of [false, true]) {
+      Object.assign(st, { code, say: said, asked: 0 }); m.asked = 0;
+      const why = `engine ${code} stream=${stream}`;
+      plainOnly(await ask(s.base, stream), said, why);
+      assert.equal(st.asked, 1, `${why}: the engine asked once`); assert.equal(m.asked, 0, `${why}: the model alone not asked`);
+    }
+    const got = lines(s.log());
+    for (const [, , result] of REFUSALS) assert.ok(got.some((j) => j.result === result && /model server \d{3}: \{/.test(j.error)), `${result} logged with the raw text`);
+  } finally { s.stop(); g.close(); }
+});
+
+test('a model failure that is not the router\'s refusal is unchanged: the usual plain failure, no JSON', { timeout: 60000 }, async () => {
+  const s = await start({ NEXY_LLM_URL: m.url });
+  try {
+    for (const [code, say] of [[500, 'CUDA out of memory'], [503, 'your Own1 answered 503']]) {
+      Object.assign(m, { answer: 'refuse', code, say });
+      const r = await ask(s.base, false);
+      assert.equal(r.status, 502, `${code}`);
+      assert.deepEqual(r.body, { error: 'the model on this machine did not answer' });
+    }
+  } finally { s.stop(); m.answer = 'ok'; }
 });
