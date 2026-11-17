@@ -21,7 +21,7 @@ import { classify, splitTasks, asksToChangePage, retryOf, fixNote } from "./inte
 import { ERROR_MAX, plainError, type LastBuild } from "../lib/chat-output";
 import { connectIntent, playConnect } from "./perm";
 import { handleEdit, editablePage, applyRevision } from "./edit-loop";
-import { installReporter, openReporter } from "./problem-report";
+import { installReporter, openReporter, type ReportThread } from "./problem-report";
 import { screenArtifact, screenAvailable, takeControlFor } from "./screen-view";
 import { takeoverAsk } from "./takeover";
 import { pickedFor, clearPick, renderedFor, type Picked } from "./pick";
@@ -2732,9 +2732,10 @@ async function boot(): Promise<void> {
       };
     },
   });
-  $("#reportBtn")?.addEventListener("click", openReporter);
-  $("#betaBtn")?.addEventListener("click", openReporter);
-  addEventListener("nexy:report", openReporter);
+  $("#reportBtn")?.addEventListener("click", () => openReporter());
+  $("#betaBtn")?.addEventListener("click", () => openReporter());
+  // "Report this chat" passes that thread; the header buttons pass nothing
+  addEventListener("nexy:report", (e) => openReporter((e as CustomEvent<ReportThread | undefined>).detail));
   $("#cvEdit")?.addEventListener("click", () => {
     const inp = $<HTMLTextAreaElement>("#input");
     if (!inp) return;

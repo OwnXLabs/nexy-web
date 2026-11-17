@@ -1,5 +1,6 @@
 import { loadEngines, type Caps, type EngineList } from "./engines";
-import { boxHere, hasApp, here, inCloud, localVoice, onOwn1, voiceApi } from "./place";
+import { boxHere, hasApp, here, inCloud, isBeta, localVoice, onOwn1, voiceApi } from "./place";
+import { reportDefaults, setReportDefaults, type ReportDefaults } from "./problem-report";
 
 // where this Nexy and its data are, said plainly
 const onHere = onOwn1 ? "On this Own1" : inCloud ? "On Nexy Cloud's server" : "On this computer";
@@ -122,7 +123,8 @@ async function section(sec: string): Promise<string> {
   const forgets = sec === "security" && boxHere && capsIn(await loadEngines()).memory;
   if (sec === "security") return `<h3>Security and privacy</h3>` +
     row("Where your data lives", not(onHere), inCloud ? "Chats and files stay on this server, which OwnX runs" : "Chats, files, builds and memory stay on this machine") +
-    row("Telemetry", not("Off"), inCloud ? "Nothing is sent anywhere beyond this server" : "Nothing is sent to OwnX Labs") +
+    row("Telemetry", not("Off"), inCloud ? "Nothing is sent anywhere beyond this server" : isBeta ? "Nothing is sent to OwnX Labs except a beta report you choose to send" : "Nothing is sent to OwnX Labs") +
+    (isBeta ? betaReportRows() : "") +
     row("Ultra-private chats", not("In memory only"), "Nothing written to disk, nothing reaches the agent that keeps memory; gone when you leave") +
     (searchHere ? row("Web search", not("Only when you ask"), // the search runs here but asks the search engines directly (privacy engineering doc, §3.5)
       `Through this machine's own search, never through OwnX. The search engines it asks see your query and ${onOwn1 ? "this Own1's" : inCloud ? "Nexy Cloud's" : "this computer's"} IP address, and so do pages Nexy opens`)
@@ -179,6 +181,20 @@ function engineRow(r: EngineList | null): string {
     `${esc(cur.note)}. Applies to new chats; each chat stays with the engine it started on.`);
 }
 
+// the same choices the report window keeps with "Remember my choices": one setting, two places
+const REPORT_PARTS: [keyof ReportDefaults, string, string][] = [
+  ["state", "What the app was doing", "Recent errors and failed requests"],
+  ["logs", "App logs", "The last 200 lines, keys and tokens removed"],
+  ["hardware", "Hardware", "OS, CPU, RAM, graphics, free disk, tier and model; never serial numbers, names or addresses"],
+];
+function betaReportRows(): string {
+  const d = reportDefaults();
+  return `<h4>Beta reports</h4>` +
+    row("Sent", not("Only when you press Send"), "From the BETA button or a chat's Report this chat. You see exactly what goes first") +
+    REPORT_PARTS.map(([k, l, sub]) => row(`Include ${l.charAt(0).toLowerCase()}${l.slice(1)}`, `<button type="button" class="sw${d[k] ? " on" : ""}" data-rsw="${k}" role="switch" aria-checked="${d[k]}" aria-label="${l}"><i></i></button>`, sub)).join("") +
+    row("This conversation", not("Never by default"), "Only when you switch it on in the report, and only that chat");
+}
+
 export async function renderSettings(sec = "general"): Promise<void> {
   const nav = $("#setNav"), body = $("#setBody");
   if (!nav || !body) return;
@@ -190,6 +206,11 @@ export async function renderSettings(sec = "general"): Promise<void> {
   body.querySelectorAll<HTMLElement>("[data-sw]").forEach((b) => b.addEventListener("click", () => {
     const k = b.dataset.sw as "speakAlways" | "wakeKey" | "notif" | "reduce"; P[k] = !P[k]; save(); applyPrefs(); void renderSettings(sec);
     if (k === "notif" && P.notif && "Notification" in window && Notification.permission === "default") void Notification.requestPermission();
+  }));
+  body.querySelectorAll<HTMLElement>("[data-rsw]").forEach((b) => b.addEventListener("click", () => {
+    const d = reportDefaults(), k = b.dataset.rsw as keyof ReportDefaults;
+    setReportDefaults({ state: d.state, logs: d.logs, hardware: d.hardware, [k]: !d[k] });
+    void renderSettings(sec);
   }));
   body.querySelectorAll<HTMLSelectElement>("[data-sel]").forEach((s) => s.addEventListener("change", () => {
     (P as any)[s.dataset.sel!] = s.value; save(); applyPrefs();

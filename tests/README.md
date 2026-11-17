@@ -180,3 +180,17 @@ not a rebuild, "fix it" only follows a failed build, and "build again" with noth
 what to build. Each failed build leaves one `build-failed` line in the turn log (id, kind,
 builder, brief length, duration, error, line), with no brief text. Own Build's code excerpt
 ("(line 214: `…`)") goes to the builder on a rebuild; the chat and the log get the line number only.
+
+Beta report checks
+==================
+
+`node --test tests/beta-report.cjs` (after `npm run build`) serves beta builds against a stand-in
+report server, log tail and hardware answer; nothing reaches update.ownx.co. It checks that the
+preview is the body that arrives, that each switch changes both, that keys, tokens, emails, phone
+numbers, home-folder names, IP and MAC addresses and wallets are removed, that the hardware lines
+carry no serial, host or user name, that "Report this chat" sends that thread only, that remembered
+choices never include the conversation and match Settings, that the comment draft survives a
+close, that screenshots come by button, paste or drop (five at most, Remove) and fit the server's
+2 MB and 1.5 MB limits, the BETA button and modal at 1280, 1600 and 390 px, ultra-private chats,
+https only, and no BETA button off beta. `SHOTS_DIR` saves screenshots of the modal and button.
+`tests/scrub.test.ts` covers the scrubbing rules on their own.

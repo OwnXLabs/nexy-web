@@ -482,6 +482,18 @@ export function moveChat(from: string, id: string, to: string): boolean {
   return true;
 }
 
+// the thread as it is now: the open chat's live turns, else its saved copy (read if not yet)
+async function reportChat(c: Chat): Promise<void> {
+  try {
+    if (c.saved && !c.loaded) await fetchChat(c);
+  } catch (e) {
+    H.toast(`This chat could not be opened for the report: ${errText(e as Error)}`);
+    return;
+  }
+  const turns = (cur?.cid === c.id ? H.history : c.history).map((t) => ({ role: t.role, text: String(t.content) }));
+  window.dispatchEvent(new CustomEvent("nexy:report", { detail: { title: c.title, turns } }));
+}
+
 export function wireChatRows(root: HTMLElement): void {
   root.querySelector<HTMLElement>("[data-chatmore]")?.addEventListener("click", () => { chatsAll = !chatsAll; H.renderSide(); });
   root.querySelectorAll<HTMLElement>("[data-chat]").forEach((b) => {
@@ -499,6 +511,8 @@ export function wireChatRows(root: HTMLElement): void {
         ...(pid === "_" && !c.projectId && !H.isPrivate() ? [{ label: "Make it a project", icon: IC.plus, run: () => { switchChat(pid, id); void (c.loading ?? Promise.resolve()).then(() => H.promote?.()); } }] : []),
         { label: "Move to another project", icon: IC.move, run: () => H.toast("Drag the chat onto a project in the sidebar") },
         ...(cur?.cid === id ? H.engineItems?.() ?? [] : []),
+        // beta: this thread only, in the report window, still sent only on its Send click
+        ...(isBeta && !H.isPrivate() ? [{ label: "Report this chat", icon: IC.flag, run: () => void reportChat(c) }] : []),
         { label: "Delete chat", icon: IC.trash, danger: true, run: () => confirmDel("Delete chat?", `<b>${esc(c.title)}</b> will be removed from this project.`, () => deleteChat(pid, id)) },
       ], r.right - 176, r.bottom + 4);
     };
@@ -551,6 +565,7 @@ function wireRailDrawer(): void {
 }
 
 const isMobile = () => innerWidth <= 820;
+const BETA_ICON = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M9 10.5h6"/></svg>`;
 
 function wireMobile(): void {
   if (document.getElementById("mbar")) return;
@@ -561,11 +576,12 @@ function wireMobile(): void {
   bar.innerHTML =
     `<button class="hbtn" id="mMenu" title="Menu"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>` +
     `<div class="mt">${glyph}<span id="mTitle">Nexy</span></div>` +
-    (isBeta ? `<button class="betabadge" id="mBeta" title="This is a beta. Report a problem to the Nexy team">BETA</button>` : "") +
-    `<button class="hbtn" id="mReport" title="Report a problem" aria-label="Report a problem"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M12 8v3M12 13.5h.01"/></svg></button>` +
+    // a beta's BETA button is its report button, last in the bar; other builds keep the plain one
+    (isBeta ? "" : `<button class="hbtn" id="mReport" title="Report a problem" aria-label="Report a problem"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M12 8v3M12 13.5h.01"/></svg></button>`) +
     `<button class="hbtn" id="mNeeds" title="Needs you"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l9 16H3L12 3Z"/><path d="M12 10v4M12 17h.01"/></svg><b id="mNeedCount">0</b></button>` +
     `<button class="btn small" id="mChat" title="Back to the chat"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>Chat</button>` +
-    `<button class="hbtn" id="mWork" title="The work"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M3 9h18M8 21h8"/></svg></button>`;
+    `<button class="hbtn" id="mWork" title="The work"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M3 9h18M8 21h8"/></svg></button>` +
+    (isBeta ? `<button class="betabadge" id="mBeta" title="Nexy Beta: report a problem or share an idea" aria-label="Nexy Beta: report a problem">${BETA_ICON}BETA</button>` : "");
   document.body.appendChild(bar);
   const stage = document.querySelector(".stage");
   if (stage && !document.getElementById("cvShade")) {

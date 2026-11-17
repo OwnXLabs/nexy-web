@@ -38,7 +38,7 @@ const chat = { id: 'creport', title: 'Bakery', pid: '_', ts: Date.now(), outputs
       const chooser = page.waitForEvent('filechooser');
       await page.click('[data-shot]');
       await (await chooser).setFiles({ name: 'shot.png', mimeType: 'image/png', buffer: PNG });
-      await page.waitForSelector('.shot img:not([hidden])');
+      await page.waitForSelector('.prp .shots figure img');
       await page.click('[data-send]');
       await page.waitForSelector('text=Thanks, saved', { timeout: 10000 });
       const files = fs.readdirSync(DIR);
