@@ -16,7 +16,10 @@ pass=0; fail=0; failed=()
 check() { # name, command…
   local name=$1; shift
   [[ -n $only && $name != *"$only"* ]] && return
-  if out=$("$@" 2>&1); then echo "PASS  $name"; pass=$((pass+1))
+  if out=$("$@" 2>&1); then
+    # a part that cannot run here says why (a skipped node --test case, or a line "SKIP  why")
+    local why; why=$(echo "$out" | sed -nE 's/^ *﹣ .* # (.+)$/\1/p; s/^SKIP  (.+)$/\1/p' | sort -u | paste -sd ';' -)
+    echo "PASS  $name${why:+  (skipped: $why)}"; pass=$((pass+1))
   else echo "FAIL  $name"; echo "$out" | grep -E "not ok|Error|expected|actual|✖" | head -8 | sed 's/^/      /'; fail=$((fail+1)); failed+=("$name"); fi
 }
 
@@ -24,6 +27,11 @@ echo "Building…"
 npm run build >/tmp/nexy-web-build.log 2>&1 || { echo "FAIL  build (see /tmp/nexy-web-build.log)"; exit 1; }
 echo "PASS  build"
 check "built CSS has no range syntax (Safari before 16.4)" node --test tests/css-range.test.mjs
+check "every test file in tests/ is run here or listed with a reason" node --test tests/runner-coverage.test.mjs
+check "publishing: owner, chat and output scoped, name conflicts, restart, unpublish, the demo publisher's session and origin" node --test --test-timeout=120000 tests/publishing.cjs
+check "the demo publisher: only Own Build's page, never the browser's; expiry, owners apart, three pages each" node --test --test-timeout=180000 tests/demo-publisher.cjs
+check "one agent session per chat, bound to the visitor's sign-in; none for a private turn" node tests/agent-session.mjs
+check "who may watch and drive the agent's screen: the slot holder or the signed-in owner, never a forged header" node tests/screen-control.mjs
 
 ts() { node --experimental-strip-types --no-warnings --test --test-timeout=120000 "$@"; }
 check "swarm: plan, parallel pieces across devices, stitch, cleaning" ts tests/swarm.test.ts
@@ -118,7 +126,10 @@ check "routines" node tests/routines.cjs
 check "problem reports" node tests/problem-report.cjs
 check "each chat keeps its own files, builds and replies" node tests/conversation-isolation.cjs
 check "publishing from Share: the right chat and output, unpublish, reload, a failed save and Retry" node tests/publishing-browser.cjs
-check "every visible button does something, at desktop and phone width" node tests/buttons.cjs
+check "every change from the browser names a content type no form can send; the served build refuses one that does not" node --test tests/delete-sends-json.cjs
+check "a chat becomes a project: the planner gets the ask, the plan shows in the chat, a chat in a project is not offered it" node tests/promote-project.cjs
+check "every Settings section opens and its controls do what they say: name and switches kept, Remove and Disconnect sent as JSON, Telegram, Export, feedback, themes, background, version" node tests/settings-sections.cjs
+check "every visible button does something: a chat, home and each Settings section, on an Own1, a computer and Nexy Cloud, beta off and on" node tests/buttons.cjs
 
 echo
 echo "$pass passed, $fail failed"
