@@ -11,6 +11,7 @@ import secrets
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlsplit
@@ -22,6 +23,8 @@ RUN = re.compile(r"[A-Za-z0-9_-]{1,64}")
 OWNER = re.compile(r"o_[a-z0-9]{1,12}_[a-f0-9]{16}")
 LOCK = threading.RLock()
 BUILD = os.environ.get("OWN_BUILD_URL", "http://127.0.0.1:4372").rstrip("/")
+# Own Build in its own container wants a service token; read per call, so a rotation needs no restart
+BUILD_TOKEN_FILE = os.environ.get("OWN_BUILD_TOKEN_FILE", "")
 TTL = float(os.environ.get("PUBLISH_TTL_HOURS", "6")) * 3600
 MAX_PER_OWNER = int(os.environ.get("PUBLISH_MAX_PER_OWNER", "3"))
 
@@ -40,11 +43,41 @@ def live_count(owner):
     return n
 
 
-def built_page(run):
-    """The page Own Build generated for this run, or None."""
+def build_headers():
+    if not BUILD_TOKEN_FILE:
+        return {}
     try:
-        with urllib.request.urlopen(f"{BUILD}/api/director/runs/{quote(run)}/preview", timeout=30) as r:
+        with open(BUILD_TOKEN_FILE) as f:
+            token = f.read().strip()
+    except OSError as e:
+        print(f"OWN_BUILD_TOKEN_FILE unreadable ({type(e).__name__}); calling without a token", flush=True)
+        return {}
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+REFUSED = object()
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    # urllib carries Authorization to any host a redirect names; with a token, follow none
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_PLAIN = urllib.request.build_opener()
+_GUARDED = urllib.request.build_opener(_NoRedirect)
+
+
+def built_page(run):
+    """The page Own Build generated for this run, None, or REFUSED (its service token was turned away)."""
+    headers = build_headers()
+    req = urllib.request.Request(f"{BUILD}/api/director/runs/{quote(run)}/preview", headers=headers)
+    try:
+        with (_GUARDED if headers else _PLAIN).open(req, timeout=30) as r:
             page = r.read(5_000_001)
+    except urllib.error.HTTPError as e:
+        print(f"no build page for {run}: Own Build answered {e.code}", flush=True)
+        return REFUSED if e.code == 401 and BUILD_TOKEN_FILE else None
     except OSError as e:
         print(f"no build page for {run}: {e}", flush=True)
         return None
@@ -162,6 +195,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(429, {"error": f"You already have {MAX_PER_OWNER} public websites. Unpublish one, or wait for one to expire."})
                 # body["html"] is ignored: the browser could send any page at all
                 page = built_page(run)
+                if page is REFUSED:
+                    return self.send(502, {"error": "Own Build turned the publisher away: its service key on this Own 1 is missing or out of date."})
                 if page is None:
                     return self.send(422, {"error": "Own Build has no finished website for this build"})
                 expires = time.time() + TTL

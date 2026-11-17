@@ -1,6 +1,7 @@
 import type { APIContext, APIRoute } from "astro";
 import { byId } from "../../../../lib/apps";
 import { COOKIE, owner } from "../../../../lib/owner";
+import { refused, studioAuth, wantsToken } from "../../../../lib/studio-token";
 
 export const prerender = false;
 
@@ -27,7 +28,8 @@ const forward = async (ctx: APIContext, who: string) => {
   const to = target(app.base, String(params.path ?? ""), url.search);
   if (!to) return json({ error: "outside the app" }, 403);
 
-  const headers: Record<string, string> = { cookie: `${app.cookie ?? COOKIE}=${who}` };
+  // the browser's own Authorization is never passed on; the studio's token is added here only
+  const headers: Record<string, string> = { cookie: `${app.cookie ?? COOKIE}=${who}`, ...studioAuth(app.id) };
   const ct = request.headers.get("content-type");
   if (ct) headers["content-type"] = ct;
 
@@ -38,6 +40,11 @@ const forward = async (ctx: APIContext, who: string) => {
       body: ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer(),
       signal: AbortSignal.timeout(600_000),
     });
+    // a studio that wants a token and refused it: plain words, not "sign in again"
+    if (res.status === 401 && wantsToken(app.id)) {
+      await res.body?.cancel();
+      return json({ error: refused(app.label), app: app.id }, 500);
+    }
     return new Response(res.body, {
       status: res.status,
       headers: {

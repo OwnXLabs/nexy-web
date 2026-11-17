@@ -67,6 +67,8 @@ check "ultra-private speech: every speech request refused while private" ts test
 check "ultra-private on a computer: mic, Talk and voice tip hidden, no reply spoken, no speech call, a recording under way dropped, all back after" node --test --test-timeout=180000 tests/private-voice.cjs
 check "status codes never reach the screen: httpMsg words in src/client" ts tests/status-codes.test.ts
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
+check "studio service tokens: each studio's own token on every server-side call, rotated without a restart, a wrong or missing one said plainly, none when unset, never in a page, reply or log" node --test --test-timeout=180000 tests/studio-token.cjs
+check "demo publisher: Own Build's page only, expiry, owners apart, Own Build's token when set" node --test --test-timeout=180000 tests/demo-publisher.cjs
 check "routine approval: pending routines wait for Confirm or Discard, clean context vouched for" node --test --test-timeout=180000 tests/routine-approval.cjs
 check "routine times: the device's zone reaches the agent, UTC fallback, local times in the view" node --test --test-timeout=180000 tests/routine-tz.cjs
 check "one request, one routine: a reminder said in chat is made once, at the asked time, and its first run says that time" node --test --test-timeout=180000 tests/one-routine.cjs
