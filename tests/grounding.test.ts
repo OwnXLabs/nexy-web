@@ -65,6 +65,12 @@ test("links the person gave stand; an answer that was not asked to search is lef
   assert.match(ground("I searched the web and Jon Fosse won.", [], true).reply, /^I didn't search the web for this, so I have no checked answer/);
 });
 
+test("the model alone, with no search tool, says it can't search and offers none", () => {
+  const g = ground("ownx.co sells home servers.", [], true, [], false);
+  assert.match(g.reply, /^I can't search the web from here, so this is from what I already know/);
+  assert.doesNotMatch(g.reply, /try the search again/);
+});
+
 test("which questions ask for a search", () => {
   assert.equal(asksToSearch(ASK), true);
   assert.equal(asksToSearch("what's the latest news on the peso?"), true);

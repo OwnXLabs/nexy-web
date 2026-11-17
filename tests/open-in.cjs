@@ -200,7 +200,8 @@ test('a document written in chat: Open in Docs uploads it once and opens ?doc=<i
   docs.features = ['doc-link'];
   const { ctx, page, tabs, errors } = await session();
   try {
-    await askForDoc(page, 'Write a research report about ownx.co');
+    // not a search ask: the plain model here cannot search, and its answer to one says so first
+    await askForDoc(page, 'Write a report about ownx.co');
     await openBtn(page).waitFor({ state: 'visible', timeout: 5000 });
     assert.equal((await openBtn(page).innerText()).trim(), 'Open in Docs');
     const title = (await page.locator('#cvTitle').textContent()).trim();
@@ -230,7 +231,7 @@ test('an upload Own Docs refuses: said plainly, no tab left open, the document s
   docs.features = ['doc-link']; docs.fail = true;
   const { ctx, page, tabs, errors } = await session();
   try {
-    await askForDoc(page, 'Write a research report about ownx.co please');
+    await askForDoc(page, 'Write a report about ownx.co please');
     await openBtn(page).click();
     await page.waitForFunction(() => window.__toasts.some((t) => /could not be put in Own Docs/.test(t)), null, { timeout: 15000 });
     const msg = (await page.evaluate(() => window.__toasts)).find((t) => /Own Docs/.test(t));

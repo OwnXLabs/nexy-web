@@ -437,7 +437,7 @@ export const POST: APIRoute = async (ctx) => {
       // a research answer stands on what the searches really gave (grounding.ts): asked for a search,
       // or one ran, or the reply says one did
       const judged = !!calls && (asked || (research && calls.some((c) => SOURCE_TOOL.test(c.name))) || claimsSearch(r.reply));
-      const g = judged ? ground(r.reply, calls!, asked, seen) : null;
+      const g = judged ? ground(r.reply, calls!, asked, seen, use !== localEngine) : null;
       if (g) r.reply = g.reply;
       r.reply = dropInlineImages(r.reply, browsed);
       r.reply = guard(r.reply, self);

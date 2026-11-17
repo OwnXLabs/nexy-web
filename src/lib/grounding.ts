@@ -30,8 +30,9 @@ function norm(u: string): { host: string; path: string } | null {
 
 export interface Grounding { reply: string; searched: boolean; found: boolean; removed: number; noted: boolean }
 
-// calls: this turn's tool calls; seen: what the person and earlier turns already gave (their links stand)
-export function ground(reply: string, calls: ToolCall[], asked: boolean, seen: string[] = []): Grounding {
+// calls: this turn's tool calls; seen: what the person and earlier turns already gave (their links stand);
+// canSearch: false for the model alone with no search tool, which is not offered a search it cannot run
+export function ground(reply: string, calls: ToolCall[], asked: boolean, seen: string[] = [], canSearch = true): Grounding {
   const searches = calls.filter((c) => SEARCHES.test(c.name)), reads = calls.filter((c) => READS.test(c.name));
   const searched = searches.length > 0;
   const good = [...searches, ...reads].filter((c) => !FAILED(c.text));
@@ -56,7 +57,10 @@ export function ground(reply: string, calls: ToolCall[], asked: boolean, seen: s
   if (!noted && !removed && out === reply.trim()) return { reply, searched, found, removed, noted };
   const why = !searched ? "I didn't search the web for this"
     : searches.some((c) => /no results/i.test(c.text)) ? "The web search found nothing for this" : "The web search didn't work this time";
-  const head = !noted ? "" : out
+  const head = !noted ? "" : !canSearch
+    ? (out ? "I can't search the web from here, so this is from what I already know, not checked against any source, and may be wrong or out of date."
+      : "I can't search the web from here, so I have no checked answer.")
+    : out
     ? `${why}, so this is not checked against any source and may be wrong or out of date. Want me to try the search again?`
     : `${why}, so I have no checked answer. Want me to try the search again?`;
   const tail = removed ? `I took out ${removed === 1 ? "a link" : `${removed} links`} that did not come from a search.` : "";
