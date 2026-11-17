@@ -5,6 +5,7 @@ import { APPS } from "../lib/apps";
 import { localVoice } from "../lib/voice";
 import { builderAvailable } from "../lib/local-build";
 import { boxAllowed, pickAllowed } from "../lib/box";
+import { guestHere } from "../lib/guest";
 // a computer without an Own1 runs chat only, plus speech when it has it; the page hides what isn't here
 const local = process.env.NEXY_STUDIOS === "off";
 // Nexy Cloud: hosted, chat only (with NEXY_STUDIOS=off), named as such
@@ -26,9 +27,11 @@ const search = !local || !!process.env.NEXY_SEARXNG_URL;
 const version = process.env.NEXY_APP_VERSION || undefined;
 // what this computer's model can do (the desktop app's capability file): the page holds back the rest
 const caps = local ? process.env.NEXY_CAPS || undefined : undefined;
+// a shared Own 1 reached with a guest code: text only, so no image attachments (src/lib/guest.ts)
+const guest = local && guestHere();
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined} data-caps={caps}>
+<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-guest={guest ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined} data-caps={caps}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

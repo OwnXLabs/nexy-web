@@ -8,6 +8,9 @@ export const here = onOwn1 ? "this Own1" : inCloud ? "Nexy Cloud" : "this comput
 const apps = new Set((root?.dataset.apps ?? "").split(" ").filter(Boolean));
 // a beta build shows the BETA badge and can send reports to the Nexy team
 export const isBeta = root?.dataset.beta === "1";
+// a shared Own 1 reached with a guest code: it takes text only
+export const onGuestCode = root?.dataset.guest === "1";
+export const TEXT_ONLY = "This shared Own 1 takes text only; describe the image in words.";
 // whole-box features (memory across chats, routines) and the engine pick, as the server allows them here
 export const boxHere = root?.dataset.box === "1";
 export const enginesHere = root?.dataset.engines === "1";

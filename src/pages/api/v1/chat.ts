@@ -35,6 +35,7 @@ const cited = (reply: string) => (reply.match(/https?:\/\/[^\s)\]>"']+/g) ?? [])
 import { overlayLines } from "../../../lib/overlay";
 import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/browse-intent";
 import { connectorAsk, connectorTurn } from "../../../lib/connectors";
+import { guestFault } from "../../../lib/guest";
 import { byId } from "../../../lib/apps";
 import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
@@ -339,6 +340,12 @@ export const POST: APIRoute = async (ctx) => {
   const tid = randomUUID();
   const log = (fields: Record<string, unknown>) =>
     logTurn({ turn: tid.slice(0, 8), ...(chatEngine ? { engine: chatEngine } : {}), ...fields, ...(isEval ? { eval: true } : {}) }, priv);
+  // a shared Own 1's refusal, said as a reply: the log names it apart from a failed turn
+  const guestNotice = (g: NonNullable<ReturnType<typeof guestFault>>, via: string) => {
+    answered(g.reply);
+    log({ result: g.result, via, ms: Date.now() - startedAt });
+    return { status: 200, body: { choices: [{ message: { role: "assistant", content: g.reply } }], via, grounded: false, notice: g.result } };
+  };
   // stopped while still writing: what it wrote is kept, and the person is offered to continue
   // `broke`: the model died mid-answer (Ollama killed), rather than running past its budget
   const stoppedTurn = (b: Budget, via: string, broke = false, self = false) => {
@@ -439,6 +446,10 @@ export const POST: APIRoute = async (ctx) => {
         private: priv || undefined,
       } };
     } catch (e: any) {
+      // a shared Own 1 (guest code) that takes text only, or whose AI is down: plain words, not a
+      // failed turn; the model alone would ask the same box
+      const shared = !visible(b.text, self).trim() ? guestFault(e) : null;
+      if (shared) return guestNotice(shared, use.id);
       log({ result: "engine-failed", via: use.id, error: String(e?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
       if (b.stopped && b.text.trim()) return stoppedTurn(b, use.id, false, self);
       // Words already on screen stay there: asking again from scratch lost them and kept the
@@ -469,6 +480,8 @@ export const POST: APIRoute = async (ctx) => {
           log({ result: "fallback", via: r.via, fallback: true, ms: Date.now() - startedAt, tools: [], sources: "unknown", cited: cited(r.reply) });
           return { status: 200, body: { choices: [{ message: { role: "assistant", content: r.reply } }], via: r.via, grounded: r.grounded, fallback: true, cut: r.cut || undefined } };
         } catch (e2: any) {
+          const shared2 = !visible(b2.text).trim() ? guestFault(e2) : null;
+          if (shared2) return guestNotice(shared2, localEngine.id);
           log({ result: "fallback-failed", via: localEngine.id, error: String(e2?.message ?? e2).slice(0, 160), ms: Date.now() - startedAt });
           if (b2.stopped ? b2.text.trim() : visible(b2.text).trim()) return stoppedTurn(b2, localEngine.id, !b2.stopped);
         } finally { b2.end(); }
