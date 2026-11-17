@@ -60,6 +60,7 @@ check "what this computer's model can do, in the browser: a chat-only model's bu
 check "the build check on pages known to work and known not to: a black screen with one button, a game with no script or no loop, a website of one line kept back; a game that plays and a website with words shown" node --test --test-timeout=120000 tests/build-gate.cjs
 check "changing a page: thinking off on Ollama and llama-server, a server that refuses the switch asked again, a thinking-only answer said plainly, a claimed change not on the page reported" ts tests/page-edit.test.ts
 check "building on this computer: engine builder, checks, one retry, plain no; Own1 still uses Own Build" node --test --test-timeout=180000 tests/local-build.cjs
+check "the router's refusals (offline, daily limit, code expired) in chart research, social drafts and rewrites, and builds on a computer: its sentence and status, never JSON, asked once; other failures as before" node --test --test-timeout=180000 tests/refusal-endpoints.cjs
 check "build again: the last brief rerun with its error, only right after a build, asked what to build when there is none" ts tests/rebuild-intent.test.ts
 check "build again in the browser: Own Build and the engine builder get the original brief and the run-check error, never \"again\"" node --test --test-timeout=180000 tests/rebuild-last-brief.cjs
 check "a failed build in the turn log: id, kind, brief length, duration, error and line, no brief text" ts tests/build-failure-log.test.ts

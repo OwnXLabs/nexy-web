@@ -3,6 +3,7 @@
 // browser runs the page in a sandbox and decides whether to try once more.
 import { randomUUID } from "node:crypto";
 import { AGENT_KEY } from "./engine/key.ts";
+import { refusal } from "./engine/plain-error.ts";
 
 const AGENT = (process.env.NEXY_AGENT_URL ?? "").replace(/\/+$/, "");
 const KEY = AGENT_KEY;
@@ -137,7 +138,10 @@ async function turn(prompt: string, user: string, session: string, onTool: (name
     headers: { ...auth(user), "x-session-id": session },
     body: JSON.stringify({ model: BOT, stream: true, messages: [{ role: "user", content: prompt }] }),
   });
-  if (!res.ok || !res.body) throw new Error(`the engine answered ${res.status}`);
+  if (!res.ok || !res.body) {
+    const said = `the engine answered ${res.status}: ${(await res.text().catch(() => "")).slice(0, 400)}`;
+    throw new Error(refusal(said) ? said : `the engine answered ${res.status}`);
+  }
   const reader = res.body.getReader(), dec = new TextDecoder();
   let buf = "", reply = "", last: any = null;
   for (;;) {
@@ -174,7 +178,7 @@ async function messages(user: string, session: string): Promise<any[]> {
 export type BuildEvent =
   | { type: "step"; text: string }
   | { type: "done"; html: string; title: string; secs: number }
-  | { type: "failed"; error: string; check: boolean; secs: number };
+  | { type: "failed"; error: string; check: boolean; secs: number; refused?: number };
 
 interface Job { who: string; events: BuildEvent[]; subs: Set<(e: BuildEvent) => void>; done: boolean; at: number }
 const JOBS = new Map<string, Job>();
@@ -210,7 +214,9 @@ async function run(id: string, brief: string, fix: string, emit: (e: BuildEvent)
     html = pageFrom(await messages(user, session), reply);
   } catch (e) {
     console.warn(`[nexy] local build ${id}: ${(e as Error).message}`);
-    return emit({ type: "failed", error: (e as Error).message, check: false, secs: secs() });
+    // the router's refusal: its sentence only, and a mark so the page does not try again
+    const r = refusal(e);
+    return emit({ type: "failed", error: r?.message ?? (e as Error).message, check: false, secs: secs(), ...(r ? { refused: r.code } : {}) });
   }
   emit({ type: "step", text: "Checking it" });
   const why = checkPage(html, brief);

@@ -976,7 +976,7 @@ function failedReply(bub: Element, sentence: string, detail: string, retry: () =
 // On a computer the engine's builder writes the page: the server checks it is what was asked,
 // the browser runs it unseen, and a failed check gets one more try, then a plain no.
 const LOCAL_BUILD_MS = 90_000;
-type LocalEnd = { type: "done"; html: string; title: string; secs: number } | { type: "failed"; error: string; check: boolean; secs: number };
+type LocalEnd = { type: "done"; html: string; title: string; secs: number } | { type: "failed"; error: string; check: boolean; secs: number; refused?: number };
 
 function followBuild(id: string, onStep: (text: string) => void): Promise<LocalEnd> {
   return new Promise((resolve) => {
@@ -1013,7 +1013,7 @@ async function playLocalMake(brief: string, again?: Again): Promise<void> {
   status(holder, "Starting…", LOCAL_BUILD_MS);
   const t0 = Date.now();
   // idle: the last version ran cleanly but did not work (no words, a blank or still game)
-  let fix = again?.error ?? "", why = "", checked = false, idle = false, buildId = "";
+  let fix = again?.error ?? "", why = "", checked = false, idle = false, refused = false, buildId = "";
   try {
     for (let attempt = 1; attempt <= 2; attempt++) {
       if (attempt === 2) { status(holder, "That version did not pass my checks. Trying once more…"); gen.live("Trying once more"); }
@@ -1024,6 +1024,8 @@ async function playLocalMake(brief: string, again?: Again): Promise<void> {
       buildId = `build:local-${started.id}`;
       const r = await followBuild(started.id, (t) => { status(holder, `${t}…`); gen.live(t); });
       const failed = (error: string) => logBuildFailure({ build: buildId, kind: game ? "game" : "web_app", brief, ms: Date.now() - t0, error, builder: "engine" });
+      // the model server refused (offline, daily limit, code expired): its words, no second try
+      if (r.type === "failed" && r.refused) { why = r.error; refused = true; failed(r.error); break; }
       if (r.type === "failed") { why = r.error; checked ||= r.check; idle = false; fix = r.check ? r.error : ""; failed(r.error); continue; }
       status(holder, "Running it to check it works…");
       gen.live("Running it to check it works");
@@ -1045,7 +1047,9 @@ async function playLocalMake(brief: string, again?: Again): Promise<void> {
     const detail = plainError(errText(e));
     noteBuild({ brief, deliverable: "web_app", ...(buildId ? { id: buildId } : {}), outcome: "failed", error: (why || detail).slice(0, ERROR_MAX) });
     gen.fail("It did not work this time");
-    failedReply(holder.querySelector(".bub")!, idle
+    failedReply(holder.querySelector(".bub")!, refused
+      ? esc(why)
+      : idle
       ? `It did not come out working: ${esc(why.split(/[:;]/)[0])}. I tried twice and kept both versions back rather than show you something broken. Try again, or describe it a little differently; this computer’s AI may be too small for it.`
       : checked
       ? "I could not build that well enough to show you. I tried twice and neither version passed my checks, so I kept them back. Try again, or describe it a little differently."
@@ -1171,11 +1175,11 @@ async function playChart(question: string, priv: boolean): Promise<void> {
     for (const wait of [15_000, 30_000, 45_000, 0]) {
       res = await fetch("/api/v1/research", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question, private: priv }) });
       c = (await res.json()) as ChartData & { error?: string; note?: string };
-      if (!wait || !(res.status === 429 || /busy/i.test(c.error ?? ""))) break;
+      if (!wait || c.error === "refused" || !(res.status === 429 || /busy/i.test(c.error ?? ""))) break;
       if (!bub.querySelector(".feednote")) bub.insertAdjacentHTML("beforeend", `<div class="feednote" style="margin-top:6px">The model is busy with another job on this machine; waiting for it.</div>`);
       await new Promise((ok) => setTimeout(ok, wait));
     }
-    if (c.error === "private" || c.error === "own-app" || c.error === "no-search") { bub.innerHTML = esc(c.note ?? "Web search is off in ultra-private mode."); return; }
+    if (c.error === "private" || c.error === "own-app" || c.error === "no-search" || c.error === "refused") { bub.innerHTML = esc(c.note ?? "Web search is off in ultra-private mode."); return; }
     if (!res.ok || c.error) throw new Error(c.error || httpMsg(res.status));
     if (c.points.length < 1) {
       bub.innerHTML = `I searched for “${esc(c.query)}” but found ${c.points.length ? "only one figure" : "no figures"} I can trace to a source, so there is no chart rather than a made-up one.` +

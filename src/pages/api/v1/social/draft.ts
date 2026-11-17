@@ -5,6 +5,7 @@ import { parseNetwork } from "../../../../lib/social/networks.ts";
 import { load, log, update } from "../../../../lib/social/store.ts";
 import { NETWORKS, type Network } from "../../../../lib/social/types.ts";
 import { envelope, json, readJson } from "./_shared.ts";
+import { refusal } from "../../../../lib/engine/plain-error.ts";
 
 export const prerender = false;
 
@@ -25,6 +26,9 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     drafts = await draftPosts({ brief, networks: unique, perNetwork: body.perNetwork, pillars: (await load()).pillars }, complete);
   } catch (e: any) {
+    // the router's refusal: its sentence, with its status; the raw text only in the log
+    const r = refusal(e);
+    if (r) { console.warn(`[nexy] social draft: ${String(e?.message ?? e).slice(0, 400)}`); return json({ error: r.message }, r.code); }
     return json({ error: `the model on this machine did not write the posts: ${String(e?.message ?? e).slice(0, 200)}` }, 502);
   }
 

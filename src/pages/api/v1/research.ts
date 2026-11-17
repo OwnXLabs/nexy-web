@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { NO_SEARCH, researchChart, searchHere } from "../../../lib/research";
 import { connectorAsk } from "../../../lib/connector-ask";
+import { refusal } from "../../../lib/engine/plain-error";
 
 export const prerender = false;
 
@@ -19,6 +20,9 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     return json(await researchChart(question));
   } catch (e: any) {
+    // the router's refusal: its sentence, with its status; the raw text only in the log
+    const r = refusal(e);
+    if (r) { console.warn(`[nexy] research: ${String(e?.message ?? e).slice(0, 400)}`); return json({ error: "refused", note: r.message }, r.code); }
     return json({ error: String(e?.message ?? e).slice(0, 160) }, 502);
   }
 };

@@ -1,4 +1,5 @@
 import { answerOf, quietChat } from "./quiet.ts";
+import { refusal } from "./engine/plain-error.ts";
 const SEARXNG = (process.env.NEXY_SEARXNG_URL ?? "").replace(/\/+$/, "");
 // a job this computer's model is held back from: the app's door to a shared Own 1 when it gives one
 const LLM = (process.env.NEXY_HEAVY_LLM_URL || (process.env.NEXY_LLM_URL ?? "http://127.0.0.1:8080")).replace(/\/+$/, "");
@@ -95,8 +96,15 @@ If the request is about change over time (growth, expansion, trend, "last N mont
       messages: [{ role: "system", content: system }, { role: "user", content: `Chart request: ${question}\n\nSnippets:\n${numbered}` }],
     }, AbortSignal.timeout(180_000));
     if (res.status !== 429 && res.status !== 503) break;
+    // the router refusing in its own words (offline, daily limit) is final: asking again changes nothing
+    const said = `model server ${res.status}: ${(await res.text().catch(() => "")).slice(0, 400)}`;
+    if (refusal(said)) throw new Error(said);
     const after = Number(res.headers.get("retry-after")) * 1000;
     await new Promise((r) => setTimeout(r, after > 0 ? Math.min(after, 15_000) : 6_000));
+  }
+  if (res?.status === 403) {
+    const said = `model server 403: ${(await res.text().catch(() => "")).slice(0, 400)}`;
+    if (refusal(said)) throw new Error(said);
   }
   if (!res || !res.ok) throw new Error(res?.status === 429 || res?.status === 503 ? "the model is busy with other requests; try again in a minute" : `model ${res?.status}`);
   const body = await res.json();

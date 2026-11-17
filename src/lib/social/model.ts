@@ -2,6 +2,7 @@ import type { Complete } from "./draft.ts";
 import { guardIdentity } from "../engine/identity-guard.ts";
 import { quietChat } from "../quiet.ts";
 import { AGENT_KEY } from "../engine/key.ts";
+import { refusal } from "../engine/plain-error.ts";
 
 const GATEWAY = process.env.NEXY_AGENT_URL ?? "";
 const GATEWAY_KEY = AGENT_KEY;
@@ -31,8 +32,14 @@ export const complete: Complete = async ({ system, user, maxTokens }) => {
 
   const j: any = await r.json().catch(() => null);
   if (!r.ok) {
+    // the router's refusal keeps its words for the route to say plainly (lib/engine/plain-error.ts)
+    const said = `${via()} answered ${r.status}: ${JSON.stringify(j ?? {})}`.slice(0, 600);
+    if (refusal(said)) throw new Error(said);
     throw new Error(`${via()} answered ${r.status}: ${String(j?.error?.message ?? j?.error ?? "").slice(0, 160)}`);
   }
+  // the engine failing the turn because its model server refused: Nexy Engine under "nexy", Hermes under "hermes"
+  const engineSaid = j?.nexy?.error ?? j?.hermes?.error;
+  if (j?.choices?.[0]?.finish_reason === "error" && refusal(engineSaid)) throw new Error(String(engineSaid).slice(0, 600));
   const m = j?.choices?.[0]?.message;
   const text = [m?.content, m?.reasoning_content].filter(Boolean).join("\n\n").trim();
   if (!text) throw new Error(`${via()} returned an empty message`);
@@ -40,6 +47,7 @@ export const complete: Complete = async ({ system, user, maxTokens }) => {
   // posts reading "API call failed after 3 retries: HTTP 429".
   const fault = /^API call failed after \d+ retries?: (.*)$/s.exec(text)?.[1] ?? /^\s*⚠️?\s*(.*)$/s.exec(text)?.[1];
   if (fault !== undefined) {
+    if (refusal(fault)) throw new Error(fault.slice(0, 600));
     throw new Error(/\b429\b/.test(fault) ? "the model is busy with other requests; try again shortly" : `${via()} failed: ${fault.slice(0, 120)}`);
   }
   return guardIdentity(text).reply;

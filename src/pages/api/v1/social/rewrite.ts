@@ -4,6 +4,7 @@ import { complete } from "../../../../lib/social/model.ts";
 import { parseNetwork, SPECS } from "../../../../lib/social/networks.ts";
 import { load, log, update } from "../../../../lib/social/store.ts";
 import { envelope, json, readJson } from "./_shared.ts";
+import { refusal } from "../../../../lib/engine/plain-error.ts";
 
 export const prerender = false;
 
@@ -31,6 +32,9 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     next = await rewriteDraft(target, instruction, complete);
   } catch (e: any) {
+    // the router's refusal: its sentence, with its status; the raw text only in the log
+    const r = refusal(e);
+    if (r) { console.warn(`[nexy] social rewrite: ${String(e?.message ?? e).slice(0, 400)}`); return json({ error: r.message }, r.code); }
     return json({ error: `the model on this machine did not rewrite it: ${String(e?.message ?? e).slice(0, 200)}` }, 502);
   }
 
