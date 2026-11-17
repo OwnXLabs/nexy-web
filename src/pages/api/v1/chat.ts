@@ -12,6 +12,8 @@ import { agentSessionKey, deniesTools, dropInlineImages, wantsResearch } from ".
 import { IDENTITY, guardIdentity } from "../../../lib/engine/identity-guard";
 import { canStart, rejoin, sse, startTurn } from "../../../lib/turns";
 import { budget, type Budget } from "../../../lib/budget";
+import { asksToSearch, claimsSearch, ground, type ToolCall } from "../../../lib/grounding";
+import { anyBuildBlocked, BUILD_REFUSED } from "../../../lib/caps";
 
 // The longest an engine may stay silent: before its first words and between any two. While it
 // writes it may go on, up to CAP_MS (budget.ts). Silent past this, the agent gives way to the model
@@ -251,6 +253,12 @@ function systemPrompt(ctx: unknown, priv = false, docs: unknown = null, isEval =
   if (c.quiet?.length) {
     lines.push(`${c.quiet.join(" and ")} cannot list their work yet, so you cannot see into them.`);
   }
+  // a build request the page took for chat still reaches the model here: it must not write the page
+  if (anyBuildBlocked()) lines.push(
+    "",
+    "Building websites, games and apps needs a bigger AI than this computer can run. If asked to build",
+    `one, say "${BUILD_REFUSED}" Never write HTML, CSS or JavaScript files or page code for it.`,
+  );
   if (!priv) lines.push(...overlayLines(isEval));
   lines.push(...files);
   return lines.join("\n");
@@ -335,6 +343,10 @@ export const POST: APIRoute = async (ctx) => {
   // a question about a connected app is answered from it, never from a web search
   const asksApp = connectorAsk(String(said ?? ""), history);
   const research = !asksApp && wantsResearch(String(said ?? ""), history);
+  // asked for what only a search answers: the engine searches first, and the answer is checked against it
+  const asked = !asksApp && !priv && asksToSearch(String(said ?? ""), history);
+  // links the person gave, or earlier answers showed, are not the model's invention
+  const seen = [String(said ?? ""), ...history.map((m: any) => String(m?.content ?? ""))];
   const searchFirst = research && !priv && !!chatEngine && searchesWhenTold(chatEngine) ? SEARCH_FIRST : "";
   const startedAt = Date.now();
   // One line when a turn starts and one when it ends, each with its result, under one id: a turn
@@ -351,6 +363,9 @@ export const POST: APIRoute = async (ctx) => {
     log({ result: "stopped", via, stopped: b.stopped, ms: Date.now() - startedAt, replyChars: reply.length });
     return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via, grounded: false, stopped: true, broke: broke || undefined, private: priv || undefined } };
   };
+  // what a search or page read gave is checked against: only these tools bring sources
+  const SOURCE_TOOL = /search|read_page|web_extract|fetch|browser_navigate/i;
+  const builds = anyBuildBlocked();
   const run = async (onText?: (d: string) => void, restart?: (self?: boolean) => void): Promise<{ status: number; body: unknown }> => {
     // asked to open a site: open it on the agent's screen first and hand the agent the page, so
     // the person watches it there even when the model would have searched instead
@@ -400,16 +415,30 @@ export const POST: APIRoute = async (ctx) => {
         heard,
         // attached files, mail, an open or fetched page: the agent then holds new routines for the owner
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
-        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}) },
+        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}), ...(asked && use !== localEngine ? { research: true } : {}) },
       );
       if (faultReply(r.reply)) throw new Error(`${use.id} worded a failure as its reply`);
-      // the tools it ran: from the reply where the engine says, else from its own session record
-      let tools = r.tools ?? null;
-      if (!tools && agentSession && use.toolsSince) tools = await use.toolsSince(agentSession, startedAt).catch((e) => {
-        console.warn("[nexy] could not read the agent's tool use", (e as Error).message);
-        return null;
-      });
+      // the tools it ran: from the reply where the engine says, else from its own session record,
+      // which also holds what each was given and gave back (read when the reply is to be checked)
+      const record = async <T,>(read: ((session: string, since: number) => Promise<T | null>) | undefined): Promise<T | null> =>
+        agentSession && read ? read(agentSession, startedAt).catch((e) => {
+          console.warn("[nexy] could not read the agent's tool use", (e as Error).message);
+          return null;
+        }) : null;
+      const recorded = use !== localEngine && (!r.tools || research || asked || builds) ? await record(use.callsSince) : null;
+      let tools = r.tools ?? recorded?.map((c) => c.name) ?? null;
+      if (!tools && !use.callsSince) tools = await record(use.toolsSince);
+      // [] when it ran none (the model alone runs none); null when unknown, and then nothing is judged
+      const calls: ToolCall[] | null = use === localEngine ? [] : recorded ?? (tools && !tools.some((t) => SOURCE_TOOL.test(t)) ? [] : null);
       const browsed = SCREEN && !!tools?.some((t) => /^browser_/.test(t));
+      // a page written in chat on a computer whose model may not build is not offered as done
+      const wrote = builds && !!calls?.some((c) => c.name === "write_file" && /\.(?:html?|js|css)\b/i.test(c.text.slice(0, 400)));
+      if (wrote) r.reply = BUILD_REFUSED;
+      // a research answer stands on what the searches really gave (grounding.ts): asked for a search,
+      // or one ran, or the reply says one did
+      const judged = !!calls && (asked || (research && calls.some((c) => SOURCE_TOOL.test(c.name))) || claimsSearch(r.reply));
+      const g = judged ? ground(r.reply, calls!, asked, seen) : null;
+      if (g) r.reply = g.reply;
       r.reply = dropInlineImages(r.reply, browsed);
       r.reply = guard(r.reply, self);
       // a small model still asks for a hand-over now and then: with no screen there is nothing to take
@@ -427,12 +456,16 @@ export const POST: APIRoute = async (ctx) => {
         sources: r.sources ?? "unknown",
         cited: cited(r.reply),
         ...(searchFirst && use !== localEngine ? { searchAsked: true } : {}),
+        ...(g ? { searched: g.searched, searchFound: g.found, linksRemoved: g.removed, unsearchedNote: g.noted } : {}),
+        ...(asked && use !== localEngine ? { researchAsked: true } : {}),
+        ...(calls === null && asked ? { grounding: "unknown" } : {}),
+        ...(wrote ? { wroteBlockedBuild: true } : {}),
         ...(conn ? { connector: conn.id, connectorOutcome: conn.outcome } : {}),
       });
       return { status: 200, body: {
         choices: [{ message: { role: "assistant", content: r.reply } }],
         via: r.via,
-        grounded: r.grounded,
+        grounded: r.grounded && !g?.noted,
         // the agent used its browser, or the page was opened on its screen: the client shows the screen
         browsed: browsed || onScreen || undefined,
         // stopped at the length limit: the client offers to continue
@@ -465,6 +498,8 @@ export const POST: APIRoute = async (ctx) => {
         try {
           restart?.(false);
           const r = await localEngine.chat(String(said ?? ""), history, systemPrompt(body?.context, priv, body?.docs, isEval) + connPrompt + NO_TOOLS_THIS_TURN, b2.signal, undefined, (d) => { b2.heard(d); onText?.(d); });
+          // the model alone searched nothing
+          if (asked || claimsSearch(r.reply)) r.reply = ground(r.reply, [], asked, seen).reply;
           r.reply = guard(r.reply);
           // the model alone must not contradict what the agent just did on screen
           if (timedOut && deniesTools(r.reply)) r.reply = "I'm still working on that. Ask me again in a moment and I'll pick it up from where I got to.";

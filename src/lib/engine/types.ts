@@ -33,7 +33,8 @@ export interface NewRoutine { name: string; schedule: string; prompt: string; tz
 // outside: the system message holds content from outside (files, mail, pages), not only Nexy's own text
 // tz: the owner's zone (IANA name), so "8 am" in a routine the agent makes means 8 am there
 // user: the person a gate signed in, sent as x-nexy-user so the engine keeps each one's sessions apart
-export interface ChatOpts { outside?: boolean; tz?: string; user?: string }
+// research: the person asked for something a search should answer, so the engine searches first
+export interface ChatOpts { outside?: boolean; tz?: string; user?: string; research?: boolean }
 
 export interface NexyEngine {
   readonly id: string;
@@ -51,6 +52,8 @@ export interface NexyEngine {
   browsed?(session: string, since: number): Promise<boolean>;
   // the tools the agent ran in this session since `since` (ms), from its own record; null where it has none
   toolsSince?(session: string, since: number): Promise<string[] | null>;
+  // each tool call it ran since then, with what it was given and gave back; null where it has no record
+  callsSince?(session: string, since: number): Promise<{ name: string; text: string }[] | null>;
   // speaks as itself: no Nexy persona or naming rules in its prompt, no identity guard on its replies
   readonly ownIdentity?: boolean;
   memory?: {

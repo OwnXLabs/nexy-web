@@ -34,16 +34,20 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
     const a = [...list].reverse().find((x) => x?.role === "assistant" && typeof x?.content === "string" && x.content.trim());
     return a?.content;
   };
-  // the gateway writes each tool call as it runs, newest last
-  const toolsSince = async (session: string, since: number): Promise<string[] | null> => {
+  // the gateway writes each tool call as it runs, newest last. Nexy Engine stamps them in whole
+  // seconds, so a search in the turn's first second is counted from the start of that second.
+  const callsSince = async (session: string, since: number): Promise<{ name: string; text: string }[] | null> => {
     const m = await api(`/api/sessions/${encodeURIComponent(`nexy-${session}`)}/messages?limit=40`).catch((e: Error) => {
       if (/^agent gateway 404\b/.test(e.message)) return null; // the first turn has not started yet
       throw e;
     });
     if (!m) return null;
     const list: any[] = m?.data ?? [];
-    return list.filter((x) => x?.role === "tool" && Number(x?.timestamp) * 1000 >= since).map((x) => String(x?.tool_name ?? "")).filter(Boolean);
+    const from = Math.floor(since / 1000) * 1000;
+    return list.filter((x) => x?.role === "tool" && Number(x?.timestamp) * 1000 >= from && x?.tool_name)
+      .map((x) => ({ name: String(x.tool_name), text: typeof x?.content === "string" ? x.content : JSON.stringify(x?.content ?? "") }));
   };
+  const toolsSince = async (session: string, since: number): Promise<string[] | null> => (await callsSince(session, since))?.map((c) => c.name) ?? null;
   return {
     id: "gateway",
     upstream: UPSTREAM[name] ?? HERMES_UPSTREAM,
@@ -70,7 +74,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           ...(opts?.user ? { "x-nexy-user": opts.user } : {}),
         },
         // vouch for the system message only when the caller says it holds nothing from outside
-        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}), ...(opts?.tz ? { tz: opts.tz } : {}) }),
+        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}), ...(opts?.tz ? { tz: opts.tz } : {}), ...(opts?.research ? { research: true } : {}) }),
       });
 
       if (!res.ok) {
@@ -103,6 +107,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
 
     browsed: async (session, since) => ((await toolsSince(session, since)) ?? []).some((t) => /^browser_/.test(t)),
     toolsSince,
+    callsSince,
     memory: {
       async list() { return (await sessions()).map(toItem); },
       async export() {
