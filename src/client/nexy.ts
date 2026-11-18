@@ -17,7 +17,7 @@ import { offersProject } from "./promote";
 import { fromReply, htmlArtifact, gameArtifact, markdownArtifact } from "./content-view";
 import { slidesFrom, monthIn, subjectIn, type DocSource } from "./deck";
 import { planBlock, markStarted, agentsBlock, consentBlock, resumeBlock, summaryBlock, autopilotBlock } from "./blocks";
-import { classify, splitTasks, asksToChangePage, retryOf, fixNote, meansOwner } from "./intent";
+import { classify, splitTasks, asksToChangePage, retryOf, fixNote, meansOwner, describesImage, IMAGE_WHAT } from "./intent";
 import { ERROR_MAX, plainError, type LastBuild } from "../lib/chat-output";
 import { connectIntent, playConnect } from "./perm";
 import { handleEdit, editablePage, applyRevision } from "./edit-loop";
@@ -27,7 +27,7 @@ import { takeoverAsk } from "./takeover";
 import { pickedFor, clearPick, renderedFor, type Picked } from "./pick";
 import { initPrivate, guard, conversation as privateConversation, isPrivate, privateConversationId, noteEphemeralDoc, setPrivate } from "./private";
 import { matchSocial, playSocial } from "./social";
-import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff, onGuestCode, TEXT_ONLY } from "./place";
+import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imagesOff, onGuestCode, sharedImages, sharedOn, TEXT_ONLY } from "./place";
 import { renderGate } from "./build-gate";
 import { caps, gameBrief, buildKind, taskOf, verdictFor, gateCard, warnsFor, WARN_NOTE, THIN } from "./capability";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, engineSlot, chatLastBuild, setChatLastBuild, type ExampleOpen } from "./shell";
@@ -766,7 +766,8 @@ function titleFor(brief: string): string {
 const ATTACH_MAX_BYTES = 40 * 1024 * 1024;
 
 type Attachment = { id: string; filename: string; eph: boolean; conv?: string; local?: string };
-interface TurnState { attached: Attachment[]; lastBuild: LastBuild | null; lastTurn: { prompt: string; el: HTMLElement | null; at?: number } }
+// imageNext: the last turn made an image or asked what one should show, so a short description is the next one
+interface TurnState { attached: Attachment[]; lastBuild: LastBuild | null; lastTurn: { prompt: string; el: HTMLElement | null; at?: number }; imageNext?: boolean }
 const turns = new Map<string, TurnState>();
 function turnState(): TurnState {
   const id = chatScope(); let state = turns.get(id);
@@ -1616,7 +1617,45 @@ async function imageQuality(src: string): Promise<string> {
   }
 }
 
+// An image made on the shared Own 1 this computer's AI runs on (api/v1/image): one request, counted
+// there like a chat turn, so a poor result is not asked for again on its own. A refusal (the daily
+// limit, a code that ended, a box that is down) is said in its own words, with nothing to retry.
+async function playSharedImage(prompt: string): Promise<void> {
+  const { push, generating } = captureWork();
+  const holder = push("ai", `Asking ${esc(sharedOn)} for that. It takes a moment.`);
+  const est = typicalMs("image");
+  status(holder, "Painting…", est);
+  const gen = generating(prompt.slice(0, 60), "image", `${sharedOn} is painting it`, est);
+  holder.classList.add("working");
+  const bub = holder.querySelector(".bub")!;
+  try {
+    const paintStart = Date.now();
+    const r = await fetch("/api/v1/image", {
+      method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ prompt: sharpen(prompt), size: "512x512", seed: Math.floor(Math.random() * 2_000_000_000), private: isPrivate() }),
+      signal: timeoutSignal(imageLimit(est)),
+    });
+    const d = await r.json().catch((e) => { console.warn("[nexy] image reply unreadable", e); return {}; }) as { image_b64?: string; error?: string; note?: string };
+    if (d.note) { gen.fail(d.note); bub.innerHTML = esc(d.note); return; }
+    if (!r.ok || !d.image_b64) throw new Error(d.error || httpMsg(r.status));
+    const src = `data:image/png;base64,${d.image_b64}`;
+    const q = await imageQuality(src);
+    if (q) bub.innerHTML = `${esc(sharedOn)} returned an image, but it is ${q}. It is ${ON_RIGHT} as it came back; ask again to try once more.`;
+    else { push("ai", `Done. It is ${ON_RIGHT}, made on ${esc(sharedOn)}. Want variations, or a crop for social?`); noteMs("image", Date.now() - paintStart); }
+    gen.replaceWith(imageArtifact({ id: `gen:image:${Date.now()}`, title: `${shortTitle(prompt, "Image")}.png`, src, meta: `${sharedOn} · 512×512` }));
+    if (!q) turnState().imageNext = true;
+  } catch (e) {
+    if ((e as Error)?.name === "AbortError") e = new Error(`${sharedOn} was still working after ${clock(imageLimit(est))}`);
+    gen.fail(`${sharedOn} stopped: ${errText(e)}`);
+    failedReply(bub, `${esc(sharedOn)} could not make that this time.`, errText(e), () => void playSharedImage(prompt));
+  } finally {
+    holder.classList.remove("working");
+    settle(holder);
+  }
+}
+
 async function playGenerate(medium: "image" | "audio", prompt: string): Promise<void> {
+  if (medium === "image" && sharedImages) return playSharedImage(prompt);
   const { push, showArtifact, generating } = captureWork();
   const who = medium === "image" ? "Own Image Studio" : "Own Beat Studio";
   const holder = push(
@@ -1650,7 +1689,7 @@ async function playGenerate(medium: "image" | "audio", prompt: string): Promise<
       }
       if (q) holder.querySelector(".bub")!.innerHTML = `${esc(who)} returned an image, but it is ${q}, twice. It is ${ON_RIGHT} as it came back; this is a fault in the image engine on this machine, not your prompt.`;
       else push("ai", `Done. It is ${ON_RIGHT}, made by ${esc(who)} on this machine. Want variations, or a crop for social?`);
-      if (!q) noteMs("image", Date.now() - paintStart);
+      if (!q) { noteMs("image", Date.now() - paintStart); turnState().imageNext = true; }
       gen.replaceWith(imageArtifact({
         id: `gen:image:${Date.now()}`,
         title: `${shortTitle(prompt, "Image")}.png`,
@@ -2463,7 +2502,10 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     if (soc) { await playSocial(soc, { push, showArtifact, project: P()?.name, block: (t, r, rows) => void pushBlock(summaryBlock(t, r, rows)) }); return; }
 
     const conn = connectIntent(text);
-    const intent = retryOf(text, lastOfChat()) ?? classify(text);
+    // right after an image, or after "what should it show?": a short description is the next image
+    const imageNext = !!localTurn.imageNext && hasApp("images");
+    localTurn.imageNext = false;
+    const intent = retryOf(text, lastOfChat()) ?? (imageNext && describesImage(text) ? { kind: "generate" as const, medium: "image" as const, prompt: text.trim() } : classify(text));
     // what this computer's model can't do is held back before it runs (src/client/capability.ts)
     if (caps && !conn) {
       const revises = !!(pickedFor(editablePage()?.id) && isOpen()) || revisesOpenPage(text, intent.kind);
@@ -2531,8 +2573,11 @@ async function send(text: string, shown?: HTMLElement): Promise<void> {
     } else if (intent.kind === "edit") {
       const r = handleEdit(text);
       push("ai", esc(r ? r.say : "That edit did not reach the page."));
-    } else if (intent.kind === "generate" && !hasApp(intent.medium === "image" ? "images" : "beat")) {
-      push("ai", esc(intent.medium === "image" ? imagesOff() : notHereYet("Making music")));
+    } else if ((intent.kind === "generate" || intent.kind === "imageWhat") && !hasApp(intent.kind === "imageWhat" || intent.medium === "image" ? "images" : "beat")) {
+      push("ai", esc(intent.kind === "imageWhat" || intent.medium === "image" ? imagesOff() : notHereYet("Making music")));
+    } else if (intent.kind === "imageWhat") {
+      push("ai", esc(IMAGE_WHAT));
+      localTurn.imageNext = true;
     } else if (intent.kind === "make" && !(intent.deliverable === "diagram" ? hasStudio("build") : hasApp("build"))) {
       push("ai", esc(notHereYet(intent.deliverable === "diagram" ? "Drawing diagrams" : "Building websites and apps")));
     } else if (intent.kind === "build" && !hasApp("startup")) {

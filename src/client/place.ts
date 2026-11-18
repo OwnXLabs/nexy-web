@@ -12,6 +12,10 @@ export const isBeta = root?.dataset.beta === "1";
 export const onGuestCode = root?.dataset.guest === "1";
 // whose Own 1 that is, as the app names it ("John's Own 1")
 export const guestOn = (onGuestCode && root?.dataset.guestOn) || "the shared Own 1";
+// whose Own 1 this computer's AI runs on (a guest code, or a device paired for AI only), or ""
+export const sharedOn = (place === "computer" && root?.dataset.guestOn) || (onGuestCode ? guestOn : "");
+// images made on that Own 1 through the app's router (api/v1/image), not on this computer
+export const sharedImages = !!sharedOn && root?.dataset.images === "shared";
 export const TEXT_ONLY = "This shared Own 1 takes text only; describe the image in words.";
 // whole-box features (memory across chats, routines) and the engine pick, as the server allows them here
 export const boxHere = root?.dataset.box === "1";
@@ -30,6 +34,8 @@ export const notHereYet = (what: string): string => inCloud
 // Images on a computer are switched on in Nexy Home, where its hardware can run them. The page
 // can't tell whether it can, so the wording covers both.
 export const imagesOff = (): string => onOwn1 || inCloud ? notHereYet("Making images")
+  // never "on this Mac" to someone whose AI is on another Own 1
+  : sharedOn ? `Making images isn't available from ${sharedOn} right now. Try again later, or ask its owner.`
   : `Making images is off. Turn on "Make images on this ${/Windows/.test(navigator.userAgent) ? "PC" : "Mac"}" in Nexy Home first. If Home doesn't offer it, this computer can't make images, but an Own1 can.`;
 // the address shown on built pages
 export const siteHost = onOwn1 ? "own1.local" : "this-computer.local";

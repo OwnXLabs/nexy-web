@@ -5,7 +5,7 @@ import { APPS } from "../lib/apps";
 import { localVoice } from "../lib/voice";
 import { builderAvailable } from "../lib/local-build";
 import { boxAllowed, pickAllowed } from "../lib/box";
-import { guestHere, guestOn } from "../lib/guest";
+import { guestHere, guestOn, sharedHere, sharedImagesUrl } from "../lib/guest";
 // a computer without an Own1 runs chat only, plus speech when it has it; the page hides what isn't here
 const local = process.env.NEXY_STUDIOS === "off";
 // Nexy Cloud: hosted, chat only (with NEXY_STUDIOS=off), named as such
@@ -18,7 +18,9 @@ const voice = local && box && localVoice();
 // building on this computer: the engine's builder, with or without the Own Build studio
 const builder = local && await builderAvailable();
 const ids = APPS.map((a) => a.id);
-const apps = [...ids, ...(voice ? ["voice"] : []), ...(builder ? ["builder"] : [])].join(" ");
+// images made on the shared Own 1 this computer's AI runs on, through the app's router
+const sharedImages = local && !ids.includes("images") && !!sharedImagesUrl();
+const apps = [...ids, ...(voice ? ["voice"] : []), ...(builder ? ["builder"] : []), ...(sharedImages ? ["images"] : [])].join(" ");
 const projects = APPS.some((a) => a.id === "startup");
 const beta = process.env.NEXY_BETA === "1";
 // web search: an Own1 has its own; a computer only when one is configured
@@ -31,11 +33,11 @@ const shot = !!process.env.NEXY_LOG_TAIL_URL;
 const caps = local ? process.env.NEXY_CAPS || undefined : undefined;
 // a shared Own 1 reached with a guest code: text only, so no image attachments (src/lib/guest.ts)
 const guest = local && guestHere();
-// a guest is never the owner, and its AI runs on someone else's Own 1, not privately here
-const on = guest ? guestOn() : "";
+// a guest is never the owner; a guest's AI, or an AI-only device's, runs on someone's Own 1, not privately here
+const on = local && sharedHere() ? guestOn() : "";
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-guest={guest ? "1" : undefined} data-guest-on={guest ? on : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-app-shot={shot ? "1" : undefined} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined} data-caps={caps}>
+<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-guest={guest ? "1" : undefined} data-guest-on={on || undefined} data-images={sharedImages ? "shared" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-app-shot={shot ? "1" : undefined} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined} data-caps={caps}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

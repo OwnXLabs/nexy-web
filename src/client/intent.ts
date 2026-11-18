@@ -21,6 +21,7 @@ export type Intent =
   | { kind: "chart" }
   | { kind: "canvasView"; view: string; say: string }
   | { kind: "generate"; medium: "image" | "audio"; prompt: string }
+  | { kind: "imageWhat" }
   | { kind: "edit"; text: string }
   | { kind: "build" }
   | { kind: "make"; brief: string; deliverable: "web_app" | "diagram" }
@@ -54,7 +55,26 @@ const CANVAS_VIEWS: [RegExp, string][] = [
 ];
 
 function stripLead(s: string): string {
-  return s.replace(/^\s*(?:an?\s+)?(?:image|picture|photo|illustration|logo|artwork|drawing|beat|track|song|music|tune|melody|loop)\s+(?:of|for|about)?\s*/i, "").trim() || s.trim();
+  return s.replace(/^\s*(?:an?\s+)?(?:image|picture|photo|illustration|painting|logo|artwork|drawing|beat|track|song|music|tune|melody|loop)\s+(?:of|for|about|showing)?\s*/i, "").trim() || s.trim();
+}
+
+// "an image of a fox in the snow": an image asked for without a verb
+const IMAGE_OF = /^\s*(?:an?\s+)?(?:image|picture|photo|illustration|painting|drawing|artwork)\s+(?:of|showing)\s+\S/i;
+// "make an image" with nothing to show: asked what it should show
+const IMAGE_ALONE = /^(?:an?\s+)?(?:new\s+)?(?:image|picture|photo|illustration|artwork|drawing|painting)(?:\s+for me)?\s*[.!]*$/i;
+export const IMAGE_WHAT = "What should the image show? Describe it in a few words, like “a small red bicycle by a lake”.";
+// replies, questions and other jobs that are never an image description, even right after an image
+const NOT_A_DESCRIPTION = /^\s*(?:i|i'm|i'd|i've|you|we|it|it's|its|that|that's|this|these|those|they|thanks?|thank you|cheers|ok(?:ay)?|yes|yeah|yep|no|nope|nah|sure|cool|great|nice|perfect|love it|wow|hi|hello|hey|stop|cancel|never ?mind|please|why|how|what|who|when|where|which|can|could|would|should|will|is|are|do|does|did|tell|write|explain|summari[sz]e|translate|search|find|look|send|email|remind|schedule|research|help|show|open|save|download|share|delete|remove|undo|again|more|less|another one|make|build|create|give|change|turn|use|try|go|let'?s|now what)\b/i;
+
+/** Right after an image (or after asking what one should show): is this short message a description of the next one? */
+export function describesImage(text: string): boolean {
+  const s = text.trim();
+  const words = s.split(/\s+/).filter(Boolean).length;
+  if (!s || words > 14 || /[?\n]/.test(s) || /[.!]\s+\S/.test(s)) return false;
+  if (NOT_A_DESCRIPTION.test(s) || QUESTION.test(s)) return false;
+  // a sentence of another job ("write a caption", "summarise my week") is classified as that
+  const k = classify(s).kind;
+  return k === "chat" || k === "generate";
 }
 
 const MAKE_VERB = /\b(build|make|create|code|write|design|give me|i want|i need)\b/i;
@@ -171,9 +191,14 @@ export function classify(text: string): Intent {
   const assign = /^\s*assign\s+(.+?)\s+to\s+(.+?)\s*$/i.exec(s);
   if (assign) return { kind: "assignTask", title: assign[1].trim(), role: assign[2].trim() };
 
+  if (IMAGE_OF.test(s) && !QUESTION.test(s)) return { kind: "generate", medium: "image", prompt: stripLead(s) };
   const gen = /^(?:please\s+)?(?:can you\s+)?(?:generate|draw|paint|make|create)\s+(?:me\s+)?(?:an?\s+)?(.+)$/i.exec(s);
   if (gen && !/\b(app|application|tool|program|workspace|editor|game|site|website)\b/i.test(gen[1])) {
     const rest = gen[1];
+    if (IMAGE_ALONE.test(rest)) return { kind: "imageWhat" };
+    // "draw a cat", "paint the sea at night": a picture, unless it is a diagram or chart
+    if (/^(?:please\s+)?(?:can you\s+)?(?:draw|paint)\b/i.test(s) && !DIAGRAM.test(s) && !/\b(?:chart|graph|plot|map|plan)\b/i.test(rest))
+      return { kind: "generate", medium: "image", prompt: stripLead(rest) };
     if (/\b(image|picture|photo|illustration|logo|artwork|drawing)\b/i.test(rest)) {
       return { kind: "generate", medium: "image", prompt: stripLead(rest) };
     }
