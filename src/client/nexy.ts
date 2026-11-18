@@ -1620,10 +1620,13 @@ async function imageQuality(src: string): Promise<string> {
 // An image made on the shared Own 1 this computer's AI runs on (api/v1/image): one request, counted
 // there like a chat turn, so a poor result is not asked for again on its own. A refusal (the daily
 // limit, a code that ended, a box that is down) is said in its own words, with nothing to retry.
+// a little past the router's 420 s and the server's 440 s, so their plain words arrive first
+const SHARED_IMAGE_WAIT = 450_000;
 async function playSharedImage(prompt: string): Promise<void> {
   const { push, generating } = captureWork();
-  const holder = push("ai", `Asking ${esc(sharedOn)} for that. It takes a moment.`);
-  const est = typicalMs("image");
+  const holder = push("ai", `Making the image on ${esc(sharedOn)}… this can take a few minutes.`);
+  // about 195 s there, until this computer has measured it; the app's router waits up to 420 s
+  const est = measured("image", 195_000);
   status(holder, "Painting…", est);
   const gen = generating(prompt.slice(0, 60), "image", `${sharedOn} is painting it`, est);
   holder.classList.add("working");
@@ -1633,7 +1636,7 @@ async function playSharedImage(prompt: string): Promise<void> {
     const r = await fetch("/api/v1/image", {
       method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({ prompt: sharpen(prompt), size: "512x512", seed: Math.floor(Math.random() * 2_000_000_000), private: isPrivate() }),
-      signal: timeoutSignal(imageLimit(est)),
+      signal: timeoutSignal(SHARED_IMAGE_WAIT),
     });
     const d = await r.json().catch((e) => { console.warn("[nexy] image reply unreadable", e); return {}; }) as { image_b64?: string; error?: string; note?: string };
     if (d.note) { gen.fail(d.note); bub.innerHTML = esc(d.note); return; }
@@ -1645,7 +1648,7 @@ async function playSharedImage(prompt: string): Promise<void> {
     gen.replaceWith(imageArtifact({ id: `gen:image:${Date.now()}`, title: `${shortTitle(prompt, "Image")}.png`, src, meta: `${sharedOn} · 512×512` }));
     if (!q) turnState().imageNext = true;
   } catch (e) {
-    if ((e as Error)?.name === "AbortError") e = new Error(`${sharedOn} was still working after ${clock(imageLimit(est))}`);
+    if ((e as Error)?.name === "AbortError") e = new Error(`${sharedOn} was still working after ${clock(SHARED_IMAGE_WAIT)}`);
     gen.fail(`${sharedOn} stopped: ${errText(e)}`);
     failedReply(bub, `${esc(sharedOn)} could not make that this time.`, errText(e), () => void playSharedImage(prompt));
   } finally {

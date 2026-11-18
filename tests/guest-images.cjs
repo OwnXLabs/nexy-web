@@ -165,3 +165,28 @@ test('a guest with no image door: an image ask never says "on this Mac"; off a s
     assert.equal(r.status, 404, 'no image door off a shared Own 1');
   } finally { g.stop(); plain.stop(); }
 });
+
+test('an image the shared Own 1 failed: the router\'s plain words while it works, then chat still answers there', { timeout: 90000 }, async () => {
+  const FAILED = "John's Own 1 couldn't make that image just now: its image maker restarted. Try again in a few minutes.";
+  const s = await start({ NEXY_OWN1_GUEST: '1', NEXY_OWN1_GUEST_ON: "John's Own 1", NEXY_LLM_URL: d.url, NEXY_SHARED_IMAGES_URL: d.url });
+  try {
+    const { page } = await open(b, s.base);
+    d.images = []; d.chats = 0; d.refuse = [503, FAILED];
+    await say(page, 'make an image of a lighthouse at dusk');
+    await page.getByText(/Making the image on John's Own 1… this can take a few minutes\./).first().waitFor({ timeout: 10000 });
+    await page.getByText(FAILED).first().waitFor({ timeout: 20000 });
+    assert.doesNotMatch((await replies(page)).join('\n'), /isn't answering|\b50\d\b/);
+    d.refuse = null;
+    await say(page, 'thanks, what is a lighthouse for?');
+    assert.ok(await until(async () => d.chats > 0), 'chat still goes to the shared Own 1');
+  } finally { s.stop(); d.refuse = null; }
+});
+
+test('the server waits past the router for an image: node:http, 440 s, never fetch\'s 300 s header limit', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'pages', 'api', 'v1', 'image.ts'), 'utf8');
+  assert.match(src, /const SHARED_IMAGE_MS = 440_000;/);
+  assert.match(src, /http\.request\(/);
+  assert.doesNotMatch(src.replace(/^\s*\/\/.*$/gm, ''), /\bfetch\(/);
+  const client = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'nexy.ts'), 'utf8');
+  assert.match(client, /const SHARED_IMAGE_WAIT = 450_000;/);
+});
