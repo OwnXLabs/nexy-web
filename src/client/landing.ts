@@ -1,7 +1,7 @@
 // The chat home, after the v23 landing design: the greeting with three suggestions, the
 // Get started list, the model download chip and the first-visit pill. Only what works on this
 // machine is offered; what isn't here is left out or explained.
-import { boxHere, hasApp, here, inCloud, onOwn1 } from "./place";
+import { boxHere, guestOn, hasApp, here, inCloud, onGuestCode, onOwn1 } from "./place";
 import { httpMsg } from "./http";
 import { isPrivate } from "./private";
 import { prefs } from "./settings";
@@ -111,7 +111,9 @@ function hello(): string {
     ...(hasApp("hub") ? ["work with your apps"] : []),
   ]);
   const tail = model.ready ? "What should we start with?" : `I’m still downloading ${esc(model.model ?? "the model")}, but you can give me a job now.`;
-  return `Hi${n ? ` ${esc(n)}` : ""}. I ${can}${onOwn1 || inCloud ? "" : ", privately on this computer"}. ${tail}`;
+  // a guest's AI runs on someone else's Own 1: never "privately on this computer"
+  const where = onOwn1 || inCloud ? "" : onGuestCode ? ` on ${esc(guestOn)}` : ", privately on this computer";
+  return `Hi${n ? ` ${esc(n)}` : ""}. I ${can}${where}. ${tail}`;
 }
 
 /** The home greeting in an empty chat with no project open. */

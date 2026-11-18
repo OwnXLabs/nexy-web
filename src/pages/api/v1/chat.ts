@@ -35,7 +35,7 @@ const cited = (reply: string) => (reply.match(/https?:\/\/[^\s)\]>"']+/g) ?? [])
 import { overlayLines } from "../../../lib/overlay";
 import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/browse-intent";
 import { connectorAsk, connectorTurn } from "../../../lib/connectors";
-import { guestFault } from "../../../lib/guest";
+import { guestFault, guestHere, guestOn } from "../../../lib/guest";
 import { refusal } from "../../../lib/engine/plain-error";
 import { byId } from "../../../lib/apps";
 import { SEARCH_NOT_SET_UP, SEARCH_SETTING_UP, searchStatus } from "../../../lib/research";
@@ -51,7 +51,14 @@ const CLOUD = process.env.NEXY_PLACE === "cloud";
 // NEXY_SCREEN=none: no agent browser, so nothing opens on a screen and no step is handed over
 const SCREEN = process.env.NEXY_SCREEN !== "none";
 const NO_HANDOVER = /\s*\[\[take-control:[^\]\n]*(?:\]\]|\s*$)/gi;
-const WHERE = CLOUD
+// a guest code: the answers come from someone else's Own 1, so nothing is said to run privately here
+const GUEST_ON = guestHere() ? guestOn() : null;
+const WHERE = GUEST_ON
+  ? [
+    `You are Nexy on this computer, used as a guest of ${GUEST_ON}: your answers are written by that Own 1's AI, reached over the network.`,
+    "It takes text only. Chats are kept on this computer.",
+  ]
+  : CLOUD
   ? [
     "You are Nexy, the assistant in Nexy Cloud, hosted by OwnX on servers it operates.",
     "Everything you do runs on this server. Web searches go out through its private search engine;",
@@ -62,7 +69,9 @@ const WHERE = CLOUD
     "Everything you do runs on this device. Nothing leaves it unless the user is asked first.",
   ];
 // An engine that speaks as itself (Hermes, OpenClaw) is told where it runs, not who to be
-const PLACE = CLOUD
+const PLACE = GUEST_ON
+  ? `You are working on this computer through Nexy, as a guest of ${GUEST_ON}, whose AI writes the answers.`
+  : CLOUD
   ? "You are working in Nexy Cloud, hosted by OwnX on servers it operates."
   : `You are working on ${process.env.NEXY_STUDIOS === "off" ? "this computer" : "an Own1 machine"}, through Nexy.`;
 const WHO = `If asked who or what you are, say "${IDENTITY}" Never name the engine, model or company behind you.`;

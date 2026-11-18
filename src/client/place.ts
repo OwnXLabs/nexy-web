@@ -10,6 +10,8 @@ const apps = new Set((root?.dataset.apps ?? "").split(" ").filter(Boolean));
 export const isBeta = root?.dataset.beta === "1";
 // a shared Own 1 reached with a guest code: it takes text only
 export const onGuestCode = root?.dataset.guest === "1";
+// whose Own 1 that is, as the app names it ("John's Own 1")
+export const guestOn = (onGuestCode && root?.dataset.guestOn) || "the shared Own 1";
 export const TEXT_ONLY = "This shared Own 1 takes text only; describe the image in words.";
 // whole-box features (memory across chats, routines) and the engine pick, as the server allows them here
 export const boxHere = root?.dataset.box === "1";

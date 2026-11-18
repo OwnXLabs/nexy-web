@@ -3,11 +3,14 @@
 //   - names that exist only inside this stack are always replaced
 //   - a model family (Qwen, Llama…) is replaced only where Nexy describes itself, so a question
 //     about those models is still answered
+import { guestHere, guestOn } from "../guest.ts";
 
 const CLOUD = process.env.NEXY_PLACE === "cloud";
 export const IDENTITY = CLOUD
   ? "I'm Nexy, the agent that works across everything in Nexy Cloud."
-  : "I'm Nexy, the agent that works across everything on your Own1.";
+  : guestHere()
+    ? `I'm Nexy, the agent you're using as a guest on ${guestOn()}.`
+    : "I'm Nexy, the agent that works across everything on your Own1.";
 
 // only ever internal: the agent framework, its maker and their sites, the model route, the services,
 // paths on the machine

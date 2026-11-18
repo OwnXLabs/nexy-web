@@ -5,7 +5,7 @@ import { APPS } from "../lib/apps";
 import { localVoice } from "../lib/voice";
 import { builderAvailable } from "../lib/local-build";
 import { boxAllowed, pickAllowed } from "../lib/box";
-import { guestHere } from "../lib/guest";
+import { guestHere, guestOn } from "../lib/guest";
 // a computer without an Own1 runs chat only, plus speech when it has it; the page hides what isn't here
 const local = process.env.NEXY_STUDIOS === "off";
 // Nexy Cloud: hosted, chat only (with NEXY_STUDIOS=off), named as such
@@ -31,9 +31,11 @@ const shot = !!process.env.NEXY_LOG_TAIL_URL;
 const caps = local ? process.env.NEXY_CAPS || undefined : undefined;
 // a shared Own 1 reached with a guest code: text only, so no image attachments (src/lib/guest.ts)
 const guest = local && guestHere();
+// a guest is never the owner, and its AI runs on someone else's Own 1, not privately here
+const on = guest ? guestOn() : "";
 ---
 <!DOCTYPE html>
-<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-guest={guest ? "1" : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-app-shot={shot ? "1" : undefined} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined} data-caps={caps}>
+<html lang="en" data-place={cloud ? "cloud" : local ? "computer" : "own1"} data-apps={apps} data-beta={beta ? "1" : undefined} data-guest={guest ? "1" : undefined} data-guest-on={guest ? on : undefined} data-voice={voice ? "local" : undefined} data-search={search ? "1" : undefined} data-version={version} data-app-shot={shot ? "1" : undefined} data-box={box ? "1" : undefined} data-engines={engines ? "1" : undefined} data-caps={caps}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -63,7 +65,7 @@ const guest = local && guestHere();
     <div class="gs" id="gs" hidden></div>
     <div class="userwrap">
       <div class="pmenu" id="pmenu">
-        <div class="pm-h"><div class="avatar">O</div><div><div class="n">Owner</div><div class="d">this machine</div></div></div>
+        <div class="pm-h"><div class="avatar">{guest ? "G" : "O"}</div><div><div class="n">{guest ? "Guest" : "Owner"}</div><div class="d">{guest ? on : "this machine"}</div></div></div>
         <div class="pm-sec">Workspace</div>
         <div id="pmWs"></div>
         <div class="pm-sec"></div>
@@ -73,7 +75,7 @@ const guest = local && guestHere();
         <button type="button" class="pm-i" id="pmKeys">Keyboard shortcuts</button>
         <button type="button" class="pm-i" id="pmHelp">Help</button>
       </div>
-      <button class="user" type="button" id="profileBtn"><div class="avatar">O</div><div><div class="n">Owner</div><div class="d" id="pmWsName">{cloud ? "Nexy Cloud" : local ? "This computer" : "Own1"}</div></div><svg class="i" style="margin-left:auto;color:var(--fg3)" viewBox="0 0 24 24"><path d="m8 14 4-4 4 4"/></svg></button>
+      <button class="user" type="button" id="profileBtn"><div class="avatar">{guest ? "G" : "O"}</div><div><div class="n">{guest ? "Guest" : "Owner"}</div><div class="d" id="pmWsName">{cloud ? "Nexy Cloud" : guest ? on : local ? "This computer" : "Own1"}</div></div><svg class="i" style="margin-left:auto;color:var(--fg3)" viewBox="0 0 24 24"><path d="m8 14 4-4 4 4"/></svg></button>
     </div>
   </aside>
 

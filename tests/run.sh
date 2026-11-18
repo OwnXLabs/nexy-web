@@ -78,7 +78,7 @@ check "ultra-private on a computer: mic, Talk and voice tip hidden, no reply spo
 check "status codes never reach the screen: httpMsg words in src/client" ts tests/status-codes.test.ts
 check "chat storage and owner separation" node --test --test-timeout=180000 tests/chat-storage.cjs
 check "studio service tokens: each studio's own token on every server-side call, rotated without a restart, a wrong or missing one said plainly, none when unset, never in a page, reply or log" node --test --test-timeout=180000 tests/studio-token.cjs
-check "a guest code on a shared Own 1: text only and an AI that is down said plainly, asked once, not a failed turn; the router's refusals (offline, daily limit, code expired) in its own words, never JSON; no image attachments in the page; off a guest code unchanged" node --test --test-timeout=180000 tests/guest-code.cjs
+check "a guest code on a shared Own 1: text only and an AI that is down said plainly, asked once, not a failed turn; busy said as busy, never offline; the router's refusals (offline, daily limit, code expired) in its own words, never JSON; no image attachments in the page; the page says whose Own 1, Guest and never Owner or privately on this computer; off a guest code unchanged" node --test --test-timeout=180000 tests/guest-code.cjs
 check "held-back jobs on a guest code: page edits and research charts through NEXY_HEAVY_LLM_URL, else NEXY_LLM_URL" ts tests/heavy-door.test.ts
 check "routine approval: pending routines wait for Confirm or Discard, clean context vouched for" node --test --test-timeout=180000 tests/routine-approval.cjs
 check "routine times: the device's zone reaches the agent, UTC fallback, local times in the view" node --test --test-timeout=180000 tests/routine-tz.cjs
@@ -115,6 +115,7 @@ check "chat home: greeting, Get started, model download, computer-only offers" n
 check "box features: shown only where the server allows them, no button leads to a refusal, a routine ask said plainly" node --test --test-timeout=180000 tests/box-features.cjs
 check "what counts as a routine ask" ts tests/routine-ask.test.ts
 check "an engine failure is said plainly" ts tests/engine-plain-error.test.ts
+check "a guest code's words: who Nexy says it is names whose Own 1, busy said as busy and offline as offline" ts tests/guest-words.test.ts
 # browser checks against a served build (empty screen dir, throwaway data and reports)
 tmp=$(mktemp -d)
 mkdir -p "$tmp/screen" "$tmp/reports" "$tmp/data"

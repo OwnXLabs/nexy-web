@@ -15,6 +15,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const ENTRY = path.join(__dirname, '..', 'dist', 'server', 'entry.mjs');
 const TEXT_ONLY = 'This shared Own 1 takes text only; describe the image in words.';
 const OFFLINE = "The shared Own 1's AI is offline right now. Try again in a few minutes.";
+const BUSY = "The shared Own 1 is busy with its owner's work. Try again shortly.";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const listen = (srv) => new Promise((ok) => srv.listen(0, '127.0.0.1', () => ok(`http://127.0.0.1:${srv.address().port}`)));
 
@@ -30,6 +31,8 @@ async function infer() {
     if (s.answer === 'text-only') return send(400, { error: 'guests may send text only' });
     if (s.answer === 'down') return send(503, { error: 'the AI is not answering' });
     if (s.answer === 'router-503') return send(503, { error: { message: 'your Own1 answered 503', type: 'router' } });
+    // busy said in words that are not the router's JSON sentence: still busy, never offline
+    if (s.answer === 'busy-text') { res.writeHead(503, { 'content-type': 'text/plain' }); return res.end(BUSY); }
     if (s.answer === 'refuse') return send(s.code, { error: { message: s.say, type: 'router' } });
     send(200, { choices: [{ message: { content: 'Hello from the shared Own 1.' }, finish_reason: 'stop' }] });
   });
@@ -235,4 +238,67 @@ test('a model failure that is not the router\'s refusal is unchanged: the usual 
       assert.deepEqual(r.body, { error: 'the model on this machine did not answer' });
     }
   } finally { s.stop(); m.answer = 'ok'; }
+});
+
+// the engine passing on the router's busy refusal cut short, so no JSON sentence can be read from it
+async function cutEngine() {
+  const srv = http.createServer(async (req, res) => {
+    for await (const _ of req);
+    const error = `model server 503: {"error":{"message":"${BUSY}","type":"router"}}`.slice(0, 95); // cut inside the sentence
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'error' }], nexy: { error } }));
+  });
+  const url = await listen(srv);
+  return { url, close: () => srv.close() };
+}
+
+test('on a guest code: the shared Own 1 busy is said as busy, never as offline; a real outage still offline', { timeout: 60000 }, async () => {
+  const g = await cutEngine();
+  const s = await start({ NEXY_OWN1_GUEST: '1', NEXY_LLM_URL: m.url });
+  const e = await start({ NEXY_OWN1_GUEST: '1', NEXY_ENGINE: 'gateway', NEXY_AGENT_URL: g.url, NEXY_AGENT_KEY: 'k', NEXY_LLM_URL: m.url });
+  try {
+    for (const stream of [false, true]) {
+      Object.assign(m, { answer: 'busy-text', asked: 0 });
+      let r = await ask(s.base, stream);
+      assert.equal(r.status, 200); assert.equal(replyOf(r), BUSY, `the model alone, stream=${stream}`); assert.equal(m.asked, 1);
+      // the router's own JSON sentence for busy: its words, as for its other refusals
+      Object.assign(m, { answer: 'refuse', code: 503, say: BUSY, asked: 0 });
+      r = await ask(s.base, stream);
+      assert.equal(replyOf(r), BUSY, `the router's sentence, stream=${stream}`);
+      Object.assign(m, { answer: 'busy-text', asked: 0 });
+      r = await ask(e.base, stream);
+      assert.equal(replyOf(r), BUSY, `through the engine, cut short, stream=${stream}`);
+      assert.equal(m.asked, 0, 'the model alone not asked again');
+      m.answer = 'down';
+      assert.equal(replyOf(await ask(s.base, stream)), OFFLINE, 'offline is still offline');
+    }
+    assert.ok(results(s.log()).includes('guest-busy') && results(e.log()).includes('guest-busy'), 'named in the turn log');
+  } finally { s.stop(); e.stop(); g.close(); m.answer = 'ok'; }
+});
+
+test('the page on a guest code says whose Own 1 it is: Guest, never Owner, never "privately on this computer"; an owner\'s page as before', { timeout: 90000 }, async () => {
+  const named = await start({ NEXY_OWN1_GUEST: '1', NEXY_OWN1_GUEST_ON: "John's Own 1", NEXY_LLM_URL: m.url });
+  const bare = await start({ NEXY_OWN1_GUEST: '1', NEXY_LLM_URL: m.url });
+  const owner = await start({ NEXY_LLM_URL: m.url });
+  const words = async (base) => {
+    const page = await b.newPage();
+    await page.goto(base + '/');
+    await page.locator('#input').waitFor({ timeout: 20000 });
+    await page.locator('#emptyState.home .t').waitFor({ timeout: 20000 });
+    const w = { profile: (await page.locator('#profileBtn').innerText()).replace(/\s+/g, ' '), menu: (await page.locator('#pmenu .pm-h').textContent()).replace(/\s+/g, ' '),
+      hello: await page.locator('#emptyState.home .t').innerText(), body: await page.locator('body').innerText() };
+    await page.close();
+    return w;
+  };
+  try {
+    for (const [srv, on] of [[named, "John's Own 1"], [bare, 'the shared Own 1']]) {
+      const w = await words(srv.base);
+      assert.match(w.profile, /Guest/, w.profile); assert.ok(w.profile.includes(on), w.profile);
+      assert.ok(w.menu.includes('Guest') && w.menu.includes(on), w.menu);
+      assert.ok(w.hello.includes(` on ${on}`), w.hello);
+      assert.doesNotMatch(w.body, /\bOwner\b|privately on this computer|This computer|on your Own ?1/, `guest page: ${on}`);
+    }
+    const w = await words(owner.base);
+    assert.match(w.profile, /Owner/); assert.match(w.profile, /This computer/); assert.match(w.hello, /privately on this computer/);
+  } finally { named.stop(); bare.stop(); owner.stop(); }
 });
