@@ -295,7 +295,7 @@ test('the page on a guest code says whose Own 1 it is: Guest, never Owner, never
       const w = await words(srv.base);
       assert.match(w.profile, /Guest/, w.profile); assert.ok(w.profile.includes(on), w.profile);
       assert.ok(w.menu.includes('Guest') && w.menu.includes(on), w.menu);
-      assert.ok(w.hello.includes(` on ${on}`), w.hello);
+      assert.ok(w.hello.includes(`using ${on} as a guest`) && !/work with your apps/.test(w.hello), w.hello);
       assert.doesNotMatch(w.body, /\bOwner\b|privately on this computer|This computer|on your Own ?1/, `guest page: ${on}`);
     }
     const w = await words(owner.base);

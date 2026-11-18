@@ -35,7 +35,7 @@ const cited = (reply: string) => (reply.match(/https?:\/\/[^\s)\]>"']+/g) ?? [])
 import { overlayLines } from "../../../lib/overlay";
 import { browserTurn, openedPage, openOnScreen, pageToOpen } from "../../../lib/browse-intent";
 import { connectorAsk, connectorTurn } from "../../../lib/connectors";
-import { guestFault, guestHere, guestOn } from "../../../lib/guest";
+import { guestFault, guestHere, guestOn, sharedHere, sharedImagesUrl } from "../../../lib/guest";
 import { refusal } from "../../../lib/engine/plain-error";
 import { byId } from "../../../lib/apps";
 import { SEARCH_NOT_SET_UP, SEARCH_SETTING_UP, searchStatus } from "../../../lib/research";
@@ -53,10 +53,19 @@ const SCREEN = process.env.NEXY_SCREEN !== "none";
 const NO_HANDOVER = /\s*\[\[take-control:[^\]\n]*(?:\]\]|\s*$)/gi;
 // a guest code: the answers come from someone else's Own 1, so nothing is said to run privately here
 const GUEST_ON = guestHere() ? guestOn() : null;
+// a device paired for AI only: its answers come from that Own 1 too
+const SHARED_ON = !GUEST_ON && process.env.NEXY_STUDIOS === "off" && sharedHere() ? guestOn() : null;
+// images are made there on request (api/v1/image), so the model never says it can't
+const IMAGES_THERE = sharedImagesUrl() ? " Nexy makes images there when asked." : "";
 const WHERE = GUEST_ON
   ? [
     `You are Nexy on this computer, used as a guest of ${GUEST_ON}: your answers are written by that Own 1's AI, reached over the network.`,
-    "It takes text only. Chats are kept on this computer.",
+    `It takes text only in chat.${IMAGES_THERE} Chats are kept on this computer.`,
+  ]
+  : SHARED_ON
+  ? [
+    `You are Nexy on this computer. Your answers are written by the AI on ${SHARED_ON}, reached over the network.${IMAGES_THERE}`,
+    "Chats are kept on this computer.",
   ]
   : CLOUD
   ? [
@@ -71,6 +80,8 @@ const WHERE = GUEST_ON
 // An engine that speaks as itself (Hermes, OpenClaw) is told where it runs, not who to be
 const PLACE = GUEST_ON
   ? `You are working on this computer through Nexy, as a guest of ${GUEST_ON}, whose AI writes the answers.`
+  : SHARED_ON
+  ? `You are working on this computer through Nexy; the AI on ${SHARED_ON} writes the answers.`
   : CLOUD
   ? "You are working in Nexy Cloud, hosted by OwnX on servers it operates."
   : `You are working on ${process.env.NEXY_STUDIOS === "off" ? "this computer" : "an Own1 machine"}, through Nexy.`;

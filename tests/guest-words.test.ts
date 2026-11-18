@@ -33,3 +33,14 @@ test("busy is busy, before any 503 is taken for offline", () => {
   assert.deepEqual(guestFault(new Error("your Own1 answered 503")), { reply: SHARED_OFFLINE, result: "guest-offline" });
   assert.match(SHARED_BUSY, /try again shortly\.$/i);
 });
+
+test("a device paired for AI only (NEXY_OWN1_GUEST_ON without NEXY_OWN1_GUEST): who Nexy says it is names that Own 1", async () => {
+  delete process.env.NEXY_OWN1_GUEST;
+  process.env.NEXY_OWN1_GUEST_ON = "Buri's Own 1";
+  const { IDENTITY: id } = await import(`../src/lib/engine/identity-guard.ts?ai-only`);
+  const { sharedHere } = await import("../src/lib/guest.ts");
+  assert.equal(id, "I'm Nexy, the agent on this computer, using the AI on Buri's Own 1.");
+  assert.ok(sharedHere());
+  delete process.env.NEXY_OWN1_GUEST_ON;
+  assert.ok(!sharedHere());
+});

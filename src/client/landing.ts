@@ -1,7 +1,7 @@
 // The chat home, after the v23 landing design: the greeting with three suggestions, the
 // Get started list, the model download chip and the first-visit pill. Only what works on this
 // machine is offered; what isn't here is left out or explained.
-import { boxHere, guestOn, hasApp, here, inCloud, onGuestCode, onOwn1 } from "./place";
+import { boxHere, hasApp, here, inCloud, onGuestCode, onOwn1, sharedOn } from "./place";
 import { httpMsg } from "./http";
 import { isPrivate } from "./private";
 import { prefs } from "./settings";
@@ -23,6 +23,7 @@ const I = {
   send: svg('<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>'),
   pen: svg('<path d="M4 20l4-1 11-11-3-3L5 16z"/>'),
   sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>'),
+  image: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/>'),
 };
 const isPhone = () => matchMedia("(max-width:820px)").matches;
 const firstName = () => (prefs().name || "").trim().split(/\s+/)[0] ?? "";
@@ -94,6 +95,9 @@ async function pollSearch(): Promise<void> {
 function suggestions(): [string, string][] {
   // a routine starter only where routines are allowed
   const brief: [string, string] = [I.sun, boxHere ? "Give me a news brief every morning" : "Give me today's news brief"];
+  // AI on someone's Own 1: what a guest gets there (chat, research, images), not this computer's apps
+  if (sharedOn) return [[I.pen, "Write the story for my bakery's website"], [I.chart, "Research my top 5 competitors"],
+    hasApp("images") ? [I.image, "Make an image"] : brief];
   return [
     hasApp("build") ? [I.globe, "Build a landing page for my bakery"] : [I.pen, "Write the story for my bakery's website"],
     [I.chart, "Research my top 5 competitors"],
@@ -105,14 +109,18 @@ function suggestions(): [string, string][] {
 const list = (a: string[]) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")}, and ${a[a.length - 1]}`;
 function hello(): string {
   const n = firstName();
+  const tail = model.ready ? "What should we start with?" : `I’m still downloading ${esc(model.model ?? "the model")}, but you can give me a job now.`;
+  // AI on someone's Own 1: what it does there, named, and never "privately on this computer"
+  if (sharedOn) {
+    const can = list(["write, plan and research with you", ...(hasApp("images") ? ["make images"] : [])]);
+    return `Hi${n ? ` ${esc(n)}` : ""}. I ${can}, using ${esc(sharedOn)}${onGuestCode ? " as a guest" : ""}. ${tail}`;
+  }
   const can = list([
     hasApp("build") ? "plan and build things" : "write, plan and research with you",
     ...(hasApp("startup") ? ["run a team of agents for you"] : []),
     ...(hasApp("hub") ? ["work with your apps"] : []),
   ]);
-  const tail = model.ready ? "What should we start with?" : `I’m still downloading ${esc(model.model ?? "the model")}, but you can give me a job now.`;
-  // a guest's AI runs on someone else's Own 1: never "privately on this computer"
-  const where = onOwn1 || inCloud ? "" : onGuestCode ? ` on ${esc(guestOn)}` : ", privately on this computer";
+  const where = onOwn1 || inCloud ? "" : ", privately on this computer";
   return `Hi${n ? ` ${esc(n)}` : ""}. I ${can}${where}. ${tail}`;
 }
 
