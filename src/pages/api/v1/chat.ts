@@ -41,7 +41,7 @@ import { byId } from "../../../lib/apps";
 import { SEARCH_NOT_SET_UP, SEARCH_SETTING_UP, searchStatus } from "../../../lib/research";
 import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
-import { own1On } from "../../../lib/own1";
+import { NETWORK_MODEL, OWN1_NOTICE, firstOwn1Use, networkModel } from "../../../lib/own1";
 import { boxAllowed, enginesShown, pickAllowed } from "../../../lib/box";
 import { ROUTINES_ELSEWHERE, routineAsk } from "../../../lib/routine-ask";
 
@@ -388,7 +388,7 @@ export const POST: APIRoute = async (ctx) => {
     log({ result: "stopped", via, stopped: b.stopped, ms: Date.now() - startedAt, replyChars: reply.length });
     return { status: 200, body: { choices: [{ message: { role: "assistant", content: reply } }], via, grounded: false, stopped: true, broke: broke || undefined, private: priv || undefined } };
   };
-  const run = async (onText?: (d: string) => void, restart?: (self?: boolean) => void): Promise<{ status: number; body: unknown }> => {
+  const run = async (onText?: (d: string) => void, restart?: (self?: boolean) => void, onRoute?: (where: string) => void): Promise<{ status: number; body: unknown }> => {
     // asked to open a site: open it on the agent's screen first and hand the agent the page, so
     // the person watches it there even when the model would have searched instead
     let browse = priv || !SCREEN ? "" : browserTurn(String(said ?? ""));
@@ -431,6 +431,8 @@ export const POST: APIRoute = async (ctx) => {
     // always streamed from the engine, so its progress is seen even when this request is not
     const b = budget(use === localEngine ? LOCAL_BUDGET_MS : research ? Math.max(RESEARCH_BUDGET_MS, use.quietMs ?? 0) : use.quietMs ?? AGENT_BUDGET_MS);
     const heard = (d: string) => { b.heard(d); onText?.(d); };
+    // Nexy Cloud's model network picks the computer: said until the engine says where it answers
+    if (NETWORK_MODEL && use !== localEngine) onRoute?.("finding");
     try {
       const r = await use.chat(
         String(said ?? ""),
@@ -443,7 +445,7 @@ export const POST: APIRoute = async (ctx) => {
         heard,
         // attached files, mail, an open or fetched page: the agent then holds new routines for the owner
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
-        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}), ...(own1On(user) ? { own1: true } : {}) },
+        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}), ...(networkModel(user) ? { model: networkModel(user) } : {}), ...(onRoute ? { onRoute } : {}) },
       );
       if (faultReply(r.reply)) throw new Error(`${use.id} worded a failure as its reply`);
       // the tools it ran: from the reply where the engine says, else from its own session record
@@ -483,6 +485,8 @@ export const POST: APIRoute = async (ctx) => {
         cut: r.cut || undefined,
         // cloud boost or John's Own1 answered: said under the answer
         answeredOn: r.answeredOn,
+        // the first answer that may come from John's Own1 says so, once
+        networkNotice: use !== localEngine && firstOwn1Use(user) ? OWN1_NOTICE : undefined,
         upstream: decided.why,
         engine: chatEngine ?? undefined,
         private: priv || undefined,
@@ -547,9 +551,9 @@ export const POST: APIRoute = async (ctx) => {
     return { ...r, body: rest };
   };
   // whatever throws outside the engine call (a connected app, the screen) still ends the turn's log
-  const turn = async (onText?: (d: string) => void, restart?: (self?: boolean) => void): Promise<{ status: number; body: unknown }> => {
+  const turn = async (onText?: (d: string) => void, restart?: (self?: boolean) => void, onRoute?: (where: string) => void): Promise<{ status: number; body: unknown }> => {
     log({ result: "started", via: eng.id, ...(research ? { research: true } : {}), stream: body?.stream === true });
-    try { return outward(await run(onText, restart)); }
+    try { return outward(await run(onText, restart, onRoute)); }
     catch (e) {
       log({ result: "failed", via: eng.id, error: String((e as Error)?.message ?? e).slice(0, 160), ms: Date.now() - startedAt });
       return { status: 502, body: { error: "the model on this machine did not answer" } };

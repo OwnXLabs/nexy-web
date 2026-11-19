@@ -86,7 +86,9 @@ export function labelReply(msg: HTMLElement, engine: string | undefined): void {
 
 // where the model network ran it, said under the answer: nothing when this machine's model did
 const ANSWERED_ON: Record<string, string> = { boost: "Answered with cloud boost.", own1: "Answered on John's Own 1." };
-export function answeredOn(msg: HTMLElement, on: string | undefined): void {
+// notice: the server's one-time word on where answers may be made, shown above the answer
+export function answeredOn(msg: HTMLElement, on: string | undefined, notice?: string): void {
+  if (notice && !msg.querySelector("[data-network-notice]")) msg.querySelector(".bub")?.insertAdjacentHTML("beforebegin", `<div class="feednote" data-network-notice>${esc(notice)}</div>`);
   const said = on ? ANSWERED_ON[on] : undefined;
   if (!said || msg.querySelector("[data-answered-on]")) return;
   msg.querySelector(".bub")?.insertAdjacentHTML("afterend", `<div class="faint" data-answered-on style="font-size:12px;margin:4px 0 0">${said}</div>`);

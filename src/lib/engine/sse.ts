@@ -1,5 +1,6 @@
 // Reads an OpenAI-style completion, streamed (SSE) or whole. Returns the full text and the last chunk.
-export async function readCompletion(res: Response, onText?: (delta: string) => void): Promise<{ content: string; last: any }> {
+// onRoute hears Nexy Engine's ": route <where>" comments: where each model call runs, as it is answered.
+export async function readCompletion(res: Response, onText?: (delta: string) => void, onRoute?: (where: string) => void): Promise<{ content: string; last: any }> {
   if (!(res.headers.get("content-type") ?? "").includes("text/event-stream") || !res.body) {
     const body = await res.json();
     const content = String(body?.choices?.[0]?.message?.content ?? "");
@@ -17,6 +18,8 @@ export async function readCompletion(res: Response, onText?: (delta: string) => 
     while ((nl = buf.indexOf("\n")) >= 0) {
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
+      const route = /^: route ([a-z0-9]{1,16})$/.exec(line)?.[1];
+      if (route) { onRoute?.(route); continue; }
       if (!line.startsWith("data:")) continue;
       const data = line.slice(5).trim();
       if (!data || data === "[DONE]") continue;

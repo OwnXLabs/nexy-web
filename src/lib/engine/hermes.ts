@@ -5,8 +5,6 @@ import { refusal } from "./plain-error";
 
 const DEFAULT_KEY = AGENT_KEY;
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
-// the model a turn asks for when its person switched on John's Own 1 (lib/own1.ts)
-const OWN1_MODEL = (process.env.NEXY_OWN1_MODEL ?? "").trim();
 
 // where a turn goes, by engine; Hermes' wording for any other gateway
 const UPSTREAM: Record<string, string> = {
@@ -74,7 +72,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           ...(opts?.user ? { "x-nexy-user": opts.user } : {}),
         },
         // vouch for the system message only when the caller says it holds nothing from outside
-        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}), ...(opts?.tz ? { tz: opts.tz } : {}), ...(opts?.own1 && OWN1_MODEL ? { upstream_model: OWN1_MODEL } : {}) }),
+        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}), ...(opts?.tz ? { tz: opts.tz } : {}), ...(opts?.model ? { upstream_model: opts.model } : {}) }),
       });
 
       if (!res.ok) {
@@ -82,7 +80,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
         const said = `agent gateway ${res.status}: ${(await res.text().catch(() => "")).slice(0, 400)}`;
         throw new Error(refusal(said) ? said : `agent gateway ${res.status}`);
       }
-      const { content: reply, last: body } = await readCompletion(res, onText);
+      const { content: reply, last: body } = await readCompletion(res, onText, opts?.onRoute);
       // the engine marks a failed turn in the response itself; its reply text changes between
       // versions, so trust the flag before the wording
       if (body?.choices?.[0]?.finish_reason === "error" || body?.hermes?.failed === true) {

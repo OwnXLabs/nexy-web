@@ -163,6 +163,15 @@ async function patient<T>(call: () => Promise<T>, waiting: (n: number, secs: num
   return call();
 }
 
+// Nexy Cloud's model network, as the server reports it: where the answer is being made
+const ROUTE_LINES: Record<string, string> = {
+  finding: "Finding the best computer for this…",
+  own1: "Answering on John's Own 1…",
+  boost: "Answering with cloud boost…",
+  local: "Answering on Nexy Cloud…",
+  own1busy: "John's Own 1 is busy, answering on Nexy Cloud…",
+};
+
 // A live status line under a reply: dots while it works, cleared when it settles.
 function status(holder: HTMLElement, text: string, etaMs?: number): void {
   const bub = holder.querySelector(".bub");
@@ -1923,7 +1932,7 @@ const STREAM_IDLE_MS = 40_000;
 // No turn id this long after asking means the machine may be gone: one quick health check says.
 const PROBE_MS = 8_000;
 // onWait: the engine's own words for a slow start, when it has them
-async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: (gone: boolean) => void, onWait?: (note: string) => void): Promise<T> {
+async function streamReply<T>(body: string, onText: (t: string) => void, onDrop: (gone: boolean) => void, onWait?: (note: string) => void, onRoute?: (where: string) => void): Promise<T> {
   let id = "";
   let abort = new AbortController(), idle = 0;
   // why the first request was stopped: before Chrome 98 abort() drops its reason, and fetch
@@ -1956,6 +1965,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
         const d = JSON.parse(line.slice(5));
         if (ev === "turn") { id = String(d.id ?? ""); if (typeof d.wait === "string" && d.wait) onWait?.(d.wait); }
         else if (ev === "text") onText(String(d.text ?? ""));
+        else if (ev === "route") onRoute?.(String(d.route ?? ""));
         else if (ev === "done") {
           if (d.status >= 400) throw new HttpError(d.status, String(d.body?.error ?? ""));
           return d.body as T;
@@ -2035,11 +2045,11 @@ async function playChat(text: string, priv = false): Promise<void> {
   // the last words on screen: if the model dies mid-answer, they stay up with Ask again
   let kept = "";
   try {
-    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean; broke?: boolean; engine?: string; answeredOn?: string };
+    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean; broke?: boolean; engine?: string; answeredOn?: string; networkNotice?: string };
     // tz: routines the agent makes run at this device's local time
     const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(engine ? { engine } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
-    let streamed = false, waitNote = 0;
+    let streamed = false, waitNote = 0, routed = false;
     const d = await patient(() => streamReply<Reply>(body, (t) => {
       const shown = t && takeoverAsk(t).answer;
       if (!shown) {
@@ -2056,7 +2066,11 @@ async function playChat(text: string, priv = false): Promise<void> {
       stopClock(holder);
     }, (note) => {
       clearTimeout(waitNote);
-      waitNote = window.setTimeout(() => { if (!streamed && holder.querySelector(".bub .wait")) status(holder, note); }, WAIT_NOTE_MS);
+      waitNote = window.setTimeout(() => { if (!streamed && !routed && holder.querySelector(".bub .wait")) status(holder, note); }, WAIT_NOTE_MS);
+    }, (where) => {
+      // where the server says the model is answering (Nexy Cloud), while nothing is written yet
+      const line = ROUTE_LINES[where];
+      if (line && !streamed) { routed = true; status(holder, line); }
     }).finally(() => clearTimeout(waitNote)), (n, secs, of, e) => {
       if (unreachable(e)) { status(holder, away()); stopClock(holder); }
       else status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`);
@@ -2081,7 +2095,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     if (!answer) throw new Error(d.error ?? "the model returned an empty message");
     thread.push({ role: "assistant", content: answer });
     if (!priv) labelReply(holder, engine ?? d.engine);
-    answeredOn(holder, d.answeredOn);
+    answeredOn(holder, d.answeredOn, d.networkNotice);
     // the agent says a routine it made waits in Routines: its card follows, to answer here
     if (!priv && /\bRoutines\b/.test(answer)) showWaitingRoutines({ push: (_w, html) => push("ai", html), block: pushBlock }, bindChat(chatThread))
       .catch((e: Error) => console.warn("[nexy] waiting routines not shown", e));

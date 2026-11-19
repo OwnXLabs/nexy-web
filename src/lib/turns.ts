@@ -3,11 +3,12 @@ import { visible } from "./stream-guard";
 
 // A chat turn that keeps running when the person's connection drops. They reconnect with its id
 // and get what is written so far, then the rest.
-export type TurnEvent = { reset: string } | { done: { status: number; body: unknown } };
+// route: where the model is answering now (Nexy Cloud's model network), for the line shown while it waits
+export type TurnEvent = { reset: string } | { route: string } | { done: { status: number; body: unknown } };
 // key: the client's id for the question, so the same question sent again joins this turn
 // left: called when the last person following it goes before it is done
 // self: the engine speaks as itself, so what it writes is not rewritten (stream-guard.ts)
-type Turn = { who: string; key: string; wait?: string; self: boolean; raw: string; shown: string; done?: { status: number; body: unknown }; subs: Set<(e: TurnEvent) => void>; at: number; timer?: ReturnType<typeof setTimeout>; left?: () => void };
+type Turn = { who: string; key: string; wait?: string; self: boolean; raw: string; shown: string; route?: string; done?: { status: number; body: unknown }; subs: Set<(e: TurnEvent) => void>; at: number; timer?: ReturnType<typeof setTimeout>; left?: () => void };
 
 const TURNS = new Map<string, Turn>();
 const KEEP_MS = 10 * 60_000;
@@ -36,7 +37,7 @@ export function rejoin(who: string, key: string): string | null {
   return null;
 }
 
-export function startTurn(who: string, run: (onText: (d: string) => void, restart: (self?: boolean) => void) => Promise<{ status: number; body: unknown }>,
+export function startTurn(who: string, run: (onText: (d: string) => void, restart: (self?: boolean) => void, onRoute: (where: string) => void) => Promise<{ status: number; body: unknown }>,
   opts: { id?: string; key?: string; left?: () => void; wait?: string; self?: boolean } = {}): string {
   const id = opts.id ?? randomUUID();
   const t: Turn = { who, key: opts.key ?? "", wait: opts.wait, self: !!opts.self, raw: "", shown: "", subs: new Set(), at: Date.now(), left: opts.left };
@@ -54,7 +55,8 @@ export function startTurn(who: string, run: (onText: (d: string) => void, restar
   };
   // another engine takes over (the model alone, which speaks as Nexy)
   const restart = (self = t.self) => { t.self = self; t.raw = ""; t.timer ??= setTimeout(flush, 0); };
-  run(onText, restart)
+  const onRoute = (where: string) => { if (!t.done && where !== t.route) { t.route = where; emit({ route: where }); } };
+  run(onText, restart, onRoute)
     .catch((e) => { console.warn("[nexy] a streamed turn failed", (e as Error).message); return { status: 502, body: { error: "the model on this machine did not answer" } }; })
     .then((done) => {
       clearTimeout(t.timer);
@@ -69,6 +71,7 @@ export function startTurn(who: string, run: (onText: (d: string) => void, restar
 export function follow(id: string, who: string, on: (e: TurnEvent) => void): (() => void) | null {
   const t = TURNS.get(id);
   if (!t || t.who !== who) return null;
+  if (t.route && !t.done) on({ route: t.route });
   if (t.shown) on({ reset: t.shown });
   if (t.done) { on({ done: t.done }); return () => {}; }
   t.subs.add(on);
@@ -88,6 +91,7 @@ export function sse(id: string, who: string): Response | null {
       ping = setInterval(() => send(": ping\n\n"), 15_000);
       stop = follow(id, who, (e) => {
         if ("reset" in e) send(`event: text\ndata: ${JSON.stringify({ text: e.reset })}\n\n`);
+        else if ("route" in e) send(`event: route\ndata: ${JSON.stringify({ route: e.route })}\n\n`);
         else { send(`event: done\ndata: ${JSON.stringify(e.done)}\n\n`); end(); }
       });
     },

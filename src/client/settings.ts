@@ -182,7 +182,7 @@ function engineRow(r: EngineList | null): string {
     `${esc(cur.note)}. Applies to new chats; each chat stays with the engine it started on.`);
 }
 
-// Nexy Cloud: John's Own1 answers this person's chats while it is free; off unless they switch it on
+// Nexy Cloud: John's Own1 answers this person's chats while it is free; on unless they switch it off
 const OWN1 = "/api/v1/own1";
 async function own1Row(): Promise<string> {
   if (document.documentElement.dataset.place !== "cloud") return "";
