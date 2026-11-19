@@ -79,10 +79,11 @@ async function section(sec: string): Promise<string> {
   if (sec === "nexy") {
     await loadVoices();
     const list = await loadEngines(true), caps = capsIn(list);
-    if (!hasApp("voice")) return `<h3>Nexy</h3>` + engineRow(list) +
+    const o1 = await own1Row();
+    if (!hasApp("voice")) return `<h3>Nexy</h3>` + engineRow(list) + o1 +
       row("Voice", not("Coming in an update"), "Talking to Nexy on this computer arrives in an update") +
       boxRows(caps);
-    return `<h3>Nexy</h3>` + engineRow(list) +
+    return `<h3>Nexy</h3>` + engineRow(list) + o1 +
       row("Voice", voices.length ? sel("voice", voices.map((v) => [v.id, v.name]), pickedVoice()) : not(`${speech} is not answering`), localVoice ? "Spoken by this computer's own voices; nothing leaves it" : "Spoken by Own Voice on this machine") +
       row("Speak replies aloud", sw(P.speakAlways, "speakAlways"), "Off: only in voice mode") +
       row("Hold space to talk", sw(P.wakeKey, "wakeKey")) +
@@ -181,6 +182,16 @@ function engineRow(r: EngineList | null): string {
     `${esc(cur.note)}. Applies to new chats; each chat stays with the engine it started on.`);
 }
 
+// Nexy Cloud: John's Own1 answers this person's chats while it is free; off unless they switch it on
+const OWN1 = "/api/v1/own1";
+async function own1Row(): Promise<string> {
+  if (document.documentElement.dataset.place !== "cloud") return "";
+  const o = await fetch(OWN1).then((r) => (r.ok ? r.json() : null)).catch((e) => { console.warn("[nexy] Own 1 setting unavailable", e); return null; });
+  if (!o?.offered) return "";
+  return row("Use John's Own 1 when it's free", `<button type="button" class="sw${o.on ? " on" : ""}" data-own1 role="switch" aria-checked="${!!o.on}" aria-label="Use John's Own 1 when it's free"><i></i></button>`,
+    "Best effort for performance, no privacy guarantees: your messages are answered on a computer in John's home.");
+}
+
 // the same choices the report window keeps with "Remember my choices": one setting, two places
 const REPORT_PARTS: [keyof ReportDefaults, string, string][] = [
   ["state", "What the app was doing", "Recent errors and failed requests"],
@@ -219,6 +230,12 @@ export async function renderSettings(sec = "general"): Promise<void> {
     const r = await fetch("/api/v1/engines", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: s.value }) }).catch(() => null);
     H.toast(r?.ok ? `New chats will use ${s.selectedOptions[0]?.textContent ?? s.value}` : "The engine wasn't changed");
     await loadEngines(true);
+    void renderSettings(sec);
+  }));
+  body.querySelectorAll<HTMLElement>("[data-own1]").forEach((b) => b.addEventListener("click", async () => {
+    const want = b.getAttribute("aria-checked") !== "true";
+    const r = await fetch(OWN1, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: want }) }).catch(() => null);
+    if (!r?.ok) H.toast("The setting wasn't changed");
     void renderSettings(sec);
   }));
   body.querySelectorAll<HTMLInputElement>("[data-txt]").forEach((i) => i.addEventListener("change", () => {

@@ -83,3 +83,11 @@ export function labelReply(msg: HTMLElement, engine: string | undefined): void {
   if (!acts || !engine || !manyEngines() || acts.querySelector("[data-engine]")) return;
   acts.insertAdjacentHTML("afterbegin", `<span class="faint" data-engine="${esc(engine)}">${esc(engineLabel(engine))}</span>`);
 }
+
+// where the model network ran it, said under the answer: nothing when this machine's model did
+const ANSWERED_ON: Record<string, string> = { boost: "Answered with cloud boost.", own1: "Answered on John's Own 1." };
+export function answeredOn(msg: HTMLElement, on: string | undefined): void {
+  const said = on ? ANSWERED_ON[on] : undefined;
+  if (!said || msg.querySelector("[data-answered-on]")) return;
+  msg.querySelector(".bub")?.insertAdjacentHTML("afterend", `<div class="faint" data-answered-on style="font-size:12px;margin:4px 0 0">${said}</div>`);
+}

@@ -41,6 +41,7 @@ import { byId } from "../../../lib/apps";
 import { SEARCH_NOT_SET_UP, SEARCH_SETTING_UP, searchStatus } from "../../../lib/research";
 import { wantsEval } from "../../../lib/eval";
 import { ownerZone } from "../../../lib/tz";
+import { own1On } from "../../../lib/own1";
 import { boxAllowed, enginesShown, pickAllowed } from "../../../lib/box";
 import { ROUTINES_ELSEWHERE, routineAsk } from "../../../lib/routine-ask";
 
@@ -442,7 +443,7 @@ export const POST: APIRoute = async (ctx) => {
         heard,
         // attached files, mail, an open or fetched page: the agent then holds new routines for the owner
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
-        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}) },
+        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}), ...(own1On(user) ? { own1: true } : {}) },
       );
       if (faultReply(r.reply)) throw new Error(`${use.id} worded a failure as its reply`);
       // the tools it ran: from the reply where the engine says, else from its own session record
@@ -469,6 +470,7 @@ export const POST: APIRoute = async (ctx) => {
         sources: r.sources ?? "unknown",
         cited: cited(r.reply),
         ...(searchFirst && use !== localEngine ? { searchAsked: true } : {}),
+        ...(r.answeredOn ? { answeredOn: r.answeredOn } : {}),
         ...(conn ? { connector: conn.id, connectorOutcome: conn.outcome } : {}),
       });
       return { status: 200, body: {
@@ -479,6 +481,8 @@ export const POST: APIRoute = async (ctx) => {
         browsed: browsed || onScreen || undefined,
         // stopped at the length limit: the client offers to continue
         cut: r.cut || undefined,
+        // cloud boost or John's Own1 answered: said under the answer
+        answeredOn: r.answeredOn,
         upstream: decided.why,
         engine: chatEngine ?? undefined,
         private: priv || undefined,

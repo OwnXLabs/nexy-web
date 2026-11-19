@@ -12,6 +12,8 @@ export interface ChatResult {
   // the tools and sources the engine says it used this turn; absent where it does not say
   tools?: string[];
   sources?: string[];
+  // where the model network ran the answer, where the engine says: cloud boost or John's Own1
+  answeredOn?: "boost" | "own1";
 }
 
 export interface MemoryItem { id: string; title: string; source: string; startedAt: number | null; messages: number }
@@ -33,7 +35,8 @@ export interface NewRoutine { name: string; schedule: string; prompt: string; tz
 // outside: the system message holds content from outside (files, mail, pages), not only Nexy's own text
 // tz: the owner's zone (IANA name), so "8 am" in a routine the agent makes means 8 am there
 // user: the person a gate signed in, sent as x-nexy-user so the engine keeps each one's sessions apart
-export interface ChatOpts { outside?: boolean; tz?: string; user?: string }
+// own1: this person switched on "Use John's Own 1 when it's free" (Nexy Cloud)
+export interface ChatOpts { outside?: boolean; tz?: string; user?: string; own1?: boolean }
 
 export interface NexyEngine {
   readonly id: string;

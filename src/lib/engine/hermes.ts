@@ -5,6 +5,8 @@ import { refusal } from "./plain-error";
 
 const DEFAULT_KEY = AGENT_KEY;
 const MODEL = process.env.NEXY_MODEL ?? "router/router:txt2txt";
+// the model a turn asks for when its person switched on John's Own 1 (lib/own1.ts)
+const OWN1_MODEL = (process.env.NEXY_OWN1_MODEL ?? "").trim();
 
 // where a turn goes, by engine; Hermes' wording for any other gateway
 const UPSTREAM: Record<string, string> = {
@@ -72,7 +74,7 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
           ...(opts?.user ? { "x-nexy-user": opts.user } : {}),
         },
         // vouch for the system message only when the caller says it holds nothing from outside
-        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}), ...(opts?.tz ? { tz: opts.tz } : {}) }),
+        body: JSON.stringify({ model: "nexy", messages, stream: !!onText, ...(opts?.outside === false ? { context_clean: true } : {}), ...(opts?.tz ? { tz: opts.tz } : {}), ...(opts?.own1 && OWN1_MODEL ? { upstream_model: OWN1_MODEL } : {}) }),
       });
 
       if (!res.ok) {
@@ -106,7 +108,9 @@ export function gatewayEngine(url: string, KEY: string = DEFAULT_KEY, name = "ga
       }
       // Nexy Engine says what it ran in the reply itself ("nexy": {tools, …})
       const strs = (v: unknown) => (Array.isArray(v) ? v.map(String).slice(0, 40) : undefined);
-      return { reply, via: name, grounded: true, cut: body?.choices?.[0]?.finish_reason === "length", tools: strs(body?.nexy?.tools), sources: strs(body?.nexy?.sources) };
+      const on = body?.nexy?.answered_on;
+      return { reply, via: name, grounded: true, cut: body?.choices?.[0]?.finish_reason === "length", tools: strs(body?.nexy?.tools), sources: strs(body?.nexy?.sources),
+        ...(on === "boost" || on === "own1" ? { answeredOn: on } : {}) };
     },
 
     browsed: async (session, since) => ((await toolsSince(session, since)) ?? []).some((t) => /^browser_/.test(t)),

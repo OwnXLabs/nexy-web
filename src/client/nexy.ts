@@ -31,7 +31,7 @@ import { buildsHere, hasApp, hasStudio, here, isBeta, notHereYet, siteHost, imag
 import { renderGate } from "./build-gate";
 import { caps, gameBrief, buildKind, taskOf, verdictFor, gateCard, warnsFor, WARN_NOTE, THIN } from "./capability";
 import { initShell, chatRows, wireChatRows, chatDrop, noteUserMessage, projectChanged, onReply, newChat, saveChat, flushChat, restoreChats, refreshChats, exampleRows, wireExamples, viewingExample, nameChat, chatThread, chatHistory, chatProject, setChatProject, chatReady, chatDeleted, currentChatId, engineSlot, chatLastBuild, setChatLastBuild, type ExampleOpen } from "./shell";
-import { engineItems, initEngineChat, labelReply, renderEngineChip } from "./engine-chat";
+import { answeredOn, engineItems, initEngineChat, labelReply, renderEngineChip } from "./engine-chat";
 import { loadEngines, pickedEngine } from "./engines";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine, deviceZone, showWaitingRoutines } from "./memory";
@@ -2035,7 +2035,7 @@ async function playChat(text: string, priv = false): Promise<void> {
   // the last words on screen: if the model dies mid-answer, they stay up with Ask again
   let kept = "";
   try {
-    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean; broke?: boolean; engine?: string };
+    type Reply = { choices?: { message?: { content?: string; reasoning_content?: string } }[]; error?: string; browsed?: boolean; cut?: boolean; stopped?: boolean; broke?: boolean; engine?: string; answeredOn?: string };
     // tz: routines the agent makes run at this device's local time
     const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(engine ? { engine } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
@@ -2081,6 +2081,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     if (!answer) throw new Error(d.error ?? "the model returned an empty message");
     thread.push({ role: "assistant", content: answer });
     if (!priv) labelReply(holder, engine ?? d.engine);
+    answeredOn(holder, d.answeredOn);
     // the agent says a routine it made waits in Routines: its card follows, to answer here
     if (!priv && /\bRoutines\b/.test(answer)) showWaitingRoutines({ push: (_w, html) => push("ai", html), block: pushBlock }, bindChat(chatThread))
       .catch((e: Error) => console.warn("[nexy] waiting routines not shown", e));

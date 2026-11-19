@@ -48,6 +48,7 @@ check "OpenClaw in Settings and chat: three engines, the pick kept, via=openclaw
 check "one engine per chat: kept after the pick changes, a mismatched turn refused, Continue shares as a linked chat or starts fresh, never from ultra-private, fact questions searched on Hermes and OpenClaw, engine and tools in the turn line, no labels with one engine" node --test --test-timeout=180000 tests/per-chat-engine.cjs
 check "Nexy Cloud: the gate names each person, their own engine and key, no box features, Nexy Cloud wording, no agent screen" node --test --test-timeout=180000 tests/cloud-mode.cjs
 check "Nexy Cloud wording in the page and in who Nexy says it is" ts tests/cloud-place.test.ts
+check "Nexy Cloud: John's Own 1 offered to a signed-in person on the shared engine, off by default, asked for only when switched on, where a reply ran passed back" ts tests/own1-opt-in.test.ts
 check "engine-neutral replies" node --test --test-timeout=180000 tests/engine-neutral.cjs
 check "who speaks: Nexy Engine as Nexy, Hermes and OpenClaw as themselves, a visitor and the apps always Nexy, failures plain on every engine, the default engine from config" node --test --test-timeout=180000 tests/engine-identity.cjs
 check "the default engine: NEXY_DEFAULT_ENGINE for no pick and no owner, a pick wins, missing or unset as before, one engine in the apps" ts tests/default-engine.test.ts
