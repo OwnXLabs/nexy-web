@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { faultReply, visible } from "../../../lib/stream-guard";
 import { owner, remember, upstreamFor } from "./private/_session";
 import { gateUser, owner as signedOwner } from "../../../lib/owner";
+import { gateLane, gateTicket } from "../../../lib/gate-turn";
 
 import { logTurn as writeTurn } from "../../../lib/turn-log";
 const logTurn = (fields: Record<string, unknown>, isPrivate: boolean) => writeTurn("chat", fields, isPrivate);
@@ -295,6 +296,8 @@ export const POST: APIRoute = async (ctx) => {
   const picker = signedOwner(ctx);
   // the person a gate signed in: their own engine where they have one, and their own sessions in it
   const user = gateUser(ctx.request);
+  // Nexy Cloud's GPU credits: the lane the gate put this turn in, and its ticket for the model network
+  const paid = gateLane(ctx.request) === "paid", ticket = gateTicket(ctx.request);
   // the same question sent again (its first request got no answer in time): join that turn
   const key = typeof body?.turnKey === "string" && /^[A-Za-z0-9-]{8,64}$/.test(body.turnKey) ? body.turnKey : "";
   const again = body?.stream === true ? rejoin(picker, key) : null;
@@ -445,7 +448,7 @@ export const POST: APIRoute = async (ctx) => {
         heard,
         // attached files, mail, an open or fetched page: the agent then holds new routines for the owner
         // and the owner's zone, so a routine the agent makes runs at the owner's local time
-        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}), ...(networkModel(user) ? { model: networkModel(user) } : {}), ...(onRoute ? { onRoute } : {}) },
+        { outside: pageRead || conn?.outcome === "read" || hasOutside(body), ...(tz ? { tz } : {}), ...(user ? { user } : {}), ...(networkModel(user, paid) ? { model: networkModel(user, paid) } : {}), ...(ticket ? { ticket } : {}), ...(onRoute ? { onRoute } : {}) },
       );
       if (faultReply(r.reply)) throw new Error(`${use.id} worded a failure as its reply`);
       // the tools it ran: from the reply where the engine says, else from its own session record

@@ -53,6 +53,38 @@ test("Own 1 on by default, off on request; paid boost off unless set; offered on
   assert.equal(paid.networkModel("t09"), "qwen3-1.7b+own1");
 });
 
+test("a turn the gate put in the paid lane asks for cloud boost first; never on a person's own engine", async () => {
+  const m = await load({ ...CLOUD, NEXY_NETWORK_MODEL: "qwen3-1.7b" });
+  assert.equal(m.networkModel("c01", true), "qwen3-1.7b+boost+own1");
+  assert.equal(m.networkModel("c01", false), "qwen3-1.7b+own1");
+  m.setOwn1("c02", false);
+  assert.equal(m.networkModel("c02", true), "qwen3-1.7b+boost", "paid with Own 1 off: boost, then the local model");
+  assert.equal(m.networkModel("u01", true), undefined, "a person's own engine keeps its model");
+  assert.equal(m.networkModel(null, true), undefined);
+});
+
+test("the gate's lane and ticket are read only from a trusted gate, and only well formed", async () => {
+  const req = (h: Record<string, string>) => new Request("http://x/", { headers: h });
+  const owner = async (env: Record<string, string>) => {
+    const e = path.join(dir, `owner-${n++}.ts`);
+    fs.writeFileSync(e, `export { gateLane, gateTicket } from ${JSON.stringify(path.join(src, "gate-turn.ts"))};\n`);
+    const keep = { ...process.env };
+    Object.assign(process.env, env);
+    try {
+      const r = await build({ entryPoints: [e], bundle: true, write: false, format: "esm", platform: "node", logLevel: "silent" });
+      return await import(`data:text/javascript;base64,${Buffer.from(r.outputFiles[0].text).toString("base64")}#${n}`);
+    } finally { process.env = keep; }
+  };
+  const off = await owner({});
+  assert.equal(off.gateLane(req({ "x-nexy-lane": "paid" })), null, "no trusted gate: no lane");
+  assert.equal(off.gateTicket(req({ "x-nexy-ticket": "u01.1795.paid.AbC" })), null);
+  const on = await owner({ NEXY_TRUST_GATE_USER: "1" });
+  assert.equal(on.gateLane(req({ "x-nexy-lane": "paid" })), "paid");
+  assert.equal(on.gateLane(req({ "x-nexy-lane": "gold" })), null);
+  assert.equal(on.gateTicket(req({ "x-nexy-ticket": "u01.1795.paid.AbC_-9" })), "u01.1795.paid.AbC_-9");
+  assert.equal(on.gateTicket(req({ "x-nexy-ticket": "u01 1795;paid" })), null);
+});
+
 test("the notice comes once per person, and never with Own 1 off", async () => {
   const m = await load({ ...CLOUD, NEXY_NETWORK_MODEL: "qwen3-1.7b" });
   assert.equal(m.firstOwn1Use("t01"), true);
@@ -68,7 +100,7 @@ test("the engine is asked for the turn's model only when there is one; where it 
   let on: unknown = "own1";
   const srv = http.createServer((req, res) => {
     let b = ""; req.on("data", (d) => (b += d)); req.on("end", () => {
-      got.push(JSON.parse(b));
+      got.push({ ...JSON.parse(b), ticket: req.headers["x-nexy-ticket"] });
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "hello" }, finish_reason: "stop" }], nexy: { tools: [], answered_on: on } }));
     });
@@ -77,12 +109,14 @@ test("the engine is asked for the turn's model only when there is one; where it 
   after(() => srv.close());
   const m = await load(CLOUD);
   const e = m.gatewayEngine(`http://127.0.0.1:${(srv.address() as any).port}`, "k", "nexy-engine");
-  let r = await e.chat("hi", [], "sys", undefined, "s1", undefined, { user: "t01", model: "qwen3-1.7b+own1" });
+  let r = await e.chat("hi", [], "sys", undefined, "s1", undefined, { user: "t01", model: "qwen3-1.7b+own1", ticket: "t01.1795.paid.Sig" });
   assert.equal(got[0].upstream_model, "qwen3-1.7b+own1");
+  assert.equal(got[0].ticket, "t01.1795.paid.Sig", "the gate's ticket goes to the engine with the turn");
   assert.equal(r.answeredOn, "own1");
   on = "boost";
   r = await e.chat("hi", [], "sys", undefined, "s1", undefined, { user: "t02" });
   assert.equal("upstream_model" in got[1], false, "Own 1 switched off: no model asked for");
+  assert.equal(got[1].ticket, undefined, "no ticket, none sent");
   assert.equal(r.answeredOn, "boost");
   on = "local";
   r = await e.chat("hi", [], "sys", undefined, "s1");

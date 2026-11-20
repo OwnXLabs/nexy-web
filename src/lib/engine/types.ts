@@ -37,7 +37,8 @@ export interface NewRoutine { name: string; schedule: string; prompt: string; tz
 // user: the person a gate signed in, sent as x-nexy-user so the engine keeps each one's sessions apart
 // model: the model the engine runs this turn on, where Nexy picks one (Nexy Cloud's model network, lib/own1.ts)
 // onRoute: where each model call runs, as the engine says while the turn runs (own1, own1busy, boost, local)
-export interface ChatOpts { outside?: boolean; tz?: string; user?: string; model?: string; onRoute?: (where: string) => void }
+// ticket: the gate's ticket for this turn (Nexy Cloud's GPU credits), sent as x-nexy-ticket and never read here
+export interface ChatOpts { outside?: boolean; tz?: string; user?: string; model?: string; ticket?: string; onRoute?: (where: string) => void }
 
 export interface NexyEngine {
   readonly id: string;

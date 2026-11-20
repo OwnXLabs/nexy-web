@@ -39,9 +39,10 @@ export function setOwn1(user: string, on: boolean): void {
   const { own1: _, ...rest } = load()[user] ?? {};
   save(user, on ? rest : { ...rest, own1: false });
 }
-// the model this person's turn asks the engine for; undefined: the engine's own (the local model)
-export function networkModel(user: string | null): string | undefined {
-  const flags = (boostPaid(user) ? "+boost" : "") + (own1On(user) ? "+own1" : "");
+// the model this person's turn asks the engine for; undefined: the engine's own (the local model).
+// paid: the gate put this turn in the paid lane (the person has GPU credits), so cloud boost comes first
+export function networkModel(user: string | null, paid = false): string | undefined {
+  const flags = (boostPaid(user) || (paid && own1Offered(user)) ? "+boost" : "") + (own1On(user) ? "+own1" : "");
   return flags ? NETWORK_MODEL + flags : undefined;
 }
 // true once per person, the first time a turn of theirs may go to John's Own1
