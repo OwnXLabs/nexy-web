@@ -1,6 +1,5 @@
 import { loadEngines, type Caps, type EngineList } from "./engines";
 import { boxHere, hasApp, here, inCloud, isBeta, localVoice, onOwn1, voiceApi } from "./place";
-import { planRows } from "./credits";
 import { reportDefaults, setReportDefaults, type ReportDefaults } from "./problem-report";
 
 // where this Nexy and its data are, said plainly
@@ -120,7 +119,8 @@ async function section(sec: string): Promise<string> {
     row("Manage the desktop", not("Not available"), "Nexy has no control over the desktop's windows yet") +
     (onOwn1 ? row("Install from the App Store", not("Restricted"), "Installs are switched off on this Own1, by the owner's decision") : "") +
     row("Agents inherit these", null, "An agent never has more than Nexy");
-  if (sec === "cloud" && inCloud) return `<h3>Nexy Cloud</h3>` + await planRows(row);
+  if (sec === "cloud" && inCloud) return `<h3>Nexy Cloud</h3>` +
+    row("Account", `<a class="btn small" href="/_auth/account">Manage account</a>`, "Passkeys, your Nexy apps and a linked wallet");
   if (sec === "cloud") return `<h3>Nexy Cloud</h3><p class="sp">Offloading heavy work to a region you choose is not connected on ${here}. Everything runs here.</p>` +
     row("Connection", not("Not connected")) + row("Spending", not("Nothing can be spent"), "There is no wallet or payment method on this machine");
   const forgets = sec === "security" && boxHere && capsIn(await loadEngines()).memory;

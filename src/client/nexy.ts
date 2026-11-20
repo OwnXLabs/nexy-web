@@ -36,7 +36,6 @@ import { loadEngines, pickedEngine } from "./engines";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine, deviceZone, showWaitingRoutines } from "./memory";
 import { initSettings, notify, openSettings, prefs } from "./settings";
-import { FreeCapError, freeCapNote, initCredits, loadCredits } from "./credits";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
@@ -119,6 +118,10 @@ window.fetch = async (...args: Parameters<typeof fetch>): Promise<Response> => {
   }
   return r;
 };
+
+// Nexy Cloud's free daily limit: its words, shown as they are, never retried
+class FreeCapError extends Error {}
+const freeCapNote = (e: FreeCapError) => `<div class="feednote" data-free-cap="1">${esc(e.message)}</div>`;
 
 // A non-2xx answer. `status` drives retries; the message is what a person reads,
 // so it never carries a bare status code.
@@ -1980,7 +1983,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       // Nexy Cloud's free messages for today are used up: said as it is, never retried
-      if (r.status === 429 && j?.free_cap) throw new FreeCapError(String(j.error ?? ""), !!j.top_up);
+      if (r.status === 429 && j?.free_cap) throw new FreeCapError(String(j.error ?? ""));
       throw new HttpError(r.status, String(j?.error ?? ""));
     }
     if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return (await r.json()) as T;
@@ -2137,8 +2140,6 @@ async function playChat(text: string, priv = false): Promise<void> {
     browsing?.stop();
     delete holder.dataset.pending;
     delete holder.dataset.q;
-    // Nexy Cloud: the answer may have spent GPU credits or a free message
-    void loadCredits();
   }
 }
 
@@ -2809,7 +2810,6 @@ async function boot(): Promise<void> {
     engineItems,
   });
   initEngineChat(toast);
-  initCredits();
   initSettings({ send, toast, roster: ROSTER, projects: () => S.projects.map((p) => ({ name: p.name, taskCount: p.taskCount, doneCount: p.doneCount })) });
   initPrivate({ history, say: (t) => { push("ai", esc(t)); }, toast });
   initLanding({ send: (t) => void send(t), settings: openSettings, toast, talk: () => $("#waveBtn")?.click() });
