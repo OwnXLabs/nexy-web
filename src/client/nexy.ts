@@ -36,6 +36,7 @@ import { loadEngines, pickedEngine } from "./engines";
 import { IC, DOTS, openCtx, confirmDel, inlineRename } from "./menus";
 import { matchMemory, playMemory, noteExampleRoutine, deviceZone, showWaitingRoutines } from "./memory";
 import { initSettings, notify, openSettings, prefs } from "./settings";
+import { FreeCapError, freeCapNote, initCredits, loadCredits } from "./credits";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
 import { httpMsg, errText, unreachable, away } from "./http";
@@ -1977,8 +1978,10 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
     let r: Response | null = await fetch("/api/v1/chat", { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body, signal: attempt() })
       .catch((e: unknown) => { throw gone ?? e; });
     if (!r.ok) {
-      const detail = await r.json().then((j) => String(j?.error ?? ""), () => "");
-      throw new HttpError(r.status, detail);
+      const j = await r.json().catch(() => ({}));
+      // Nexy Cloud's free messages for today are used up: said as it is, never retried
+      if (r.status === 429 && j?.free_cap) throw new FreeCapError(String(j.error ?? ""), !!j.top_up);
+      throw new HttpError(r.status, String(j?.error ?? ""));
     }
     if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return (await r.json()) as T;
     for (let n = 0; ; n++) {
@@ -2128,12 +2131,14 @@ async function playChat(text: string, priv = false): Promise<void> {
     thread.pop();
     console.warn("[nexy] the answer failed", e);
     // Ollama killed mid-answer lost the words already shown and ended on a raw error
-    holder.querySelector(".bub")!.innerHTML = unreachable(e) ? esc(away())
+    holder.querySelector(".bub")!.innerHTML = e instanceof FreeCapError ? freeCapNote(e) : unreachable(e) ? esc(away())
       : `${kept ? bubbleText(closeBold(kept)) : ""}<div class="feednote bad" data-interrupted="1">${kept ? "This answer stopped before it finished." : "The model on this machine did not answer."} <span class="faint">(${esc((e as Error).message)})</span> <button type="button" class="btn small" data-ask-again="${esc(text)}">Ask again</button></div>`;
   } finally {
     browsing?.stop();
     delete holder.dataset.pending;
     delete holder.dataset.q;
+    // Nexy Cloud: the answer may have spent GPU credits or a free message
+    void loadCredits();
   }
 }
 
@@ -2804,6 +2809,7 @@ async function boot(): Promise<void> {
     engineItems,
   });
   initEngineChat(toast);
+  initCredits();
   initSettings({ send, toast, roster: ROSTER, projects: () => S.projects.map((p) => ({ name: p.name, taskCount: p.taskCount, doneCount: p.doneCount })) });
   initPrivate({ history, say: (t) => { push("ai", esc(t)); }, toast });
   initLanding({ send: (t) => void send(t), settings: openSettings, toast, talk: () => $("#waveBtn")?.click() });

@@ -1302,3 +1302,9 @@ body.rail-closed .stage{--lw:0px}
 }
 /* a narrow phone keeps the lock as a pill; its name would crowd out the box */
 @media (max-width:480px){.keys #privBtn{padding:0 9px}.keys #privBtn .pl{display:none}}
+
+/* Nexy Cloud: GPU credits in the sidebar, and the top-up page */
+.credits{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:8px 8px 8px 14px;border:1px solid var(--line);border-radius:14px;font-size:12.5px;color:var(--fg2)}
+.credits .cr-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal.topup{width:500px;height:min(720px,90vh)}
+.modal.topup iframe{flex:1;width:100%;border:0;background:transparent}
