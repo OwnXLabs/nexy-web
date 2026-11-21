@@ -120,8 +120,15 @@ window.fetch = async (...args: Parameters<typeof fetch>): Promise<Response> => {
 };
 
 // Nexy Cloud's free daily limit: its words, shown as they are, never retried
-class FreeCapError extends Error {}
-const freeCapNote = (e: FreeCapError) => `<div class="feednote" data-free-cap="1">${esc(e.message)}</div>`;
+// Nexy Cloud's free messages for today are used up: when they reset (this device's time), and the way to fast
+// answers only where GPU credits can be bought
+class FreeCapError extends Error { constructor(msg: string, readonly resetAt = 0, readonly purchases = false) { super(msg); } }
+const freeCapNote = (e: FreeCapError) => {
+  const at = e.resetAt > Date.now() ? new Date(e.resetAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+  const text = at ? `You've used today's free messages. They reset at ${at}.` : e.message;
+  const up = e.purchases ? ` <a class="btn small" data-get-credits href="/_auth/top-up">Get GPU credits for fast answers</a>` : "";
+  return `<div class="feednote" data-free-cap="1">${esc(text)}${up}</div>`;
+};
 
 // A non-2xx answer. `status` drives retries; the message is what a person reads,
 // so it never carries a bare status code.
@@ -175,6 +182,31 @@ const ROUTE_LINES: Record<string, string> = {
   local: "Answering on Nexy Cloud…",
   own1busy: "John's Own 1 is busy, answering on Nexy Cloud…",
 };
+
+// Nexy Cloud's free tier: while a reply waits there, where it is in the queue (the gate asks the model network)
+const QUEUE_POLL_MS = 2_000;
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+const queueLine = (position: number, etaS: number) => `You're on the free tier · in the queue (${ordinal(position)}) · about ${etaS} s`;
+// back: the line to go back to after the wait, and when it was said (a reading taken before it is stale)
+function watchQueue(holder: HTMLElement, back: () => { line?: string; at: number }): () => void {
+  let stopped = false, queued = false, timer = 0;
+  const poll = async () => {
+    if (stopped) return;
+    try {
+      const asked = Date.now();
+      const r = await fetch("/_auth/queue", { cache: "no-store", credentials: "same-origin" });
+      if (r.status === 404) { stopped = true; return; } // no free tier here
+      const q = r.ok ? await r.json() as { position?: number; eta_s?: number } : {};
+      if (stopped) return;
+      if (back().at > asked) { /* stale: the reply moved on meanwhile */ }
+      else if (q.position && q.eta_s) { if (!queued) stopClock(holder); queued = true; status(holder, queueLine(q.position, q.eta_s)); }
+      else if (queued) { queued = false; const { line } = back(); if (line) status(holder, line); }
+    } catch (e) { console.warn("[nexy] the free-tier queue was not read", e); }
+    timer = window.setTimeout(poll, QUEUE_POLL_MS);
+  };
+  timer = window.setTimeout(poll, 0);
+  return () => { stopped = true; clearTimeout(timer); };
+}
 
 // A live status line under a reply: dots while it works, cleared when it settles.
 function status(holder: HTMLElement, text: string, etaMs?: number): void {
@@ -1983,7 +2015,7 @@ async function streamReply<T>(body: string, onText: (t: string) => void, onDrop:
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       // Nexy Cloud's free messages for today are used up: said as it is, never retried
-      if (r.status === 429 && j?.free_cap) throw new FreeCapError(String(j.error ?? ""));
+      if (r.status === 429 && j?.free_cap) throw new FreeCapError(String(j.error ?? ""), Number(j.reset_at) || 0, j.purchases === true);
       throw new HttpError(r.status, String(j?.error ?? ""));
     }
     if (!(r.headers.get("content-type") ?? "").includes("text/event-stream")) return (await r.json()) as T;
@@ -2055,7 +2087,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     // tz: routines the agent makes run at this device's local time
     const body = JSON.stringify({ messages: recent(thread), context: context(), private: priv, docs: await attachedDocs(priv), stream: true, tz: deviceZone(), ...(chat ? { chat } : {}), ...(engine ? { engine } : {}), ...(EVAL ? { eval: true } : {}) });
     const bub = holder.querySelector<HTMLElement>(".bub")!;
-    let streamed = false, waitNote = 0, routed = false;
+    let streamed = false, waitNote = 0, routed = false, lastLine: string | undefined, lineAt = 0, unqueue: (() => void) | undefined;
     const d = await patient(() => streamReply<Reply>(body, (t) => {
       const shown = t && takeoverAsk(t).answer;
       if (!shown) {
@@ -2063,6 +2095,7 @@ async function playChat(text: string, priv = false): Promise<void> {
         return;
       }
       streamed = true;
+      unqueue?.();
       kept = shown;
       bub.innerHTML = withCursor(bubbleText(shown));
       if (Date.now() - savedAt > PARTIAL_SAVE_MS) { savedAt = Date.now(); saveChat(); }
@@ -2076,8 +2109,10 @@ async function playChat(text: string, priv = false): Promise<void> {
     }, (where) => {
       // where the server says the model is answering (Nexy Cloud), while nothing is written yet
       const line = ROUTE_LINES[where];
-      if (line && !streamed) { routed = true; status(holder, line); }
-    }).finally(() => clearTimeout(waitNote)), (n, secs, of, e) => {
+      if (line && !streamed) { routed = true; lastLine = line; lineAt = Date.now(); status(holder, line); }
+      // the model network said it is looking: from here a free-tier wait has a place in the queue
+      if (where === "finding" && !unqueue) unqueue = watchQueue(holder, () => ({ line: streamed ? undefined : lastLine, at: lineAt }));
+    }).finally(() => { clearTimeout(waitNote); unqueue?.(); }), (n, secs, of, e) => {
       if (unreachable(e)) { status(holder, away()); stopClock(holder); }
       else status(holder, `The model is busy or loading on this machine. Trying again in ${secs}s (${n} of ${of}).`);
     });
