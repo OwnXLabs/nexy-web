@@ -72,6 +72,8 @@ const on = local && sharedHere() ? guestOn() : "";
         <div id="pmWs"></div>
         <div class="pm-sec"></div>
         <button type="button" class="pm-i" id="settingsBtn">Settings</button>
+        {cloud && <a class="pm-i" id="pmUsage" href="/_auth/usage">Billing &amp; usage</a>}
+        {cloud && <a class="pm-i" id="pmPlans" href="/_auth/plans">Plans</a>}
         <button type="button" class="pm-i" id="pmTeam">Team</button>
         <button type="button" class="pm-i" id="pmConn">Connections</button>
         <button type="button" class="pm-i" id="pmKeys">Keyboard shortcuts</button>

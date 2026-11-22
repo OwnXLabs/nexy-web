@@ -81,6 +81,9 @@ test('Nexy Cloud: no credits UI, Manage account, the free limit, and the paid la
     await sleep(1500);
     assert.equal(chats(), 1, 'the refusal is not retried');
     // Settings, Nexy Cloud: Manage account, nothing about credits
+    // the profile menu: Billing & usage and Plans (Nexy Cloud only)
+    assert.equal(await page.locator('#pmUsage').getAttribute('href'), '/_auth/usage');
+    assert.equal(await page.locator('#pmPlans').getAttribute('href'), '/_auth/plans');
     await page.evaluate(() => { document.querySelector('#settingsBtn')?.click(); });
     await page.locator('#setNav [data-sec="cloud"]').click();
     await page.locator('#setBody').getByText('Manage account').waitFor();
