@@ -41,6 +41,8 @@ check "the screen viewer loads its class from noVNC (Astro 7 bundling)" ts tests
 check "swarm: website request in the browser, built across a fake Own 1 and Gaming PC" node --test --test-timeout=180000 tests/swarm-browser.cjs
 check "chat streams, resumes, hides engine faults" node --test --test-timeout=180000 tests/chat-stream.cjs
 check "network faults: latency, drops, silence" node --test --test-timeout=180000 tests/network-faults.cjs
+check "Nexy Cloud lanes: paid turns ask for boost, the gate's ticket reaches the engine" node --test --test-timeout=180000 tests/cloud-lanes.cjs
+check "Nexy Cloud usage: free queue, free limit card, fast lane and credits, what is left under the composer" node --test --test-timeout=300000 tests/free-tier.cjs
 check "a hanging gateway and a lost question: every turn logged start to end, a question sent again joins its reply" node --test --test-timeout=180000 tests/gateway-stall.cjs
 check "engine picker" node --test --test-timeout=180000 tests/engine-picker.cjs
 check "OpenClaw engine: agent target, bearer from the key file, one safe session key per chat, whole and streamed, failures fall back" ts tests/openclaw.test.ts

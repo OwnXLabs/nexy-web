@@ -71,11 +71,13 @@ test('Nexy Cloud: no credits UI, Manage account, the free limit, and the paid la
     const words = /gpu credits|top up|buy credits|balance/i;
     assert(!words.test(await page.locator('body').innerText()), 'nothing about credits on the page');
     assert.equal(await page.locator('#credits, [data-topup]').count(), 0);
-    // the free limit: its words, no button, asked once
+    // the free limit: its words and the plans; buying is greyed out until it opens; asked once
     await page.locator('#input').fill('one more question');
     await page.locator('#input').press('Enter');
     await page.locator('[data-free-cap]').filter({ hasText: "You've used today's free messages" }).waitFor({ timeout: 20000 });
-    assert.equal(await page.locator('[data-free-cap] button').count(), 0);
+    const buy = await page.locator('[data-free-cap] button').all();
+    assert.equal(buy.length, 2);
+    for (const x of buy) assert(await x.isDisabled(), 'nothing can be bought yet');
     await sleep(1500);
     assert.equal(chats(), 1, 'the refusal is not retried');
     // Settings, Nexy Cloud: Manage account, nothing about credits
