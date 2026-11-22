@@ -85,8 +85,10 @@ test('Nexy Cloud: no credits UI, Manage account, the free limit, and the paid la
     await page.locator('#setNav [data-sec="cloud"]').click();
     await page.locator('#setBody').getByText('Manage account').waitFor();
     assert.equal(await page.locator('#setBody a', { hasText: 'Manage account' }).getAttribute('href'), '/_auth/account');
+    assert.equal(await page.locator('#setBody a', { hasText: 'Billing & usage' }).getAttribute('href'), '/_auth/usage');
+    assert.equal(await page.locator('#setBody a', { hasText: 'See plans' }).getAttribute('href'), '/_auth/plans');
     const text = await page.locator('#setBody').innerText();
-    assert(!words.test(text) && !/wallet address|ethereum|web3|crypto/i.test(text), text);
+    assert(!/top up|buy credits|wallet address|ethereum|web3|crypto/i.test(text), text);
     assert.deepEqual(errors, []);
     await ctx.close();
 
