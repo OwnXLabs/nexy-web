@@ -1302,3 +1302,20 @@ body.rail-closed .stage{--lw:0px}
 }
 /* a narrow phone keeps the lock as a pill; its name would crowd out the box */
 @media (max-width:480px){.keys #privBtn{padding:0 9px}.keys #privBtn .pl{display:none}}
+
+/* Nexy Cloud usage: the lane and what is left, under the composer; the moments around the free limit */
+.usage{display:flex;align-items:center;justify-content:space-between;gap:6px 12px;flex-wrap:wrap;margin:6px 4px 0;font-size:11.5px;color:var(--fg3)}
+.usage b{font-weight:500;color:var(--fg2)}
+.usage .ut{min-width:0}
+.usage .ulink{color:var(--fg3);text-decoration:none;white-space:nowrap}
+.usage .ulink:hover{color:var(--fg)}
+.usage[data-tone=low] b,.usage[data-tone=low] .ulink{color:#f5c26b}
+.usage[data-tone=out] b,.usage[data-tone=out] .ulink{color:#ff9b85}
+.unote b,.ucap b{font-weight:500;color:var(--fg)}
+.unote a,.ucap a:not(.btn){color:var(--fg2)}
+.ucap{font-size:13px;color:var(--fg2)}
+.ucap p{margin:6px 0 0}
+.uacts{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.uacts .btn,.bub .uacts .btn{text-decoration:none}
+.uacts .btn:disabled{opacity:.45;cursor:not-allowed}
+.usoon{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg3)}

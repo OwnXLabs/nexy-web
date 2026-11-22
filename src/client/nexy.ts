@@ -38,6 +38,7 @@ import { matchMemory, playMemory, noteExampleRoutine, deviceZone, showWaitingRou
 import { initSettings, notify, openSettings, prefs } from "./settings";
 import { initLanding, homeNode, did, welcome, modelState, modelReady } from "./landing";
 import { initAurora } from "./aurora";
+import { afterTurn, capCard, queueSkip, readUsage, unqueueSkip, usageNow, welcomeNote } from "./usage";
 import { httpMsg, errText, unreachable, away } from "./http";
 import { timeoutSignal } from "./compat";
 import { inline, renderMd } from "./md";
@@ -119,16 +120,9 @@ window.fetch = async (...args: Parameters<typeof fetch>): Promise<Response> => {
   return r;
 };
 
-// Nexy Cloud's free daily limit: its words, shown as they are, never retried
-// Nexy Cloud's free messages for today are used up: when they reset (this device's time), and the way to fast
-// answers only where GPU credits can be bought
+// Nexy Cloud's free messages for today are used up: never retried; the card says when they reset (this
+// device's time) and what the plans offer (usage.ts)
 class FreeCapError extends Error { constructor(msg: string, readonly resetAt = 0, readonly purchases = false) { super(msg); } }
-const freeCapNote = (e: FreeCapError) => {
-  const at = e.resetAt > Date.now() ? new Date(e.resetAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
-  const text = at ? `You've used today's free messages. They reset at ${at}.` : e.message;
-  const up = e.purchases ? ` <a class="btn small" data-get-credits href="/_auth/top-up">Get GPU credits for fast answers</a>` : "";
-  return `<div class="feednote" data-free-cap="1">${esc(text)}${up}</div>`;
-};
 
 // A non-2xx answer. `status` drives retries; the message is what a person reads,
 // so it never carries a bare status code.
@@ -199,13 +193,13 @@ function watchQueue(holder: HTMLElement, back: () => { line?: string; at: number
       const q = r.ok ? await r.json() as { position?: number; eta_s?: number } : {};
       if (stopped) return;
       if (back().at > asked) { /* stale: the reply moved on meanwhile */ }
-      else if (q.position && q.eta_s) { if (!queued) stopClock(holder); queued = true; status(holder, queueLine(q.position, q.eta_s)); }
-      else if (queued) { queued = false; const { line } = back(); if (line) status(holder, line); }
+      else if (q.position && q.eta_s) { if (!queued) stopClock(holder); queued = true; status(holder, queueLine(q.position, q.eta_s)); queueSkip(holder); }
+      else if (queued) { queued = false; unqueueSkip(holder); const { line } = back(); if (line) status(holder, line); }
     } catch (e) { console.warn("[nexy] the free-tier queue was not read", e); }
     timer = window.setTimeout(poll, QUEUE_POLL_MS);
   };
   timer = window.setTimeout(poll, 0);
-  return () => { stopped = true; clearTimeout(timer); };
+  return () => { stopped = true; clearTimeout(timer); unqueueSkip(holder); };
 }
 
 // A live status line under a reply: dots while it works, cleared when it settles.
@@ -2068,6 +2062,10 @@ async function playChat(text: string, priv = false): Promise<void> {
   status(holder, "Thinking", typicalMs("chat"));
   const browsing = priv ? null : watchBrowsing(chat, () => showArtifact(screenArtifact()));
   const askedAt = Date.now();
+  // Nexy Cloud: what was left before this turn, to say what it cost; the welcome credits, the first time
+  const usedBefore = usageNow();
+  const hello = welcomeNote();
+  if (hello) holder.querySelector(".bub")?.insertAdjacentHTML("beforebegin", hello);
   const thread = conversation(priv);
   const continuing = text === CONTINUE;
   const asked = continuing ? [...thread].reverse().find((m) => m.role === "user" && m.content !== CONTINUE)?.content ?? text : text;
@@ -2137,6 +2135,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     thread.push({ role: "assistant", content: answer });
     if (!priv) labelReply(holder, engine ?? d.engine);
     answeredOn(holder, d.answeredOn, d.networkNotice);
+    void afterTurn(holder, usedBefore);
     // the agent says a routine it made waits in Routines: its card follows, to answer here
     if (!priv && /\bRoutines\b/.test(answer)) showWaitingRoutines({ push: (_w, html) => push("ai", html), block: pushBlock }, bindChat(chatThread))
       .catch((e: Error) => console.warn("[nexy] waiting routines not shown", e));
@@ -2169,7 +2168,7 @@ async function playChat(text: string, priv = false): Promise<void> {
     thread.pop();
     console.warn("[nexy] the answer failed", e);
     // Ollama killed mid-answer lost the words already shown and ended on a raw error
-    holder.querySelector(".bub")!.innerHTML = e instanceof FreeCapError ? freeCapNote(e) : unreachable(e) ? esc(away())
+    holder.querySelector(".bub")!.innerHTML = e instanceof FreeCapError ? capCard(e.resetAt, e.message, e.purchases) : unreachable(e) ? esc(away())
       : `${kept ? bubbleText(closeBold(kept)) : ""}<div class="feednote bad" data-interrupted="1">${kept ? "This answer stopped before it finished." : "The model on this machine did not answer."} <span class="faint">(${esc((e as Error).message)})</span> <button type="button" class="btn small" data-ask-again="${esc(text)}">Ask again</button></div>`;
   } finally {
     browsing?.stop();
@@ -2848,6 +2847,7 @@ async function boot(): Promise<void> {
   initSettings({ send, toast, roster: ROSTER, projects: () => S.projects.map((p) => ({ name: p.name, taskCount: p.taskCount, doneCount: p.doneCount })) });
   initPrivate({ history, say: (t) => { push("ai", esc(t)); }, toast });
   initLanding({ send: (t) => void send(t), settings: openSettings, toast, talk: () => $("#waveBtn")?.click() });
+  void readUsage();
   installReporter({
     endpoint: "/api/v1/problem-report", app: "nexy", version: document.documentElement.dataset.version,
     team: isBeta ? "/api/v1/beta-report" : undefined,
