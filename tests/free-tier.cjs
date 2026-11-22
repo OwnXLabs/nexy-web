@@ -189,7 +189,7 @@ test('welcome GPU credits: the fast lane, what each message cost, then back to t
     const o = await withMe(b, s.base, [me(0, c(40)), me(0, c(30)), me(0, c(20)), me(0, c(9))]);
     await o.page.locator('#usage').waitFor({ timeout: 20000 });
     assert.equal(await o.pill(), 'Fast lane · 40 GPU credits');
-    assert.equal(await o.page.locator('#usage .ulink').getAttribute('href'), '/_auth/plans');
+    assert.equal(await o.page.locator('#usage .ulink').getAttribute('href'), '/_auth/usage');
 
     await o.ask('first');
     assert.match(await o.last().locator('[data-usage=welcome]').innerText(), /^You have 40 welcome GPU credits\. .*no queue/);

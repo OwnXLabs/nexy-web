@@ -8,6 +8,7 @@ type Credits = { balance: number; welcome: number; fast: boolean; purchases: boo
 export type Usage = { free?: Free; credits?: Credits };
 
 export const PLANS = "/_auth/plans";
+export const USAGE = "/_auth/usage";
 const WARN_FREE = 5;   // free messages left: a word about it, once a day
 const LOW_FREE = 10;   // the pill turns amber
 const LOW_CREDITS = 30;
@@ -41,7 +42,11 @@ export async function readUsage(): Promise<Usage | null> {
     const r = await fetch("/_auth/me", { cache: "no-store", credentials: "same-origin" });
     if (!r.ok) return now;
     const j = await r.json() as Usage;
-    now = { free: j.free, credits: j.credits };
+    const n = (x: unknown) => Math.max(0, Math.floor(Number(x) || 0));
+    now = {
+      free: j.free ? { used: n(j.free.used), cap: n(j.free.cap), reset_at: n(j.free.reset_at) } : undefined,
+      credits: j.credits ? { balance: n(j.credits.balance), welcome: n(j.credits.welcome), fast: j.credits.fast === true, purchases: j.credits.purchases === true } : undefined,
+    };
     renderPill();
     return now;
   } catch (e) {
@@ -70,7 +75,7 @@ function renderPill(): void {
     else { text = `<b>Free tier</b> · ${left} of ${now.free!.cap} messages left today`; if (left <= LOW_FREE) tone = "low"; }
   } else return;
   el.dataset.tone = tone;
-  el.innerHTML = `<span class="ut">${text}</span><a class="ulink" href="${PLANS}">${fastNow(now) ? "GPU credits" : "Skip the queue"} &rarr;</a>`;
+  el.innerHTML = `<span class="ut">${text}</span><a class="ulink" href="${fastNow(now) ? USAGE : PLANS}">${fastNow(now) ? "Usage" : "Skip the queue"} &rarr;</a>`;
 }
 
 // One-time welcome: the credits that came with the account, and what they do
