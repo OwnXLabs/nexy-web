@@ -180,7 +180,9 @@ const ROUTE_LINES: Record<string, string> = {
 // Nexy Cloud's free tier: while a reply waits there, where it is in the queue (the gate asks the model network)
 const QUEUE_POLL_MS = 2_000;
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
-const queueLine = (position: number, etaS: number) => `You're on the free tier · in the queue (${ordinal(position)}) · about ${etaS} s`;
+// a wait of a minute and a half or more reads in minutes ("about 3 min")
+const waitText = (s: number) => s >= 90 ? `${Math.round(s / 60)} min` : `${s} s`;
+const queueLine = (position: number, etaS: number) => `You're on the free tier · in the queue (${ordinal(position)}) · about ${waitText(etaS)}`;
 // back: the line to go back to after the wait, and when it was said (a reading taken before it is stale)
 function watchQueue(holder: HTMLElement, back: () => { line?: string; at: number }): () => void {
   let stopped = false, queued = false, timer = 0;

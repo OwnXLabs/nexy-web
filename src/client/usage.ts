@@ -134,7 +134,7 @@ export function capCard(resetAt: number, fallback: string, purchases = false): s
 export function queueSkip(holder: HTMLElement): void {
   if (fastNow(now) || holder.querySelector("[data-usage=queue]")) return;
   holder.querySelector(".bub")?.insertAdjacentHTML("afterend",
-    `<div class="faint" data-usage="queue" style="font-size:12px;margin:4px 0 0">Paid plans skip the free queue. <a href="${PLANS}">See plans</a></div>`);
+    `<div class="faint" data-usage="queue" style="font-size:12px;margin:4px 0 0">Paid plans skip the free queue. <a href="${PLANS}">See plans</a><br>The free tier runs on computers people share. More of them means a shorter wait. <a href="/about#network" target="_blank" rel="noopener">How sharing works</a></div>`);
 }
 export const unqueueSkip = (holder: HTMLElement) => holder.querySelector("[data-usage=queue]")?.remove();
 

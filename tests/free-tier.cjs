@@ -79,21 +79,22 @@ test('queued on the free tier: the place in the queue, then where it is answered
   const b = await chromium.launch();
   try {
     // the gate's answers while the call waits: 3rd, 2nd, 1st, then out of the queue
-    const places = [{ position: 3, eta_s: 30 }, { position: 2, eta_s: 20 }, { position: 2, eta_s: 20 }, { position: 1, eta_s: 20 }];
+    const places = [{ position: 3, eta_s: 170 }, { position: 2, eta_s: 20 }, { position: 2, eta_s: 20 }, { position: 1, eta_s: 20 }];
     let polls = 0;
     const { page, ctx, errors } = await open(b, s.base, (p) => p.route('**/_auth/queue', (r) => r.fulfill({ json: places[polls++] ?? {} })));
     await page.locator('#input').fill('a free question');
     await page.locator('#input').press('Enter');
     await page.locator('#thread .wait .wl', { hasText: 'in the queue (2nd)' }).waitFor({ timeout: 20000 });
     const skip = page.locator('.m.ai').last().locator('[data-usage=queue]');
-    assert.equal(await skip.innerText(), 'Paid plans skip the free queue. See plans');
-    assert.equal(await skip.locator('a').getAttribute('href'), '/_auth/plans');
+    assert.equal(await skip.innerText(), 'Paid plans skip the free queue. See plans\nThe free tier runs on computers people share. More of them means a shorter wait. How sharing works');
+    assert.equal(await skip.locator('a').first().getAttribute('href'), '/_auth/plans');
+    assert.equal(await skip.locator('a').last().getAttribute('href'), '/about#network');
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'queued-status.png') });
     await page.getByText('done: a free question').waitFor({ timeout: 30000 });
     assert.equal(await page.locator('[data-usage=queue]').count(), 0, 'gone once it is answered');
     const lines = await page.evaluate(() => window.__lines);
     const want = [
-      "You're on the free tier · in the queue (3rd) · about 30 s",
+      "You're on the free tier · in the queue (3rd) · about 3 min",
       "You're on the free tier · in the queue (2nd) · about 20 s",
       "You're on the free tier · in the queue (1st) · about 20 s",
       'Answering on Nexy Cloud…',
