@@ -67,11 +67,12 @@ const on = local && sharedHere() ? guestOn() : "";
     <div class="gs" id="gs" hidden></div>
     <div class="userwrap">
       <div class="pmenu" id="pmenu">
-        <div class="pm-h"><div class="avatar">{guest ? "G" : "O"}</div><div><div class="n">{guest ? "Guest" : "Owner"}</div><div class="d">{guest ? on : "this machine"}</div></div></div>
+        <div class="pm-h"><div class="avatar">{guest ? "G" : cloud ? "Y" : "O"}</div><div><div class="n">{guest ? "Guest" : cloud ? "Your account" : "Owner"}</div><div class="d">{guest ? on : cloud ? "Nexy Cloud" : "this machine"}</div></div></div>
         <div class="pm-sec">Workspace</div>
         <div id="pmWs"></div>
         <div class="pm-sec"></div>
         <button type="button" class="pm-i" id="settingsBtn">Settings</button>
+        {cloud && <a class="pm-i" id="pmAccount" href="/_auth/account">Account</a>}
         {cloud && <a class="pm-i" id="pmUsage" href="/_auth/usage">Billing &amp; usage</a>}
         {cloud && <a class="pm-i" id="pmPlans" href="/_auth/plans">Plans</a>}
         <button type="button" class="pm-i" id="pmTeam">Team</button>
