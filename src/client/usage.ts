@@ -5,7 +5,10 @@ const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&
 
 type Free = { used: number; cap: number; reset_at: number };
 type Credits = { balance: number; welcome: number; fast: boolean; purchases: boolean };
-export type Usage = { free?: Free; credits?: Credits };
+// credits for answers from the home network (the gate's home_credits): spent from the first message where `first`,
+// otherwise once the day's free messages are used
+type Home = { balance: number; first: boolean };
+export type Usage = { free?: Free; credits?: Credits; home?: Home };
 
 export const PLANS = "/_auth/plans";
 export const USAGE = "/_auth/usage";
@@ -43,7 +46,9 @@ export async function readUsage(): Promise<Usage | null> {
     if (!r.ok) return now;
     const j = await r.json() as Usage;
     const n = (x: unknown) => Math.max(0, Math.floor(Number(x) || 0));
+    const hb = Number((j as { home_credits?: { balance?: unknown } }).home_credits?.balance) || 0;
     now = {
+      home: hb > 0 ? { balance: hb, first: (j as { home_credits?: { first?: unknown } }).home_credits?.first === true } : undefined,
       free: j.free ? { used: n(j.free.used), cap: n(j.free.cap), reset_at: n(j.free.reset_at) } : undefined,
       credits: j.credits ? { balance: n(j.credits.balance), welcome: n(j.credits.welcome), fast: j.credits.fast === true, purchases: j.credits.purchases === true } : undefined,
     };
@@ -58,24 +63,29 @@ export async function readUsage(): Promise<Usage | null> {
 // the line under the composer: which lane the next message goes to, and what is left
 function renderPill(): void {
   const comp = document.querySelector<HTMLElement>(".composer");
-  if (!comp || !now || (!now.free && !now.credits)) return;
+  if (!comp || !now || (!now.free && !now.credits && !now.home)) return;
   let el = comp.querySelector<HTMLElement>("#usage");
   if (!el) {
     el = document.createElement("div"); el.id = "usage"; el.className = "usage";
     comp.append(el);
   }
-  const c = now.credits, left = freeLeft(now);
-  let text: string, tone = "";
+  const c = now.credits, left = freeLeft(now), h = now.home;
+  // two places, never more: a balance is cut, not rounded up
+  const some = (b: number) => (Math.floor(b * 100) / 100).toFixed(2);
+  let text: string, tone = "", paying = fastNow(now);
   if (fastNow(now)) {
     const n = perMessage(), about = n ? ` · about ${Math.floor(c!.balance / n)} fast messages` : "";
     text = `<b>Fast lane</b> · ${c!.balance} GPU credits${about}`;
     if (c!.balance <= LOW_CREDITS) tone = "low";
+  } else if (h && (h.first || left === 0 || left === undefined)) {
+    // the next message is paid from this account's credits
+    text = `<b>Credits</b> · ${some(h.balance)} left`; paying = true;
   } else if (left !== undefined) {
     if (left === 0) { text = `<b>No free messages left today</b> · resets in ${resetsIn(now.free!.reset_at)}`; tone = "out"; }
-    else { text = `<b>Free tier</b> · ${left} of ${now.free!.cap} messages left today`; if (left <= LOW_FREE) tone = "low"; }
+    else { text = `<b>Free tier</b> · ${left} of ${now.free!.cap} messages left today${h ? ` · then ${some(h.balance)} credits` : ""}`; if (left <= LOW_FREE && !h) tone = "low"; }
   } else return;
   el.dataset.tone = tone;
-  el.innerHTML = `<span class="ut">${text}</span><a class="ulink" href="${fastNow(now) ? USAGE : PLANS}">${fastNow(now) ? "Usage" : "Skip the queue"} &rarr;</a>`;
+  el.innerHTML = `<span class="ut">${text}</span><a class="ulink" href="${paying ? USAGE : PLANS}">${paying ? "Usage" : "Skip the queue"} &rarr;</a>`;
 }
 
 // One-time welcome: the credits that came with the account, and what they do

@@ -216,6 +216,38 @@ test('welcome GPU credits: the fast lane, what each message cost, then back to t
   } finally { await b.close(); s.p.kill(); e.srv.close(); }
 });
 
+test('credits for the home network: shown under the composer in place of the free count when they pay for the next message', { timeout: 150000 }, async () => {
+  const e = await engine(0);
+  const s = await start(cloud(e.url));
+  const b = await chromium.launch();
+  try {
+    const home = (free, balance, first) => ({ ...me(free), home_credits: { balance, first } });
+    // the line is redrawn a moment after the reply: wait for it
+    const pillIs = async (o, want) => { for (let i = 0; i < 50 && (await o.pill()) !== want; i++) await new Promise((r) => setTimeout(r, 200)); assert.equal(await o.pill(), want); };
+    // spent from the first message: the free count would never move, so it is not what is shown
+    let o = await withMe(b, s.base, [home(0, 4.9919, true), home(0, 4.9838, true)]);
+    await o.page.locator('#usage').waitFor({ timeout: 20000 });
+    assert.equal(await o.pill(), 'Credits · 4.99 left');
+    assert.equal(await o.page.locator('#usage .ulink').innerText(), 'Usage →');
+    await o.ask('one');
+    await pillIs(o, 'Credits · 4.98 left');
+    assert.deepEqual(o.errors, []);
+    await o.ctx.close();
+    // spent after the free messages: both are said, then the credits alone
+    o = await withMe(b, s.base, [home(12, 2.5, false), home(50, 2.5, false)]);
+    await o.page.locator('#usage').waitFor({ timeout: 20000 });
+    assert.equal(await o.pill(), 'Free tier · 38 of 50 messages left today · then 2.50 credits');
+    await o.ask('one');
+    await pillIs(o, 'Credits · 2.50 left');
+    await o.ctx.close();
+    // none left: as without them
+    o = await withMe(b, s.base, [home(12, 0, true)]);
+    await o.page.locator('#usage').waitFor({ timeout: 20000 });
+    assert.equal(await o.pill(), 'Free tier · 38 of 50 messages left today');
+    await o.ctx.close();
+  } finally { await b.close(); s.p.kill(); e.srv.close(); }
+});
+
 test('the free tier: what is left under the composer, and one word when 5 are left', { timeout: 150000 }, async () => {
   const e = await engine(0);
   const s = await start(cloud(e.url));
