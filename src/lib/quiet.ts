@@ -4,9 +4,10 @@
 // change. A server that refuses the field is asked again without it.
 export const QUIET = { chat_template_kwargs: { enable_thinking: false }, reasoning_effort: "none" } as const;
 
-export async function quietChat(base: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+// ticket: the gate's ticket for this call (Nexy Cloud), passed on untouched so the model network knows whose it is
+export async function quietChat(base: string, body: Record<string, unknown>, signal?: AbortSignal, ticket?: string | null): Promise<Response> {
   const send = (b: Record<string, unknown>) => fetch(`${base}/v1/chat/completions`, {
-    method: "POST", signal, headers: { "content-type": "application/json" }, body: JSON.stringify(b),
+    method: "POST", signal, headers: { "content-type": "application/json", ...(ticket ? { "x-nexy-ticket": ticket } : {}) }, body: JSON.stringify(b),
   });
   const res = await send({ ...body, ...QUIET });
   if (res.status !== 400 || !/reasoning/i.test(await res.clone().text().catch(() => ""))) return res;

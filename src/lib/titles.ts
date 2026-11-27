@@ -12,11 +12,11 @@ const SYSTEM =
   "If a brand or product name is given, lead with it. Title Case, no quotes, no trailing punctuation. Reply with the name only.";
 
 // a short title from the local model, or null if it is busy or says nothing useful
-export async function shortTitle(text: string): Promise<string | null> {
+export async function shortTitle(text: string, ticket?: string | null): Promise<string | null> {
   const res = await quietChat(LLM, {
     model: MODEL, max_tokens: 24, temperature: 0.2,
     messages: [{ role: "system", content: SYSTEM }, { role: "user", content: text.slice(0, 1200) }],
-  }, AbortSignal.timeout(60_000));
+  }, AbortSignal.timeout(60_000), ticket);
   if (!res.ok) return null;
   const out = answerOf(await res.json()).split("\n")[0].replace(/^["'“”\s]+|["'“”.\s]+$/g, "").trim();
   // a title is shown in the sidebar: the same rule as a reply
