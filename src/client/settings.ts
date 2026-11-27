@@ -192,8 +192,8 @@ async function own1Row(): Promise<string> {
   if (document.documentElement.dataset.place !== "cloud") return "";
   const o = await fetch(OWN1).then((r) => (r.ok ? r.json() : null)).catch((e) => { console.warn("[nexy] Own 1 setting unavailable", e); return null; });
   if (!o?.offered) return "";
-  return row("Use John's Own 1 when it's free", `<button type="button" class="sw${o.on ? " on" : ""}" data-own1 role="switch" aria-checked="${!!o.on}" aria-label="Use John's Own 1 when it's free"><i></i></button>`,
-    "Best effort for performance, no privacy guarantees: your messages are answered on a computer in John's home.");
+  return row("Use the home network when it's free", `<button type="button" class="sw${o.on ? " on" : ""}" data-own1 role="switch" aria-checked="${!!o.on}" aria-label="Use the home network when it's free"><i></i></button>`,
+    "Best effort for performance, no privacy guarantees: your messages are answered on a member's home computer.");
 }
 
 // the same choices the report window keeps with "Remember my choices": one setting, two places

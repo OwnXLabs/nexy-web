@@ -1,4 +1,4 @@
-// Nexy Cloud's model network, per signed-in person: John's Own 1 is on by default and can be switched
+// Nexy Cloud's model network, per signed-in person: the home network is on by default and can be switched
 // off (then the local model alone), paid boost is off for everyone unless set, and the first turn
 // that may go to the Own 1 carries a one-time notice. Only where NEXY_NETWORK_MODEL is set and the
 // shared engine answers the person. The engine is asked for exactly that model; where it says the
@@ -92,7 +92,7 @@ test("the notice comes once per person, and never with Own 1 off", async () => {
   m.setOwn1("t02", false);
   assert.equal(m.firstOwn1Use("t02"), false);
   assert.equal(m.firstOwn1Use("u01"), false, "not where it is not offered");
-  assert.match(m.OWN1_NOTICE, /^Your messages are answered on a computer in John's home: best effort for performance, no privacy guarantees\.$/);
+  assert.match(m.OWN1_NOTICE, /^Your messages are answered on a member's home computer: best effort for performance, no privacy guarantees\.$/);
 });
 
 test("the engine is asked for the turn's model only when there is one; where it ran comes back", async () => {

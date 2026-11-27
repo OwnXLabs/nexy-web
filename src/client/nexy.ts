@@ -171,10 +171,10 @@ async function patient<T>(call: () => Promise<T>, waiting: (n: number, secs: num
 // Nexy Cloud's model network, as the server reports it: where the answer is being made
 const ROUTE_LINES: Record<string, string> = {
   finding: "Finding the best computer for this…",
-  own1: "Answering on John's Own 1…",
+  own1: "Answering on the home network…",
   boost: "Answering with cloud boost…",
   local: "Answering on Nexy Cloud…",
-  own1busy: "John's Own 1 is busy, answering on Nexy Cloud…",
+  own1busy: "The home network is busy, answering on Nexy Cloud…",
 };
 
 // Nexy Cloud's free tier: while a reply waits there, where it is in the queue (the gate asks the model network)

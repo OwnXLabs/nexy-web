@@ -3,13 +3,13 @@ import path from "node:path";
 import { ENGINES } from "./engine/registry";
 
 // Nexy Cloud's model network, per signed-in person. Text and code go to John's Own1 while it is free,
-// on by default ("Use John's Own 1 when it's free" turns it off: the local model alone). Paid boost
+// on by default ("Use the home network when it's free" turns it off: the local model alone). Paid boost
 // (cloud providers first) is a per-person flag, off for everyone until payment exists. Nexy asks the
 // engine for NEXY_NETWORK_MODEL plus "+boost" and/or "+own1"; the bare name is the local model.
 // Only where the shared engine answers the person: an engine of their own (a microVM) takes it with
 // its next image.
 export const NETWORK_MODEL = (process.env.NEXY_NETWORK_MODEL ?? "").trim();
-export const OWN1_NOTICE = "Your messages are answered on a computer in John's home: best effort for performance, no privacy guarantees.";
+export const OWN1_NOTICE = "Your messages are answered on a member's home computer: best effort for performance, no privacy guarantees.";
 
 type Prefs = { own1?: false; boost?: true; noticed?: true };
 const FILE = process.env.NEXY_DATA_DIR ? path.join(process.env.NEXY_DATA_DIR, "network.json") : "/var/lib/nexy/network.json";
